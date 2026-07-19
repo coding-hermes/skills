@@ -203,6 +203,20 @@ If the environment is fundamentally broken (missing toolchain, corrupted venv), 
 
 Read `.coding-hermes/tasks.md`. This is the project's single source of truth for what needs to be done.
 
+**Permanent last task — NEVER-DONE:** Every task board MUST end with this task. It is NEVER marked `[x]` — it is the perpetual improvement engine.
+
+```
+## [ ] NEVER-DONE — Run coding-hermes-never-done 11-point audit
+
+Load coding-hermes-never-done skill. Run ALL 11 checks: spec alignment,
+doc coverage, test gaps, package upgrades, pitfall hunt, performance audit,
+endpoint verification, CI/CD health, DuckBrain sync, code quality,
+middle-out wiring. Create a task for EVERY gap found. This task is never
+complete — the audit always finds something.
+```
+
+When onboarding a new project, the foreman MUST write this task as the LAST item in the Active section. When a tick ends with an empty board (after the sweep), the foreman picks up this task and runs the audit. The audit creates new tasks which get worked in subsequent ticks. When those are done, the NEVER-DONE task re-triggers and finds NEW gaps. The cycle never stops.
+
 **Count:**
 - `## [ ]` — pending task headers
 - `- [ ]` — pending subtasks under active headers
