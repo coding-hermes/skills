@@ -6,7 +6,7 @@ description: >-
   quality, commits, learns, and scans external signals — autonomously
   delivering complete projects end-to-end. Loaded by every coding-hermes
   foreman cron job. Follows the fleet architecture.
-version: 2.6.0
+version: 2.7.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -241,6 +241,8 @@ The standard requires: exact Go interfaces with every method signature, error pa
 ## Step 1.5 — Discovery Sweep (Board Empty)
 
 When there's nothing to work on, FIND work. The sweep is ordered by priority — don't check CI until you've confirmed the build works.
+
+**Model Router — task decomposition on first contact:** When a project is new or the board has only bootstrap tasks (INIT, SPEC, DOC, CI), load `coding-hermes-model-router` and decompose the project into a full task matrix. Score each task by priority, complexity, and required capabilities. Route each task to the cheapest model that works.
 
 **1.5a. Build integrity check:**
 ```bash
@@ -761,8 +763,10 @@ The judge evaluates: does the code actually meet the acceptance criteria? Not "d
 ```bash
 git add <specific files only>     # NEVER git add -A, NEVER git add .
 git diff --cached                 # verify what you're about to commit
-git commit -m "<type>: <description>" --no-verify
+git commit -m "<type>: <description>" -m "Co-authored-by: $CO_AUTHOR" --no-verify
 ```
+
+**Co-author is MANDATORY.** The second `-m` with `$CO_AUTHOR` from `~/.hermes/.env` must be on EVERY commit — feat, fix, chore, docs, board updates, all of them. If `$CO_AUTHOR` is unset, fail the tick. Do not proceed without it. See `references/co-author-enforcement.md` for the full enforcement pattern and pitfall history.
 
 **Commit message format:** `<type>: <what was done> — <why>. Addresses <task-id>.`
 Example: `feat: add JWT middleware to /api/users — enables authenticated user endpoints. Addresses USER-AUTH-03.`
