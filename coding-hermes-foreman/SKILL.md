@@ -551,6 +551,36 @@ The foreman has access to 8 infrastructure tools. Not every tick uses all of the
 | 🔗 **Dep Integrity** | — | 1.5e | Circular deps, unlinked imports, missing transitive deps — catches "unlinked dependencies" |
 | 🧪 **E2E Verify** | — | 1.5h | Full system smoke test — health checks, CLI commands, import verification, cross-service calls. Spawn Luna (vision/screenshots) or Step 3.7 Flash (browser/CLI) for browser-based visual verification.
 
+### 1.5i — E2E Testing Tick (Self-Improving Loop)
+
+The foreman can dispatch a dedicated testing worker that exercises the project end-to-end and feeds findings back as tasks. This is NOT a one-shot audit — it's a continuous self-improvement mechanism.
+
+**When to trigger:** Every 5-10 ticks on active projects, or when U01 usability audit flags gaps, or when code is deployed/restarted.
+
+**How it works:**
+
+1. **Spawn a testing worker** — Luna (vision/screenshots/browser) or Step 3.7 Flash (CLI/API/browser) — with a prompt like:
+   ```
+   You are an E2E testing agent for PROJECT. Deploy/build the project,
+   run Playwright/Cypress tests, capture screenshots, hit every API endpoint,
+   check the browser console for errors. Produce:
+   - e2e-output/report.md — per-screenshot analysis, spec compliance, severity
+   - e2e-output/tasks.md — task matrix with ID|Task|Pri|Cpx|Deps|Tags|Files
+   ```
+
+2. **Feed results back into the board** — read `e2e-output/tasks.md` and inject each task as a real board task (with model assignment from the router). The tasks become part of the normal foreman loop.
+
+3. **Self-improvement loop:** Worker fixes tasks → code improves → next testing tick finds NEW issues → loop continues. The project gets better every cycle.
+
+**Proven:** HEADING 2026-07-24 — Luna cron found 5 Playwright failures, 4 API contract mismatches, 1 combobox bug. Produced 10 actionable tasks (LUNA-001 through LUNA-010) with exact file paths, priorities, complexity levels, and dependency chains. All committed as E2E evidence.
+
+**Testing worker model selection:**
+| Task | Model | Why |
+|------|-------|-----|
+| Browser E2E + screenshots | GPT-5.6 Luna | Vision, screenshots, DOM inspection, visual regression |
+| CLI/API testing | Step 3.7 Flash | Fast, cheap, agentic — good for curl/httpie test suites |
+| Complex multi-service | DeepSeek V4 Pro | Multi-step reasoning across services |
+
 **Local CI testing — run CI commands before pushing:** Before pushing code, run the project's CI pipeline locally to catch failures without burning CI minutes. For Go: `go test ./... -count=1 -timeout 120s && go vet ./...`. For TypeScript: `pnpm test && pnpm lint`. For Python: `python -m pytest -x -q && ruff check .`. For Rust: `cargo test && cargo clippy`. This catches 80% of CI failures before they hit the remote runner. |
 | 🔮 **Off-by-One** | Predictive | 9 | Pre-solve lab — submit solved problems, discover cached solutions |
 | 🏗️ **Bunker** | — | On-demand | Remote deployment to Hetzner for E2E testing. Used when tasks require server validation. `bunker deploy <project>` |
