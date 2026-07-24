@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-model-router
 description: Task decomposition and model routing — break projects into independently executable tasks, score by priority/complexity/capability, route each to the least expensive model that can complete it reliably
-version: 1.1.0
+version: 1.2.0
 category: coding-hermes
 ---
 
@@ -73,10 +73,10 @@ Tag strength: `+++tag` essential, `++tag` important, `+tag` useful, `-tag` unnec
 
 ### DeepSeek V4 Flash
 - **Complexity:** 1-5 | **Cost:** $0.10/$0.20/1M | **Speed:** Fast | **Context:** 1M
-- **++:** code-generation, terminal | **+:** concise-output, file-editing
+- **++:** code-generation, terminal, test-execution | **+:** concise-output, file-editing, testing
 - **-:** advanced-vision | **--:** architecture, complex-debugging
-- **Provider:** opencode-go (flat-rate) | **Levels:** Minimal-Low-Med
-- **Best:** Boilerplate, mechanical tasks, routine fixes, budget workers
+- **Provider:** opencode-go (flat-rate) | **Levels:** Minimal-Med
+- **Best:** Boilerplate, mechanical tasks, routine fixes, test running — budget test runner
 
 ### Kimi K3
 - **Complexity:** 2-6 | **Cost:** $0.40/$0.80/1M | **Speed:** Medium | **Context:** 262K
@@ -122,10 +122,10 @@ Tag strength: `+++tag` essential, `++tag` important, `+tag` useful, `-tag` unnec
 
 ### Step 3.7 Flash
 - **Complexity:** 1-4 | **Cost:** $0.09/$0.30/1M | **Speed:** Fast | **Context:** 256K
-- **++:** agentic-coding | **+:** code-generation, terminal, testing, test-execution
+- **++:** agentic-coding, testing, test-execution | **+:** code-generation, terminal
 - **-:** architecture, complex-reasoning | **--:** long-context
-- **Provider:** stepfun | **Levels:** Minimal-Low-Med
-- **Best:** C++/Rust features, Python tests, infra/CI, budget agentic
+- **Provider:** stepfun | **Levels:** Minimal-Med
+- **Best:** C++/Rust features, Python tests, infra/CI, test authoring + execution — fastest budget test runner
 
 ### Grok 4.5
 - **Complexity:** 2-7 | **Cost:** Flat-rate (prepaid) | **Speed:** Medium | **Context:** 128K
@@ -148,13 +148,15 @@ fit = complexity_fit + capability_match + tool_match + context_fit
       - cost_penalty - latency_penalty - weakness_penalty
 ```
 
-Essential capability failures override numeric score. A task tagged `+++advanced-vision` must NOT go to a model without vision.
+Essential capability failures override numeric score.
+
+## Test Runner Hierarchy
+
+For test-running tasks, prefer in order: **Luna** (primary, $100/mo flat) → **Step 3.7 Flash** ($0.09/1M, fastest) → **V4 Flash** ($0.10/1M, catches missing imports). For spec writing, prefer: **Terra** (primary) → **GPT-5.6 Sol** (complex specs) → **V4 Pro** (fallback).
 
 ## Escalation
 
 Escalate when: touches more components than estimated, complexity exceeds model range, tests reveal architectural issues, missing essential capability, 2+ failures for different reasons, security/data-loss risk, context exceeds model capacity.
-
-Escalation actions: increase reasoning level, switch to fallback, split task, create discovery task, add specialist review.
 
 ## Expected Usage
 
@@ -163,19 +165,12 @@ Escalation actions: increase reasoning level, switch to fallback, split task, cr
 - Board is empty + NEVER-DONE audit → re-assess with model routing
 - Worker selection → match task tags to model profiles above
 
-**Legacy board conversion:** when converting existing `.coding-hermes/tasks.md` boards to this matrix format, see `references/board-conversion.md` for the 7-step bulk-conversion pattern.
-
-**Output format (minimal skeleton — see `references/board-conversion.md` for full patterns including phase grouping, board state classification, and completed-summary treatment):**
+**Output format:**
 ```
 Core purpose: [one-liner]
-[Status line: foreman model, worker model, DuckBrain namespace, current state, tick info]
 ID | Task | Priority | Complexity | Deps | Tags | Model | Reasoning | Fallback
-[Phase header rows for >10 tasks spanning multiple phases — see reference]
 Assumptions: [only routing-relevant ones]
-Routing Notes: [explain unusual selections, per-phase rationale for full pipelines]
-Execution Order: [prioritized IDs, phased for full pipelines]
-Escalation Conditions: [board-state-specific — idle vs active vs full pipeline]
-Completed: [phase-level summary table — collapse, don't delete]
+Routing Notes: [explain unusual selections]
+Execution Order: [prioritized IDs]
+Escalation Conditions: [when to reroute]
 ```
-
-**When converting existing boards**, load `references/board-conversion.md` for the full workflow including pre-scan, board state classification, task-type routing defaults, and anti-patterns.
