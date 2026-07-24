@@ -4,7 +4,7 @@ description: >-
   Fleet-level maintenance cron — monitors and balances all coding-hermes
   projects. Heals broken foremen, audits fleet health, rebalances models
   and schedules, detects orphans, and produces HTML reports. Runs every 4h.
-version: 2.41.0
+version: 2.42.1
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -59,7 +59,7 @@ Bane + Hermes          → strategy, new capabilities, architecture decisions
 
 Fix without asking. Use the `cronjob` tool for state transitions, `hermes cron edit` for single-field changes, and temporary Python scripts under `/tmp/` for bulk edits. Never edit `jobs.json` directly — the side-channel bypasses scheduler state.
 
-**Script locations:** All three scripts live in this skill's `scripts/` directory (`~/.hermes/skills/coding-hermes-supervisor/scripts/`). Use the full skill-dir path or reference them relative to the skill. `enforce-foreman-models.py` is also symlinked at `~/.hermes/scripts/enforce-foreman-models.py` (accessible from either path), but **`phase0-autoheal.py` and `post-heal-verify.py` only exist in the skill dir** — they are NOT at `~/.hermes/scripts/`. Do NOT look for `~/.hermes/scripts/phase0-autoheal.py`; it won't be there, and you'll waste time writing a fresh script rather than running the existing one. **Proven:** 2026-07-18 — supervisor agent wrote a fresh Phase 0 script to `/tmp/` instead of running the existing `scripts/phase0-autoheal.py` from the skill dir.
+**Script locations:** All three scripts live in this skill's `scripts/` directory (`~/.hermes/skills/coding-hermes-supervisor/scripts/`). Use the full skill-dir path or reference them relative to the skill. `enforce-foreman-models.py` is also at `~/.hermes/scripts/enforce-foreman-models.py` (the cron execution path). ⚠️ This is a SEPARATE COPY, NOT a symlink — both copies must be patched independently when policy changes. Phase 0G must diff them for drift. But **`phase0-autoheal.py` and `post-heal-verify.py` only exist in the skill dir** — they are NOT at `~/.hermes/scripts/`. Do NOT look for `~/.hermes/scripts/phase0-autoheal.py`; it won't be there, and you'll waste time writing a fresh script rather than running the existing one. **Proven:** 2026-07-18 — supervisor agent wrote a fresh Phase 0 script to `/tmp/` instead of running the existing `scripts/phase0-autoheal.py` from the skill dir.
 
 **Always run scripts in this order:**
 0. **CHECK DAEMON FIRST** (see Phase 0I). Restart if dead, verify alive. This is step 0 — before any script.
@@ -188,6 +188,8 @@ When daemon is INACTIVE: Do NOT create cron foremen as fallback. Cron foremen ar
 
 **Not all shared-workdir projects are duplicates (added 2026-07-19):** When two projects share a workdir but have different purposes, Model/Provider, or NamespaceID, they may both be valid. **eduos-e2e** (E2E browser tester, no model/provider set) shares a workdir with **eduos.dexdat.com.co** (main foreman, v4-flash/deepseek-foreman). eduos-e2e is a different cron job (EduOS Browser E2E Tester, `d838ce4f5ddc`) with its own prompt that runs browser tests against the eduos codebase. Both entries are intentional. **Detection:** before flagging as duplicate, compare Model, Provider, Command, and NamespaceID fields. If they differ in purpose, they may both be legitimate. **Corollary: if ALL fields (Model, Provider, Command, NamespaceID) are identical — or both have empty/identical values across all four with no distinguishing feature — they ARE duplicates.** Disable the one created later (compare CreatedAt). **Proven:** 2026-07-19 — eduos-e2e + eduos.dexdat.com.co workdir same, different projects. **Proven:** 2026-07-24 — hivemind-pulse (created 2026-07-16) disabled as same-workdir duplicate of hivemind-work (created 2026-07-12); both had identical model/provider/ns/cmd.
 
+**Cron-scheduler workdir duplicates (added 2026-07-24):** When a cron foreman (in jobs.json) and a scheduler project share the same workdir, both enabled, they produce **double ticks**. The cron dispatches via `_running_job_ids`, the scheduler via its timer loop — both spawn separate `hermes chat -q` processes. Detection: cross-reference enabled cron foremen's `workdir` against scheduler projects' `Workdir`. Fix: pause the cron foreman (legacy dispatch mechanism). See `references/cron-scheduler-workdir-duplicate.md` for detection and fix scripts. **Proven:** 2026-07-24 — `off-by-one-foreman` (cron, v4-pro) ↔ `off-by-one` (scheduler, v4-flash) both at `/home/kara/off-by-one`. `h3-foreman-bootstrap` (cron, v4-pro) ↔ `h3` (scheduler, v4-flash) both at `/home/kara/get-h3/h3`. Both crons paused.
+
 #### 0F. Missing Task Board Detection
 
 Foreman exists but `.coding-hermes/tasks.md` is missing → create it with bootstrap tasks:
@@ -210,8 +212,10 @@ The `enforce-foreman-models.py` cron job (`667bc78e9470`) is a `no_agent: true` 
 **Script quality verification (added 2026-07-17):** After confirming the cron is healthy, verify the script content contains the expected enforcement rules. The cron running every 30m does not guarantee the script has all the right logic. Read the script at `~/.hermes/scripts/enforce-foreman-models.py` and scan for:
 - **Rule 0: toolset normalization** — must null→canonical 6, strip delegation/cronjob, add missing tools, remove extras. Look for `CANONICAL_TOOLSETS` and `PROHIBITED` variables and the `if et is None or not isinstance(et, list)` branch.
 - **Rule 1: provider enforcement** — must set `deepseek-foreman` on any foreman with a different provider. Look for `if provider != 'deepseek-foreman'`.
-- **Rule 2: model enforcement** — must set v4-pro for schedule ≤ 30m, v4-flash for ≥ 60m. Look for `target_model = 'deepseek-v4-pro' if schedule_mins <= 30 else 'deepseek-v4-flash'`.
+- **Rule 2: model enforcement** — all foremen use `deepseek-v4-flash` (Bane directive 2026-07-24, no more v4-pro split). Look for `target_model = 'deepseek-v4-flash'` (unconditional, no schedule check).
 - **Foreman detection guard** — must use exact `'coding-hermes-foreman'` check (not a broad substring). Look for `if 'coding-hermes-foreman' not in skills: continue`.
+- **Rule 4: dual-copy match** — enforce script is TWO files (see `references/enforce-script-dual-copy-drift.md`). Diff: `diff ~/.hermes/scripts/enforce-foreman-models.py ~/.hermes/skills/coding-hermes-supervisor/scripts/enforce-foreman-models.py`. If they differ, sync loser to match verified-correct copy. **Proven:** 2026-07-24 — both copies had old v4-pro split; skill text correct but neither script matched it.
+
 If any rule is missing, the supervisor must patch the script immediately — a running cron with a stale script is worse than a dead cron because it silently enforces incomplete rules.
 
 **Scheduler-model cross-check (added 2026-07-18):** After confirming the script is healthy, verify the scheduler daemon's models directly via the API. The enforce script only reads `jobs.json` (cron entries), but foremen now run through the scheduler daemon which has its own Model/Provider fields per project in its SQLite DB. Cron-level models are irrelevant for paused foremen — the scheduler DB is the actual source of truth for what model is used when spawning a foreman session. **The enforce script and the scheduler DB are independent data stores** — one can be correct while the other drifts.
@@ -260,8 +264,21 @@ Fix: `PUT /api/v1/projects/<name> {"Model": "deepseek-v4-flash"}` (PascalCase fi
 
 **When daemon is DEAD:**
 1. Check if the binary exists: `test -x /home/kara/coding-herms-scheduler/bin/schedulerd`
-2. Start it with the correct DB path: `/home/kara/coding-herms-scheduler/bin/schedulerd -db /home/kara/.hermes/coding-hermes/scheduler.db 2>&1 &`
-3. Verify it came up: wait 3 seconds, curl the health endpoint
+2. Start it via `terminal(background=true)` — nohup/`&` are rejected by the Hermes terminal tool. See `references/schedulerd-restart-background-mode.md` for the exact command. Use `-max-concurrent 8` (not 10) to reduce fork contention:
+   ```
+   terminal(
+     command="/home/kara/coding-herms-scheduler/bin/schedulerd \
+       -db /home/kara/.hermes/coding-hermes/scheduler.db \
+       -listen 127.0.0.1:9090 \
+       -gateway-url http://127.0.0.1:8642 \
+       -max-interval 12h -min-interval 30s \
+       -max-concurrent 8 \
+       -tick-timeout 600s",
+     background=true, timeout=10
+   )
+   ```
+   The `-db` flag is MANDATORY (binary defaults to empty DB at `~/.hermes/scheduler.db`).
+3. Verify it came up: `sleep 3 && curl -s --noproxy '*' -o /dev/null -w "%{http_code}" http://127.0.0.1:9090/api/v1/projects`
 4. If it fails to start after 3 attempts, alert Bane — do NOT fall back to cron foremen
 5. Log each restart attempt with timestamp and result
 
@@ -271,6 +288,7 @@ Fix: `PUT /api/v1/projects/<name> {"Model": "deepseek-v4-flash"}` (PascalCase fi
 - Query `GET /api/v1/projects` to verify projects are loaded (not empty)
 - Check that the packer is producing ticks (look for non-zero "checked" count in process output)
 - Report daemon health in Phase 5 fleet report: uptime, projects loaded, projects enabled, last tick time
+- **Check `evaluation_age_seconds` from the health endpoint** — if > 600s (10 min), the evaluation loop is stuck even though the HTTP API responds normally. The daemon is a zombie: it answers GET requests but never evaluates projects. **Detection:** `curl -s --noproxy '*' http://127.0.0.1:9090/api/v1/health | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'evaluation_age={d.get(\"evaluation_age_seconds\", -1)}s')"`. If > 600s, restart the daemon. See `references/daemon-evaluation-loop-stuck.md`. **Proven:** 2026-07-24 — 14,439s evaluation age, no ticks for 9+ hours.
 
 **⚠️ Daemon running but HTTP unreachable — detection gap:** A `curl` to `:9090` may return connection refused/timeout even though `ps aux | grep schedulerd` shows a running process and ticks are still spawning in the process table. **Also:** a `curl` returning HTTP 404 means the port IS occupied by a non-schedulerd process (e.g. `dagger.test` Go test binary) — see `references/phase0i-port-9090-rogue-process.md` for detection and recovery. This happens when the HTTP server within the daemon is wedged (deadlock in the HTTP mux, stuck goroutine) while the timer/scheduler loop still runs. **Detection:**
 1. `ss -tlnp | grep schedulerd` — if no listening socket, the HTTP listener never started or crashed
@@ -314,7 +332,30 @@ For jobs that DID fire: git activity, task progress (`[x]` vs `[ ]` count), CI s
 
 #### 2D. Rebalance
 
-**Foremen run in the scheduler daemon now (not cron).** Use the scheduler API to adjust cooldowns instead of editing cron `schedule.minutes`.
+Check for: projects with real pending tasks on 43200s cooldown, projects with 0 tasks on 900s cooldown, projects where cooldown was reverted by daemon restart. Report mismatches, fix via scheduler API.
+
+#### 2E. GitReins Judge Validation (CRITICAL for code quality)
+
+Every coding-hermes project MUST have GitReins LLM judge configured. Check all 41 projects:
+
+```bash
+python3 ~/.hermes/scripts/check-gitreins-judge.py <workdir>
+```
+
+Verify per project:
+- `.gitreins/config.yaml` has `evaluator:` section
+- `defaults.model = deepseek-v4-flash`
+- `defaults.api_key_env = GITREINS_LLM_API_KEY` (or global env provides)
+- **Limits appropriate for codebase size:**
+  - >200 source files → `max_iterations ≥ 100`
+  - >500 source files OR C++/Rust → `max_time ≥ 30m`
+  - >500 source files → `max_input_tokens ≥ 1M`
+
+**Fix method:** Inject `GITREINS-JUDGE` task into the project's `tasks.md` with the correct limits. The foreman owns its config — the foreman adjusts limits based on its own codebase knowledge. Do NOT edit the config directly.
+
+**Red flags:** Missing config entirely → inject INIT + GITREINS-JUDGE. Wrong model → inject GITREINS-JUDGE. Undersized limits for codebase size → inject GITREINS-JUDGE with recommended limits.
+
+Report in fleet HTML: projects missing judge, projects with undersized limits, projects fully configured.
 
 **Primary rule: pending-task-based formula** (as directed by Bane 2026-07-19):
 Count open tasks via `grep -c '^## \\[ \\]' .coding-hermes/tasks.md`, **then subtract 1 if NEVER-DONE is present** (it is NOT a real task — it's the perpetual improvement engine that fires when the board is empty):
@@ -356,7 +397,7 @@ Verify every foreman cron has canonical skills: `["coding-hermes-foreman", "codi
 
 All curl commands MUST use `--noproxy '*'` when running inside the gateway container — proxy env vars otherwise route `curl` through the gateway's own proxy, which can fail or time out against `127.0.0.1`.
 
-**⚡ Python `urllib`/`requests` have the same proxy problem — use curl in bash scripts instead.** When running inside the gateway container, Python's `urllib.request` respects the `$http_proxy` / `$https_proxy` environment variables and routes all requests through the gateway's proxy. A `urllib.request.urlopen("http://127.0.0.1:9090/...")` call returns `ConnectionRefusedError` or times out even though `curl --noproxy '*'` works fine from the same shell. **Workaround:** write bash scripts with `curl -s --noproxy '*'` for scheduler API calls, not Python scripts using `urllib` or `requests`. Or, if you must use Python, set `os.environ["NO_PROXY"] = "127.0.0.1,localhost"` before any network calls. **Proven:** 2026-07-24 — supervisor Phase 2D rebalance script failed on all 30+ API calls via urllib; converted to bash+curl, all succeeded immediately.
+**⚡ Python `urllib`/`requests` have the same proxy problem — use curl in bash scripts instead.** Python's `urllib.request` respects `$http_proxy` / `$https_proxy` env vars, routing all requests through the gateway's proxy. A `urllib.request.urlopen("http://127.0.0.1:9090/...")` returns `ConnectionRefusedError` even though `curl --noproxy '*'` works fine. **Workaround:** bash scripts with `curl -s --noproxy '*'` for scheduler API calls, not Python. Or set `os.environ["NO_PROXY"] = "127.0.0.1,localhost"` before network calls. **Proven:** 2026-07-24 — supervisor Phase 2D failed on 30+ urllib calls; bash+curl succeeded immediately.
 
 ```bash
 # List all projects (returns flat project array)
@@ -528,17 +569,12 @@ When a Python script does multiple state changes in one pass (e.g., pause a dupl
 
 ## Changelog
 
-Full changelog with all historical entries moved to `references/changelog.md`. Below are the most recent entries.
+Full changelog in `references/changelog.md`. Latest entries:
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 2.41.0 | 2026-07-24 | **Python urllib proxy bypass gap in gateway.** Added pitfall: same `--noproxy` problem that affects curl inside the gateway container also affects Python `urllib`/`requests` — they respect `$http_proxy` env vars and route all scheduler API calls through the gateway proxy, producing ConnectionRefusedError. Documented workaround (bash+curl) and Python fix (set `NO_PROXY`). Duplicate detection: clarified "same everything → duplicate" corollary — if all four fields (Model, Provider, Command, NamespaceID) are identical with no distinguishing feature, the projects ARE duplicates. Proven: 2026-07-24 — hivemind-pulse disabled as same-workdir duplicate of hivemind-work. |
-| 2.40.0 | 2026-07-23 | **Critical infra cooldown drift detection gap.** Added pitfall: CRITICAL_INFRA guard prevents rebalance script from touching coding-hermes-scheduler/duckbrain but creates blind spot — autoSlowdown pushes cooldown above 900s with no detection mechanism. Found coding-hermes-scheduler at 34587s (~9.6h). Added detection script and reference file `references/critical-infra-cooldown-drift-2026-07-23.md`. Updated rebalance analysis script description to note the gap. |
-| 2.39.0 | 2026-07-23 | **Phase 2D model vs directionality tension clarified.** Added pitfall under directionality rule: when a project has 0 pending but its cooldown can't be increased (directionality), the model must follow STAGE (pending count) not cooldown. A 0-pending project at 1800s gets v4-flash even though cooldown suggests v4-pro — model and cooldown are independent dimensions. Proven: 2026-07-23 — dexdat-core, h3-sdk-go-foreman both incorrectly assigned v4-pro by a rebalance script that coupled model to cooldown. |
-| 2.38.0 | 2026-07-22 | **Daemon restart ordering fix.** Added "daemon health check FIRST" at top of Phase 0 — if daemon is dead, restart it and verify alive before running auto-heal scripts. Previously Phase 0 scripts ran while daemon was dead, the auto-heal (correctly seeing daemon=dead) unpaused heading-foreman, then daemon restart required manual re-pause. New process: check daemon → restart if dead → verify → THEN run scripts. Proven: 2026-07-22 — heading-foreman accidental unpause during daemon-down window. Model cross-check: 14 projects realigned from v4-pro→v4-flash for idle speeds. CI billing exhaustion confirmed on dexdat + wojons orgs (5+ projects blocked, all boards already tracking). Timeout spiral fix: h3-sdk-go-foreman 13824000s→900s (v2.36.0 detection pattern confirmed). |
-| 2.36.1 | 2026-07-22 | **autoSlowdown trigger clarified + fix priority elevated.** |
-| 2.36.0 | 2026-07-22 | **Phase 6: GitHub Actions billing exhaustion detection.** Added fleet-wide CI billing exhaustion detection pattern — when 3+ projects show concurrent CI failures, check for billing exhaustion before diagnosing individual failures. Do NOT add redundant CI fix tasks when billing entries already exist. **Timeout spiral extreme:** h3-sdk-go-foreman at 13824000s (160 days — 160× the documented 86400s max). Detection: scan for CooldownS > 86400 (not just >=). **helios-work workdir drift (2nd report):** v2.33.0 helios/helios-work drift never resolved — supervisor must re-flag previously-reported human-action items. **AutoSlowdown overshoot:** Kobayashi-Maru set to 1800s, reverted to 43200s (past original 3600s) — autoSlowdown can INCREASE cooldown beyond pre-rebalance value when LastTickAt=never. |
-| 2.34.0 | 2026-07-21 | **Phase 0I: Port 9090 rogue process detection.** |
+| 2.42.0 | 2026-07-24 | **Evaluation loop stuck detection** (Phase 0I, `evaluation_age_seconds` > 600s). References: `daemon-evaluation-loop-stuck.md`, `cron-scheduler-workdir-duplicate.md`, `schedulerd-restart-background-mode.md`. Enforce script updated to Bane 2026-07-24 directive (all foremen v4-flash). Cron-scheduler workdir duplicates paused: off-by-one-foreman, h3-foreman-bootstrap. |
+| 2.41.0 | 2026-07-24 | **Python urllib proxy bypass gap in gateway.** |
 
 - **Don't blame state.db for I/O problems.** A 10GB SQLite database is well within SQLite's design limits. The real causes of latency are swap thrashing (swappiness > 10 on a server) and I/O contention from too many concurrent Docker containers + LSPs + build processes. Check `vm.swappiness` and `free -h` first — not `du -sh state.db`.
 - **Mermaid diagrams in HTML reports: use `<pre class="mermaid">`, not `<div class="mermaid">`.** The div tag fails to render in most browsers. Always `<pre>` for Mermaid blocks in fleet reports and architecture docs.
@@ -551,7 +587,7 @@ Full changelog with all historical entries moved to `references/changelog.md`. B
 - **Pinned projects:** Bane-set model/provider combos. Audit them but never change them.
 - **Stale pinned table reverts models — CHECK THE SCRIPTS, not just SKILL.md:** When policy changes from pinned exceptions to uniform enforcement, DELETE the pinned table from this skill's `scripts/phase0-autoheal.py` AND from any pinned-reference in SKILL.md. A stray PINNED dict entry in phase0-autoheal.py silently reverts model/provider every 4 hours regardless of what the skill text says. **Proven:** 2026-07-13 — phase0-autoheal.py had 4 stale pinned entries (bunker/kimi, speclang-ci/MiniMax, mythos/grok, helix/grok) that reverted model/provider on every tick. Remove the entries from the JSON dict in the script — the LLM reading the skill text is not the problem, the code path is.
 - **`enforce-foreman-models.py` had NO toolset enforcement (worse than broken — missing).** The skill v2.4.0 changelog claimed "Toolset enforcement added to enforce-foreman-models.py" and the pitfall below discussed a `set(new_et) != set(et)` diff-based check — but the actual script on disk at both `~/.hermes/scripts/` and `skills/coding-hermes-supervisor/scripts/` had **zero** toolset code. No `CANNONICAL_TOOLSETS`, no `PROHIBITED`, no null-check, no strip, no add-missing. The script ran every 30m for 3+ days silently passing foremen with `cronjob`/`session_search`/`delegation` in their toolsets. The root cause: the skill was updated with the intended fix, but the script deployment step was missed. **Fix (applied 2026-07-17):** wrote the full toolset normalization logic — null→canonical 6, strip delegation/cronjob, add missing tools, remove extras. Uses straight equality (`new_et != et`) not set-diff, so any deviation is caught. The `post-heal-verify.py` script now independently checks the same invariants so a missing script fix can't go undetected again. **Pitfall for future:** When updating a skill's changelog with a script change, write the script changes FIRST then update the changelog — never the reverse. The supervisor's Phase 0G script quality verification step (see above) now catches this class of gap on every tick.
-- **`post-heal-verify.py` `elif` chain hides secondary issues.** The old toolset check used `elif` — if a foreman had BOTH `cronjob` AND missing canonical tools, only the cronjob issue was reported. The missing tools were invisible. **Fix:** use nested `if` blocks inside the `isinstance(et, list)` branch so all three issue types (prohibited tools, missing tools, extra tools) are reported independently. Also check for extra non-canonical tools that shouldn't be there.
+- **Post-heal verify checks toolsets via `elif` chain, hiding secondary issues.** Always check all three toolset issue types independently (prohibited, missing, extra) using nested `if` blocks inside the `isinstance(et, list)` branch.
 - **Post-heal-verify `is_infra_cron` must check skills at the JOB level, not per-skill-string.** A naive check like `any("coding-hermes-cron" in s and "coding-hermes-foreman" not in s for s in skills)` fires a false positive for every foreman. This is because foremen have `"coding-hermes-cron"` as one of their 4 skills — when the iterator reaches that string, the condition `"coding-hermes-foreman" not in "coding-hermes-cron"` is `True`, so the per-skill check flags the foreman as an "infra cron with a leaked model/provider." The **correct pattern** is to join skills into a combined string and check once: `is_foreman = "coding-hermes-foreman" in " ".join(skills)`. Then separate `has_ch_cron = "coding-hermes-cron" in " ".join(skills)` and `is_infra = has_ch_cron and not is_foreman and not is_supervisor`. **Proven:** 2026-07-18 — initial post-heal-verify run reported 84 false-positive `INFRA HAS MODEL` flags on all 41 foremen because of this per-string bug. Fixed with job-level combined-string checks.
 - **LLM-based model enforcement is unreliable — use scripts:** The supervisor agent is an LLM. It reads pinned tables, interprets exceptions, and applies "don't touch" reasoning even when told not to. For deterministic enforcement, use `enforce-foreman-models.py` (see `scripts/enforce-foreman-models.py`) — a non-LLM cron job with `no_agent=true` that runs every 4h. The supervisor should only VERIFY the script ran, never touch models itself. **Proven:** 2026-07-12 — supervisor reverted models 5+ times despite skill saying "NO EXCEPTIONS."
 - **Broad `is_ch`/`coding-hermes` substring checks in auto-heal scripts match non-foreman crons AND the supervisor.** Both `enforce-foreman-models.py` and `phase0-autoheal.py` originally used broad substring checks (`any('coding-hermes' in …)` or `any(s in skills for s in ["coding-hermes","coding-hermes-cron","coding-hermes-supervisor"])`) that matched infrastructure crons (like `h3-duckbrain-sync` with only `coding-hermes-cron`) and the supervisor itself. For model/state/repeat/force-fire operations, use `is_ch_foreman = any("coding-hermes-foreman" in s for s in skills)` — NOT the broad `is_ch` check. Schema-only fixes (kind/display/expr) can safely use the broader check. **Fixed in both scripts 2026-07-13:** `enforce-foreman-models.py` uses `any('coding-hermes-foreman' in str(s) for s in skills)`; `phase0-autoheal.py` now uses `is_ch_foreman` for 0G (model drift), 0C-FIX (repeat), and 0A-POST (force-fire). **Proven:** 2026-07-13 — phase0-autoheal changed supervisor provider `opencode-go` → `deepseek-foreman` and set model/provider on `h3-duckbrain-sync` (infra cron); both required immediate post-heal reversion script.
