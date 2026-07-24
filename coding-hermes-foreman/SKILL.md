@@ -549,7 +549,9 @@ The foreman has access to 8 infrastructure tools. Not every tick uses all of the
 | 🛡️ **GitReins** | Procedural | 6, 7 | Quality gates — static guard (secrets/build/lint/tests) + LLM judge (acceptance evaluation) |
 | 🔍 **Vuln Scanner** | — | 1.5d | Dependency vulnerability scanning — govulncheck, npm audit, pip-audit, cargo-audit |
 | 🔗 **Dep Integrity** | — | 1.5e | Circular deps, unlinked imports, missing transitive deps — catches "unlinked dependencies" |
-| 🧪 **E2E Verify** | — | 1.5h | Full system smoke test — health checks, CLI commands, import verification, cross-service calls |
+| 🧪 **E2E Verify** | — | 1.5h | Full system smoke test — health checks, CLI commands, import verification, cross-service calls. Spawn Luna (vision/screenshots) or Step 3.7 Flash (browser/CLI) for browser-based visual verification.
+
+**Local CI testing — run CI commands before pushing:** Before pushing code, run the project's CI pipeline locally to catch failures without burning CI minutes. For Go: `go test ./... -count=1 -timeout 120s && go vet ./...`. For TypeScript: `pnpm test && pnpm lint`. For Python: `python -m pytest -x -q && ruff check .`. For Rust: `cargo test && cargo clippy`. This catches 80% of CI failures before they hit the remote runner. |
 | 🔮 **Off-by-One** | Predictive | 9 | Pre-solve lab — submit solved problems, discover cached solutions |
 | 🏗️ **Bunker** | — | On-demand | Remote deployment to Hetzner for E2E testing. Used when tasks require server validation. `bunker deploy <project>` |
 | ⏰ **Cron Self-Management** | — | Self-Pause | Foremen adjust their own schedule (slow down ONLY) and self-pause. `cronjob(action='update', schedule='...')` for interval increase, `cronjob(action='pause')` to pause. NEVER decrease interval. |

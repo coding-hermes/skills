@@ -115,14 +115,14 @@ Tag strength: `+++tag` essential, `++tag` important, `+tag` useful, `-tag` unnec
 
 ### GPT-5.6 Luna
 - **Complexity:** 1-4 | **Cost:** $100/mo flat-rate | **Speed:** Fast | **Context:** 1M
-- **+++:** test-execution, testing | **++:** debugging, terminal | **+:** code-review, file-editing
+- **+++:** test-execution, testing, vision, browser, screenshots | **++:** debugging, terminal, CLI-automation | **+:** code-review, file-editing
 - **-:** architecture, spec-writing | **--:** complex-reasoning
 - **Provider:** openai-codex | **Levels:** Minimal-Med
-- **Best:** Test running, test debugging, CI verification, regression hunting — primary test runner
+- **Best:** Test running, test debugging, CI verification, regression hunting, browser-based E2E testing, visual regression testing, screenshot comparison — primary test runner with vision
 
 ### Step 3.7 Flash
 - **Complexity:** 1-4 | **Cost:** $0.09/$0.30/1M | **Speed:** Fast | **Context:** 256K
-- **++:** agentic-coding, testing, test-execution | **+:** code-generation, terminal
+- **++:** agentic-coding, testing, test-execution, browser, CLI-automation | **+:** code-generation, terminal, vision, screenshots
 - **-:** architecture, complex-reasoning | **--:** long-context
 - **Provider:** stepfun | **Levels:** Minimal-Med
 - **Best:** C++/Rust features, Python tests, infra/CI, test authoring + execution — fastest budget test runner
