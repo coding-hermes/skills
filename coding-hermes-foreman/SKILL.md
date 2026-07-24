@@ -454,19 +454,40 @@ If anything unexpected is staged, unstage it. Only the worker's changes get comm
 
 ## Step 9 — Off-by-One Submit
 
-The pre-solve lab learns from every completed task.
+The pre-solve lab learns from every completed task. Server runs on `http://localhost:8766`.
+
+**Verify off-by-one is alive (first):**
+```bash
+curl -s http://localhost:8766/health
+# Expect: {"status":"ok","uptime":"..."}
+```
 
 **Submit the problem this tick solved:**
-```
-Off-by-One: submit(task_type="<type>", problem="<description>", solution="<what worked>", files="<files changed>")
+```bash
+curl -s -X POST http://localhost:8766/api/v1/problems/submit \
+  -H 'Content-Type: application/json' \
+  -d '{"problem_class":"<language>-<category>-<specific>","description":"<what the task was and what approach worked>","cadence":"pre-phase"}'
+# Fields: problem_class (kebab-case slug), description (free text), cadence (pre-phase|end-of-day|post-debug)
+# Returns: {"submission_id":"sub_xxxxx"}
 ```
 
 **Discover cached solutions for the NEXT tick's tasks:**
-```
-Off-by-One: discover(task_type="<next task type>", context="<next task description>")
+```bash
+curl -s -X POST http://localhost:8766/api/v1/problems/discover \
+  -H 'Content-Type: application/json' \
+  -d '{"problem_class":"<next-task-type>"}'
+# Returns: [{"answer_id":"...","title":"...","content":"<pre-verified solution>","status":"verified",...}]
+# If empty or status=not_found: no cached solution yet — proceed normally
 ```
 
-Over time, this builds a cross-project solution cache. A parser fix for the ASCE project might solve the same problem for the Helios project. This is how the fleet learns across projects, not just across ticks.
+**Check if a submission is complete (optional):**
+```bash
+curl -s http://localhost:8766/api/v1/queue/<submission_id>
+```
+
+**Cross-project learning:** Over time, this builds a fleet-wide solution cache. A parser fix for ASCE might solve the same problem for Helios. A Go concurrency pattern for bunker might help hermes-dagger. Always submit completed tasks and always discover before the next tick.
+
+**Proven:** 2026-07-24 — off-by-one is live with 51 problems, solving on 60s cron. Zero foreman hits recorded — foremen have not been using the discover endpoint. Start using it.
 
 ## Step 10 — DuckBrain Write
 
