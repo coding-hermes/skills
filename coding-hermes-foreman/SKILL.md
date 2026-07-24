@@ -581,7 +581,30 @@ The foreman can dispatch a dedicated testing worker that exercises the project e
 | CLI/API testing | Step 3.7 Flash | Fast, cheap, agentic — good for curl/httpie test suites |
 | Complex multi-service | DeepSeek V4 Pro | Multi-step reasoning across services |
 
-**Local CI testing — run CI commands before pushing:** Before pushing code, run the project's CI pipeline locally to catch failures without burning CI minutes. For Go: `go test ./... -count=1 -timeout 120s && go vet ./...`. For TypeScript: `pnpm test && pnpm lint`. For Python: `python -m pytest -x -q && ruff check .`. For Rust: `cargo test && cargo clippy`. This catches 80% of CI failures before they hit the remote runner. |
+### Local CI — Run the FULL pipeline on-host when remote CI is down
+
+When GitHub Actions/GitLab billing is exhausted (org spending limits, runner unavailable), the foreman MUST run the CI pipeline locally. Local CI results are valid for task completion — the quality bar is the same, just the runner is on-host.
+
+**Before EVERY push — run local CI:**
+These are the same commands the remote CI runner executes. Run them. If they pass locally, the task meets the quality bar.
+
+| Language | Build | Test | Lint | Vet |
+|----------|-------|------|------|-----|
+| **Go** | `go build ./...` | `go test -count=1 -timeout 120s ./...` | `golangci-lint run` | `go vet ./...` |
+| **TypeScript** | `pnpm build` (or `npm run build`) | `pnpm test` (or `npm test`) | `pnpm lint` (or `npm run lint`) | `npx tsc --noEmit` |
+| **Python** | `python -c "compile('...')"` | `python -m pytest -x -q` | `ruff check .` | `mypy .` (if configured) |
+| **Rust** | `cargo build` | `cargo test` | `cargo clippy -- -D warnings` | `cargo fmt --check` |
+| **C/C++** | `make -j4` | `make test -j4` | `cppcheck .` | `clang-tidy` |
+
+**When remote CI is billing-blocked:**
+1. Run the FULL local pipeline (build + test + lint + vet)
+2. Record results on the board: `CI: LOCAL PASS (GitHub billing blocked — org spending limit)`
+3. Task completion criteria: local pipeline passes. Remote CI status is not required.
+4. Do NOT create redundant CI fix tasks for billing exhaustion — it's a human-gated admin issue.
+
+**When remote CI is available:** Run local CI BEFORE pushing, then push and verify remote CI after. This catches failures without burning CI minutes on avoidable failures.
+
+**Proven:** muster (16+ days CI blocked on wojons org billing), Kobayashi-Maru (GitHub Actions minutes exhausted), SpecLang (billing blocked). All three had foremen waiting on CI that would never run while local pipelines would have validated the work immediately. |
 | 🔮 **Off-by-One** | Predictive | 9 | Pre-solve lab — submit solved problems, discover cached solutions |
 | 🏗️ **Bunker** | — | On-demand | Remote deployment to Hetzner for E2E testing. Used when tasks require server validation. `bunker deploy <project>` |
 | ⏰ **Cron Self-Management** | — | Self-Pause | Foremen adjust their own schedule (slow down ONLY) and self-pause. `cronjob(action='update', schedule='...')` for interval increase, `cronjob(action='pause')` to pause. NEVER decrease interval. |
