@@ -681,7 +681,34 @@ A single 15-minute USABILITY-001 walkthrough caught all 7. None of the 11 static
 
 For the full checklist with exact commands, deployment patterns, and failure classification, see `coding-hermes-foreman/references/never-done-12th-check-usability.md`.
 
-Create: `## [ ] USABILITY — <broken step description>` for each failure. Available in `coding-hermes-foreman/references/never-done-12th-check-usability.md`.
+Create: `## [ ] E2E — <gap description>` for each missing check. Available in `coding-hermes-foreman/references/never-done-13th-check-e2e-testing.md`.
+
+### 14. GITREINS JUDGE — Is the LLM evaluator configured?
+
+Every coding-hermes project MUST have GitReins LLM judge configured for commit evaluation. Without it, code quality degrades — no automated review of worker output.
+
+Check:
+```bash
+python3 ~/.hermes/scripts/check-gitreins-judge.py .
+```
+Or manually: `cat .gitreins/config.yaml` → must have `evaluator:` section with `defaults.model: deepseek-v4-flash` and `defaults.api_key_env: GITREINS_LLM_API_KEY`.
+
+If missing:
+- Create `.gitreins/config.yaml` with:
+```yaml
+evaluator:
+  max_iterations: 50
+  max_time: 10m
+  max_input_tokens: 0.2M
+  max_output_tokens: 0.4M
+defaults:
+  model: deepseek-v4-flash
+  api_key_env: GITREINS_LLM_API_KEY
+```
+- The foreman configures it directly — this is critical infrastructure, not a subagent task
+- Run `gitreins guard` to verify it loads
+
+Create: `## [ ] GITREINS-JUDGE — Configure LLM evaluator (deepseek-v4-flash, GITREINS_LLM_API_KEY)`
 
 ### 13. E2E TESTING TICK — Has a real browser/CLI agent tested this?
 
