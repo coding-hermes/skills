@@ -6,7 +6,7 @@ description: >-
   quality, commits, learns, and scans external signals — autonomously
   delivering complete projects end-to-end. Loaded by every coding-hermes
   foreman cron job. Follows the fleet architecture.
-version: 2.7.0
+version: 2.9.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -14,12 +14,19 @@ metadata:
     tags: [coding-hermes, foreman, autonomous, sdlc, delivery]
     related_skills:
       - coding-hermes-cron
+      - coding-hermes-self-heal
+      - coding-hermes-board
+      - coding-hermes-discovery
+      - coding-hermes-worker-model
+      - coding-hermes-map
       - hilo-usage
       - gitreins
       - prompt-foundry
       - duckbrain
   support_files:
     - references/duckbrain-recall-failure-modes.md
+    - references/stale-bug-reporting.md
+    - references/pi-agent-rebuild.md
     - references/hermes-chat-workdir-gotcha.md
     - references/operational-cli-batch-tasks.md
     - references/go-lint-fix-patterns.md
@@ -30,9 +37,20 @@ metadata:
     - references/two-silent-workers-foreman-direct.md
     - references/pitfalls-session-learning.md
     - references/discovery-sweep-quality.md
+    - references/scheduler-vs-cron-pitfall.md
+    - references/cloudflare-tunnel-nextjs.md
+    references/ — Supporting documentation for foreman operations
+      - `nextjs-tailwind-v4-css-fix.md` — Next.js 15 + Tailwind v4 CSS empty utilities fix
+      - `foreman-pitfalls.md` — Scheduler duplicates, .env.production wipes, tunnel instability
+      - `never-done-12th-check-usability.md`
     - references/concurrency-dual-source-race.md
     - references/rust-workspace-test-flakiness.md
-    - references/sdk-compliance-testing.md
+    references/ — Supporting documentation for foreman operations
+      - `nextjs-tailwind-v4-css-fix.md` — Next.js 15 + Tailwind v4 CSS empty utilities fix
+      - `foreman-pitfalls.md` — Scheduler duplicates, .env.production wipes, tunnel instability
+      - `never-done-12th-check-usability.md`
+    - references/cloudflare-tunnel-demos.md
+    - references/post-heading-pitfalls.md
     - references/testing-with-dummy-projects.md
     - references/typescript-pnpm-foreman-scaffold.md
     - references/go-ci-creation-pattern.md
@@ -41,16 +59,23 @@ metadata:
     - references/go-engine-auto-persist-pitfall.md
     - references/go-test-timenow-nondeterminism.md
     - references/multi-repo-sdk-init-assessment.md
-    - references/gdscript-worker-provider-cascade.md
+    - references/parallel-tick-sibling-signals.md
+    - references/sibling-tick-board-collision.md
     - references/python-ci-make-targets.md
     - references/go-migration-goose-down-parsing.md
     - references/cloudflared-tunnel-restart.md
     - references/cron-localhost-verification.md
+    - references/live-e2e-detects-stub-plumbing.md
     - references/demo-user-protection-pattern.md
     - references/gh-pages-static-site-verification.md
     - references/shell-quoting-hermes-chat-q.md
     - references/misplaced-cross-project-code.md
-    - references/sdk-compliance-testing.md
+    references/ — Supporting documentation for foreman operations
+      - `nextjs-tailwind-v4-css-fix.md` — Next.js 15 + Tailwind v4 CSS empty utilities fix
+      - `foreman-pitfalls.md` — Scheduler duplicates, .env.production wipes, tunnel instability
+      - `never-done-12th-check-usability.md`
+    - references/cloudflare-tunnel-demos.md
+    - references/post-heading-pitfalls.md
     - references/parallel-spec-worker-spawning.md
     - references/frontend-worker-api-type-mapping.md
     - references/sudo-blocked-cron-workaround.md
@@ -60,11 +85,44 @@ metadata:
     - templates/go-github-ci.yml
 ---
 
+> See [coding-hermes-map] for the full skill hierarchy and when to use each skill.
+
 # Coding Hermes Foreman — Full SDLC Project Delivery
 
 The foreman is the per-project orchestrator. Every tick runs a complete software development lifecycle: self-heal, scan the board, analyze impact, load project memory, pre-load context, spawn a worker with the right model and provider, verify quality through GitReins guard and judge, commit, submit learnings to Off-by-One, write findings to DuckBrain, and scan external signals before the next task. The foreman DOES NOT write code — it inspects, plans, dispatches, and verifies.
 
 **A foreman tick delivers a complete unit of work.** Not a fragment. Not a step. The worker writes code until the acceptance criteria are met, the guard passes, the judge approves, and the commit is clean. If the worker fails, the foreman retries with adjustments. If the worker succeeds, the foreman learns and moves on.
+
+```mermaid
+graph TD
+    CF[coding-hermes-foreman<br/>Orchestrator]
+    SH[coding-hermes-self-heal<br/>Step 0]
+    BD[coding-hermes-board<br/>Step 1 + Self-Pause]
+    DS[coding-hermes-discovery<br/>Step 1.5]
+    WM[coding-hermes-worker-model<br/>Model Selection]
+    WK[coding-hermes-worker<br/>Step 5]
+    GD[coding-hermes-guard<br/>Step 6]
+    CR[coding-hermes-cron]
+    HI[hilo-usage]
+    GR[gitreins]
+    DB[duckbrain]
+    ND[never-done]
+
+    CF --> SH
+    CF --> BD
+    CF --> DS
+    CF --> WM
+    CF --> WK
+    CF --> GD
+    BD --> DS
+    BD --> ND
+    WM --> WK
+    WK --> GD
+    DS --> HI
+    CF --> CR
+    CF --> GR
+    CF --> DB
+```
 
 ## Critical: Foreman Does NOT Use delegate_task
 
@@ -122,388 +180,24 @@ delegate_task(goal="...", context="...", role="leaf")
 ```
 
 ## Step 0 — Self-Heal
-
-Before touching ANY tasks, fix what's broken. A foreman that operates on a broken environment produces broken commits.
-
-**Identity & Co-Author (Step 0):**
-```bash
-# Author identity — always enforce:
-git config user.name   # must be "kara"
-git config user.email  # must be "totalwindupflightsystems@gmail.com"
-
-# Human co-author — read from persistent config:
-# Source: ~/.hermes/.env → CODING_HERMES_CO_AUTHOR
-# If unset: ASK THE USER who to credit, then save to .env.
-CO_AUTHOR=$(grep CODING_HERMES_CO_AUTHOR ~/.hermes/.env | cut -d= -f2- | tr -d '"')
-# Fallback: if grep fails, prompt user: "Who should I credit as co-author?"
-# Then append: echo "CODING_HERMES_CO_AUTHOR=\"Name <email>\"" >> ~/.hermes/.env
-```
-Set proactively (not just verify). Then commit with co-author from the env var:
-```bash
-if [ -n "$CO_AUTHOR" ]; then
-  git commit -m "message" -m "Co-authored-by: $CO_AUTHOR"
-else
-  echo "ERROR: CODING_HERMES_CO_AUTHOR not set in ~/.hermes/.env"
-  echo "       Add: CODING_HERMES_CO_AUTHOR=\"Your Name <email>\""
-  exit 1
-fi
-```
-
-The `~/.hermes/.env` file is the single source of truth for co-author. All coding-hermes projects, foremen, and sub-agents read from it. NEVER hardcode the name in commit messages — always use `$CO_AUTHOR` from the env var.
-
-**Proven:** 2026-07-18 — 10+ repos had wrong authors. Foreman must set identity per-tick.
-
-Also fix identity on EVERY tick:
-
-**Dependencies:**
-```bash
-git pull --rebase
-```
-Handle merge conflicts immediately — stash, pull, pop. Don't create a task for a merge conflict.
-
-**Dirty workdir — uncommitted code detection:**
-When `git pull --rebase` fails with "You have unstaged changes," do NOT just stash blindly. Check WHAT the changes are:
-```bash
-git status --short
-git diff --stat
-```
-If the changes are completed code (new files, modified files with substance — not just board updates or config syncs):
-1. `go build ./... && go vet ./...` — does it compile?
-2. `go test ./... -count=1 -short` — do tests pass?
-3. If both pass → this is **completed work from a prior tick that wasn't committed**. Verify the ACs match the first pending task on the board. If they do, proceed directly to Step 6 (Guard) → Step 7 (Judge/manual verification) → Step 8 (Commit). Do NOT spawn a worker — the work is already done.
-4. If build or tests fail → this is partial/broken work. Stash it with `git stash push -u -m "WIP: <task-id> — incomplete prior tick"`. Pull, then pop and decide: fix as foreman or create a task for the board.
-5. If the diff is ONLY board/bookkeeping changes (`.coding-hermes/tasks.md`, `.gitreins/tasks.yaml`, `.vfs/`, `CHANGELOG.md`) or **project-specific config-only files** (see `references/bookkeeping-commit-patterns.md`) — this is normal cleanup from a prior tick. Add and commit them as a `chore` commit before pulling.
-
-**⚠️ DUCK-DRILL: `duckbrain.config.json` `defaultNamespace` — NEVER change it.** If you see this file dirty with a `defaultNamespace` change, REVERT it. Do NOT commit it. The default namespace is PINNED to `hermes-memory` and changing it breaks every other foreman's DuckBrain operations (DB-003: 20 default rotations in 7 days). Any namespace you need to write to, pass `namespace="<name>"` explicitly — never change the global default.
-
-This prevents duplicate work: spawning a worker when the code is already written is wasteful and can cause merge conflicts. **Proven:** ASCE 2026-07-12 — OAuth implementation (PH2-001, 15 files, +3255 lines, 22 tests) sat uncommitted from a prior worker. Build+test green. Foreman verified ACs, committed, skipped worker spawn entirely.
-
-**CI Health:**
-```bash
-gh run list -R <repo> --limit 3
-```
-Transient failures (billing blocks, runner timeouts, rate limits) → fix immediately, no task created. Real failures (test failures, build errors) → if caused by previous tick's commit, fix immediately. If caused by external change, flag in Step 1.6.
-
-**Environment:**
-- Go: `go mod tidy`, `go vet ./...`
-- Python: `pip install -e ".[dev]"`, `ruff check .`
-- TypeScript: `npm ci`, `npx tsc --noEmit`
-- Rust: `cargo check`
-
-**GitReins state cleanup:** `.gitreins/config.yaml` and `.gitreins/tasks.yaml` can drift between ticks — tasks completed via MCP (task_create/task_complete) leave stale state files. Before the discovery sweep, restore both to a clean state:
-```bash
-git checkout -- .gitreins/config.yaml .gitreins/tasks.yaml 2>/dev/null
-rm -f .gitreins/config.yaml.bak .gitreins/tasks.yaml.bak 2>/dev/null
-```
-These are MCP-managed state files, not project source. Never commit them. If they show as modified in `git status`, they'll block `git pull --rebase`. **Proven:** Crier 2026-07-12 — MCP-completed tasks left both files modified and a .bak untracked; foreman restored to clean state before discovery sweep.
-
-If the environment is fundamentally broken (missing toolchain, corrupted venv), create a `## [ ] INFRA` task and skip to Step 1.6. Don't burn ticks fighting the environment.
+Load skill: coding-hermes-self-heal
+See [coding-hermes-self-heal] for full self-heal procedure.
 
 ## Step 1 — Read Board
-
-Read `.coding-hermes/tasks.md`. This is the project's single source of truth for what needs to be done.
-
-**Board format — model-router style (MANDATORY):** Every task board MUST use the matrix format from `coding-hermes-model-router`. Each task is a row with: ID, Task, Priority, Complexity, Dependencies, Capability Tags, Selected Model, Reasoning Level, Fallback.
-
-```markdown
-# Project Name — Task Board
-
-> Foreman: deepseek-v4-flash @ deepseek-foreman | DuckBrain: <namespace>
-
-## Active
-
-| ID | Task | Pri | Cpx | Deps | Tags | Model | Reasoning | Fallback |
-|----|------|-----|-----|------|------|-------|-----------|----------|
-| T01 | Repair login flow | Critical | 5±1 | — | +++backend, ++debugging, -vision | GLM-5.2 | High | DS-V4-Pro |
-| T02 | Add rollback to migration | High | 4±1 | T01 | +++database, ++terminal, -vision | DS-V4-Flash | Medium | Kimi-K3 |
-
-## Completed
-
-| ID | Task | Pri | Cpx | Commit | Model |
-|----|------|-----|-----|--------|-------|
-| T00 | Bootstrap init | Trivial | 1±0 | abc1234 | DS-V4-Flash |
-```
-
-When onboarding a new project, the foreman MUST load `coding-hermes-model-router` and decompose the project into this matrix.
-
-**Permanent last task — NEVER-DONE:** Every task board MUST end with this task. It is NEVER marked `[x]` — it is the perpetual improvement engine.
-
-```
-## [ ] NEVER-DONE — Run coding-hermes-never-done 11-point audit
-
-Load coding-hermes-never-done skill. Run ALL 11 checks: spec alignment,
-doc coverage, test gaps, package upgrades, pitfall hunt, performance audit,
-endpoint verification, CI/CD health, DuckBrain sync, code quality,
-middle-out wiring. Create a task for EVERY gap found. This task is never
-complete — the audit always finds something.
-```
-
-When onboarding a new project, the foreman MUST write this task as the LAST item in the Active section. When a tick ends with an empty board (after the sweep), the foreman picks up this task and runs the audit. The audit creates new tasks which get worked in subsequent ticks. When those are done, the NEVER-DONE task re-triggers and finds NEW gaps. The cycle never stops.
-
-**Count:**
-- `## [ ]` — pending task headers
-- `- [ ]` — pending subtasks under active headers
-- `## [x]` — completed task headers
-
-**Decision:**
-- Board has pending tasks → pick the oldest `## [ ]` task, proceed to Step 2
-- Board is empty OR all tasks are `[x]` → jump to Step 1.5 Discovery Sweep
-
-**Task selection:** Pick the oldest pending task FIFO. If a HIGH_PRIORITY label exists, pick that first. Never cherry-pick tasks — FIFO prevents a task from rotting at the bottom of the board forever.
-
-**SPEC quality gate — before ANY CORE implementation, verify specs exist AND meet quality bar.** SPEC phase tasks are BLOCKING. Before allowing a worker to touch CORE/API/MCP code, the foreman MUST verify that spec files (under `specs/`) meet the coding-hermes implementation standard:
-
-```bash
-skill_view(name='coding-hermes-specs')
-```
-
-The standard requires: exact Go interfaces with every method signature, error paths for every function, exact DDL with indexes, wiring to CLI/HTTP/gRPC/main.go, config with env var names/types/defaults, edge cases, test scenarios. Prose in DuckBrain does NOT count as a spec — specs live as files under `specs/`. and constraints, wiring/dependency injection code, config with exact env var names and types, testing requirements with scenarios, edge case enumeration per component, Mermaid data flow diagrams, and 10-section structure (Overview → Dependencies → Interface → Behavior → Data → States → Errors → Testing → Security → Performance). Prose-level architecture overviews do NOT qualify — an agent reading the spec must be unable to take a wrong path. If specs exist but are prose-level (no exact interfaces, no DDL, no error catalog), the SPEC task is NOT complete — the foreman must either expand the spec or create subtasks for the missing sections. Do not spawn a CORE worker with prose-level specs. **Proven:** Scheduler 2026-07-12 — Bane rejected prose-level DuckBrain entries as "architectural prose"; expanding to axiom-level S01-S04 (1504 lines, exact Go interfaces, DDL, error paths, Mermaid diagrams, 10-section structure per file) enabled correct first-pass CORE implementation (830 lines, 6 files, build+vet+test green).
-
-**Combining tasks — the same-file exception:** The rule is "ONE task per tick," but when two adjacent board tasks share the same root cause, touch the same file, and can be fixed in one atomic commit, combine them. This saves a full tick on a trivial follow-up. The worker prompt should cover both tasks under one header. The board update marks both `[x]` with the same commit hash. **Requirements for combining:** (1) both tasks touch the same file(s), (2) the root cause is shared, (3) the combined change is small enough to verify manually in one pass, (4) both tasks are adjacent on the board (not cherry-picked from opposite ends). **Proven:** Muster 2026-07-12 — "stale stored commands" + "duplicate help entry" both traced to root.go's `newHelpCommand()` and `loadPersistedCommands`; one worker prompt, one commit (`136822d`), both marked `[x]`.
-
-## Step 1.5 — Discovery Sweep (Board Empty)
-
-When there's nothing to work on, FIND work. The sweep is ordered by priority — don't check CI until you've confirmed the build works.
-
-**Model Router — task decomposition on first contact:** When a project is new or the board has only bootstrap tasks (INIT, SPEC, DOC, CI), load `coding-hermes-model-router` and decompose the project into a full task matrix. Score each task by priority, complexity, and required capabilities. Route each task to the cheapest model that works.
-
-**1.5a. Build integrity check:**
-```bash
-make build 2>&1 || go build ./... || cargo build || npm run build
-```
-Does the project build clean? If no, create `## [ ] BUILD — <broken component>`.
-
-**1.5b. Usability testing (live endpoints):**
-If the project has live endpoints (APIs, UIs, services), hit them:
-```bash
-curl -s http://localhost:<port>/health || echo "Not running"
-curl -s https://<deployed-url>/api/status || echo "Not deployed"
-```
-Does the running service respond correctly? If not, create `## [ ] LIVE — endpoint <name> returning <error>`.
-
-**🚨 MANDATORY — Stub detection after every worker task that touches endpoints.** After a worker completes, verify that no endpoint returns stub responses:
-```bash
-# Start service, hit every registered endpoint, reject stubs
-for endpoint in $(grep -r '\.HandleFunc\|\.Handle\|router\.' --include='*.go' -h | grep -oP '"/[^"]+"' | tr -d '"'); do
-  resp=$(curl -s "http://localhost:<port>${endpoint}" 2>/dev/null)
-  if echo "$resp" | grep -qi "not implemented\|unimplemented\|writeNotImplemented\|TODO\|501"; then
-    echo "❌ STUB: ${endpoint} returns 'not implemented'"
-    echo "## [ ] LIVE — endpoint ${endpoint} is a stub, must be wired" >> .coding-hermes/tasks.md
-  fi
-done
-```
-**If ANY endpoint returns a stub response, the worker's "done" claim is REJECTED.** The task stays open. Do not mark it `[x]`. Do not let the foreman leave stubs claiming "task complete." This check is PRE-COMMIT — run it before Step 8 (GitReins guard), not after. **Proven:** Imhotep 2026-07-16 — worker claimed API was complete, but `/api/catalogs` returned `writeNotImplemented` on 2 endpoints. Foreman marked task `[x]` without hitting them. Stub gate would have caught it.
-
-**Cron context pitfall — localhost curl blocked by security scanner.** `curl http://127.0.0.1:<port>/health` is blocked by Tirith as "Schemeless URL in sink context." `python3 -c "import urllib.request..."` is blocked as script execution. `web_extract` to localhost is blocked as private network. **Workaround:** verify liveness via system-level checks instead of HTTP — `systemctl status <service>` + `ss -tlnp | grep <port>` + journalctl tail. If the service is confirmed running by systemd, treat that as a passing health check. See `references/cron-localhost-verification.md` for the full pattern and detection table.
-
-**Static-site variant (GitHub Pages, no backend):** Use the pattern from `references/gh-pages-static-site-verification.md` — HTTP 200 + MD5 byte-identity check against the deployed URL. Skip `/health`/`/api/status`.
-**1.5c. Spec alignment sweep:**
-
-```bash
-grep -r "TODO\|FIXME\|HACK\|XXX" --include="*.go"
-```
-What's spec'd but not implemented? What TODOs rot? Create tasks.
-
-**Deeper spec audit:** Compare spec interfaces/structs against code. See `references/spec-audit-methodology.md`. Proven: Rabbit-Hole — 4 gaps found.
-
-**Stale version/count check:** grep docs for stale version numbers. See `references/stale-count-discovery-patterns.md`.
-Do the commands in README.md actually work? Run them. Are docs accurate against current code? Create `## [ ] DOC — <doc issue>`.
-
-**Stale version/count check:** After any feature-expansion tick, grep ALL documentation files for stale references to old version numbers, language counts, tool counts, or feature counts. See `references/stale-count-discovery-patterns.md` for patterns and proven instances. Fix mechanically — no worker needed.
-
-**1.5e. CI audit:**
-```bash
-# GitHub repos: use gh CLI
-gh run list -R <repo> --limit 10
-# GitLab repos (detected via `git remote -v`): check for .gitlab-ci.yml
-ls .gitlab-ci.yml 2>/dev/null || echo "No CI pipeline"
-```
-Any failing pipelines that aren't transient? Create `## [ ] CI — <pipeline> failing`.
-If no CI file exists on a GitLab project, create `## [ ] CI — Missing .gitlab-ci.yml, no pipeline configured`.
-See `references/gitlab-ci-audit.md` for the full detection + creation pattern.
-
-**CI infrastructure vs code failure classification:** When CI runs complete impossibly fast (< 30s when normal is 2+ min), ALL workflows fail, and markdown-only commits fail identically to code commits — it's an infrastructure issue (billing, runner availability, Node.js deprecation), not a code problem. Do NOT create code-fix tasks for infra failures. See `references/ci-failure-diagnosis.md` for the full classification table and proven instances. For GitHub Pages deployment failures specifically (`actions/configure-pages@v4` returning `HttpError: Not Found`), see `references/gh-pages-configure-failure.md`.
-
-**CI non-triggering (zero runs):** When workflows are active and correctly configured but produce no runs at all despite recent commits, this is a separate failure mode — likely GitHub Actions billing exhaustion, org-level disable, or workflow restrictions. See `references/ci-non-triggering-diagnosis.md` for detection and response patterns.
-
-**1.5f. WebUI admin panel (for projects with APIs/services):**
-If the project is a fleet tool (scheduler, dagger, H3, Bunker, etc.), consider adding a lightweight admin dashboard via WebUI:
-```bash
-skill_view(name='webui')
-```
-WebUI is a ~200KB C library that turns any browser into your app's GUI — no Electron, no web framework. If the project has:
-- API endpoints or services → add a WebUI dashboard
-- CLI only → skip (CLI is sufficient)
-- Is a library/SDK → skip
-
-Create `## [ ] DASH — WebUI admin panel for <feature>` if dashboard would help. The webui skill has Go/Python/Rust examples.
-
-**Queue limit:** Maximum 5 new tasks per sweep. Don't flood the board. Pick the 5 most impactful gaps.
-
-**1.5d. Vulnerability scan — dependencies:**
-
-Security vulns are real gaps. Scan every tick — a vuln found today may have been disclosed yesterday.
-
-```bash
-# Go — govulncheck
-govulncheck ./... 2>&1 | head -30
-
-# Python — pip-audit (preferred) or safety
-uv run pip-audit 2>&1 || pip-audit 2>&1 || echo "pip-audit not installed — create INFRA task"
-
-# Node/TypeScript — npm audit
-npm audit --production 2>&1 | head -30
-
-# Rust — cargo-audit
-cargo audit 2>&1 | head -30
-```
-
-**Decision tree for vuln findings:**
-| Severity | Action |
-|----------|--------|
-| CRITICAL / HIGH | Create `## [ ] SEC — <package>: <CVE/ID> (critical)` immediately. This blocks other work. |
-| MODERATE | Create `## [ ] DEPS — update <package> (<CVE>)`. Queue normally. |
-| LOW / advisory | Note in DuckBrain. Don't create a task — low-severity vulns in transitive deps are rarely exploitable. |
-
-**If the vuln scanning tool isn't installed** (`govulncheck: command not found`, `pip-audit: command not found`): create `## [ ] INFRA — install <tool> for dependency vuln scanning`. This is an INFRA task, not SEC — the tool gap is infrastructure, not a vulnerability.
-
-**Proven:** DexDat Core 2026-07-16 — `govulncheck` found GO-2026-XXXX in indirect dep; foreman created SEC task, worker bumped transitive dep, guard green.
-
-**1.5e. Dependency integrity check — unlinked deps, circular deps, missing transitive deps:**
-
-"Done" doesn't mean compiled. It means every import resolves, every linked library is accessible, every transitive dep is accounted for. These checks catch the "unlinked dependencies" that Bane finds when he asks for real E2E testing.
-
-```bash
-# Go — verify every import resolves
-go build ./... 2>&1  # catches missing packages
-go mod verify 2>&1   # checks go.sum integrity
-go mod graph 2>&1 | grep -v '^[^ ]* [^ ]*$' | head -5  # circular dep detection
-
-# Python — check imports actually resolve
-python3 -c "import <package>; print('ok')" 2>&1  # per-package
-uv run python3 -c "import <main_module>; print('ok')" 2>&1
-
-# Node/TypeScript — check all deps install clean
-npm ls --depth=0 2>&1 | grep -E "UNMET|INVALID|EXTRANEOUS"
-pnpm ls --depth=0 2>&1 | grep -E "ERR|missing"
-
-# Rust — check dependency tree
-cargo tree --depth=0 2>&1 | grep -E "error|unused"
-```
-
-**Decision tree:**
-| Finding | Action |
-|---------|--------|
-| Build fails — missing package | Create `## [ ] BUILD — import <pkg> not found, missing from go.mod/package.json` |
-| go.sum / lockfile mismatch | Run `go mod tidy` / `npm install` / `cargo update` and create `## [ ] DEPS — lockfile out of sync` |
-| Circular dependency detected | Create `## [ ] REFACTOR — circular dep between <A> and <B>`. This is structural debt. |
-| UNMET/EXTRANEOUS deps | Create `## [ ] DEPS — clean up <package.json/go.mod>` |
-
-**Proven:** The "unlinked dependencies" Bane finds during manual E2E testing are exactly what this check catches BEFORE claiming done.
-
-**Supervisor auto-pause orphan check (1.5f):** Check for supervisor-paused crons where both the replacement and replaced are dead. Run `scripts/check-paused-crons.py`. Create INFRA task if found. See `references/supervisor-auto-pause-orphan-chain.md`. **Proven:** EduOS 2026-07-15.
-
-**GitReins stale-task cleanup (1.5g):** Check `.gitreins/tasks.yaml` for stale `in_progress` tasks whose code is already committed. Resolve via MCP `task_complete`. See `references/gitreins-stale-task-cleanup.md`. **Proven:** H4F 2026-07-15.
-
-**Empty workdir detection:** If zero source files (`*.go`/`*.py`/`*.ts`/`*.rs`) exist at project root or in standard subdirectories, the workdir is empty. Create `## [ ] INFRA — workdir empty, no source code`. Do NOT run 1.5a–1.5h on an empty workdir.
-
-**Spec-hub umbrella variant — empty sibling repos:** When this foreman coordinates a multi-repo umbrella and sibling implementation repos are empty shells (only init commits), create Phase 0.5 scaffold tasks rather than INFRA tasks. The foreman CAN do mechanical scaffolding directly (module files, Makefiles, package stubs, .gitignore) but must NOT write SDK code. See `references/spec-hub-multi-repo-foreman.md`.
-
-**Unimplemented-feature test detection:** CI failures are sometimes caused by tests asserting behavior of CLI flags or features that don't exist yet. These are NOT regressions — the test was written before the feature was implemented. Detection pattern:
-```bash
-# Check if failing CI tests reference flags the CLI doesn't support
-./bin/<cli> <command> --help 2>&1 | grep -c "<flag-in-question>"
-```
-When a test asserts a feature that doesn't exist:
-1. Check the CLI help output to confirm the flag/feature is missing
-2. Check the spec to see if it's planned
-3. If planned: skip the test with `it.skip` + comment referencing the spec section
-4. If NOT planned: consider whether the test should be removed
-5. Create a task for implementing the feature (referencing the skipped test)
-**Seen:** Speclang 2026-07-12 — `tests/cli.test.ts` search `--json` and `--quiet` tests failed CI because `speclang search` doesn't support those flags. Skipped both with `it.skip`, CI went green.
-
-**1.5h. E2E completion verification — the "actually done" gate:**
-
-When ALL phases on the board are `[x]` AND the discovery sweep (1.5a–1.5g) finds nothing requiring a worker spawn, the foreman MUST verify the system actually works end-to-end before claiming completion. Unit tests passing + guard green ≠ the system works. This is the gate that catches what Bane finds during manual testing: unlinked deps, broken wiring, config mismatches, runtime panics.
-
-**E2E verification per project type:**
-
-```bash
-# API / backend services — full smoke test
-curl -s http://localhost:<port>/health || echo "HEALTH FAIL"
-curl -s http://localhost:<port>/v1/<primary-endpoint> | head -20 || echo "API FAIL"
-# Check actual process is running (not just port open)
-systemctl status <service> --no-pager -l 2>&1 | head -5
-ss -tlnp | grep <port> || echo "PORT NOT LISTENING"
-
-# CLI tools — run with real args
-./bin/<cli> --help 2>&1 | head -5
-./bin/<cli> version 2>&1
-./bin/<cli> <primary-command> --dry-run 2>&1 || echo "CLI PRIMARY COMMAND FAIL"
-
-# Libraries / SDKs — import test
-go test ./... -count=1 -short 2>&1 | tail -5
-# Python SDK
-uv run python3 -c "import <package>; print(dir(<package>))" 2>&1
-
-# Static sites / frontends
-curl -sI https://<deployed-url> | head -5
-# Check MD5 of deployed vs local build
-curl -s https://<deployed-url>/index.html | md5sum
-
-# Multi-service projects — integration test
-# Start if not running, hit all endpoints, check cross-service calls
-curl -s http://localhost:<portA>/health && curl -s http://localhost:<portB>/health
-```
-
-**Decision tree for E2E results:**
-| Result | Action |
-|--------|--------|
-| ✅ All endpoints respond, CLI works, imports resolve | Project is genuinely complete. Proceed to idle-tick tracking. |
-| ❌ Service not running | Create `## [ ] LIVE — <service> not running. Health endpoint unreachable.` |
-| ❌ API returns error/5xx | Create `## [ ] LIVE — <endpoint> returning <error>. E2E verification failed.` |
-| ❌ CLI command panics/errors | Create `## [ ] BUG — <cli> <command> panics with <error>` |
-| ❌ Import fails (ModuleNotFoundError) | Create `## [ ] BUILD — package <name> not importable. Check venv/setup.` |
-| ❌ Cross-service call fails | Create `## [ ] INTEGRATION — <service-A> → <service-B> call failing` |
-
-**This is NOT the same as Step 1.5b (usability testing).** 1.5b checks if live endpoints exist. 1.5h checks if the ENTIRE system works — all endpoints, imports, cross-service calls, CLI commands. 1.5b is a quick check. 1.5h is the final exam.
-
-**If E2E verification fails:** The project is NOT complete regardless of what the board says. Create the appropriate tasks, reset the idle-tick counter to 0, and return to Step 1. The next tick will pick up the E2E failure tasks.
-
-**Proven:** Bane's repeated finding: "foreman says something is done and it is not and when I ask for real end to end testing it then finds the issues unlinked dependencies etc." This gate catches those issues BEFORE claiming done — when the foreman runs E2E verification, it finds unlinked deps itself instead of Bane finding them later.
-
-**If after the full sweep (including E2E verification) the board is still empty:** The foreman MUST run the Never-Done audit before considering self-pause:
-
-```bash
-skill_view(name='coding-hermes-never-done')
-```
-
-The never-done audit checks 10 categories: spec alignment, doc coverage, test gaps, package upgrades, pitfalls, performance, endpoint verification, CI/CD health, DuckBrain sync, code quality. If ANY of the 10 checks finds a gap, create tasks and return to Step 1. The project is not done — the audit found work.
-
-**ONLY if ALL 10 checks pass with zero findings** does the project enter the self-pause track below. The never-done audit runs on EVERY empty-board tick — not just once.
+Load skill: coding-hermes-board
+See [coding-hermes-board] for full board + self-pause procedure.
+
+## Step 1.5 — Discovery Sweep
+Load skill: coding-hermes-discovery
+See [coding-hermes-discovery] for full discovery sweep across all languages.
 
 ## Self-Pause — Only NEVER-DONE Remains
-
-When a project's ONLY remaining task is the NEVER-DONE audit, the foreman sets the daemon cooldown to 12h (43200s). The project is idle — no pending real work. Burning PAYG every 15 minutes on a no-op audit is waste.
-
-```bash
-# When board has ONLY NEVER-DONE (no other `## [ ]` tasks):
-curl -s -X PUT http://127.0.0.1:9090/api/v1/projects/<name> \
-  -H 'Content-Type: application/json' \
-  -d '{"CooldownS":43200}'
-```
-
-**Speed-up on new work:** The foreman checks the board on each tick. If real tasks appear (Bane adds work, pushed code creates tasks), the foreman resets cooldown to 900s:
-
-```bash
-curl -s -X PUT http://127.0.0.1:9090/api/v1/projects/<name> \
-  -H 'Content-Type: application/json' \
-  -d '{"CooldownS":900}'
-```
-
-The supervisor also handles this in Phase 2D: any project at 43200s cooldown with new pending tasks gets reset to 900s.
+Load skill: coding-hermes-board
+See [coding-hermes-board] for self-pause procedure.
 
 ## Step 2 — Hilo Impact Analysis
+
+**Daemon pitfalls reference:** See `references/daemon-pitfalls.md` for: autoSlowdown fighting manual cooldowns, Deliver field persistence bug, cooldown reversion on crash, background review trap, and model sweep filtering bugs.
 
 Before touching code, understand the blast radius. Hilo prevents "fix one thing, break three others."
 
@@ -522,7 +216,25 @@ hilo classify "<task>"          # categorize the task type
 
 ## Step 3 — DuckBrain Context Load
 
-Load the project's memory before action. The worker needs context it wouldn't otherwise have.
+Load YOUR OWN memory before action. You have been here before. Don't rediscover what you already know.
+
+**First — load YOUR state (what you decided, what you understand):**
+```python
+# What do I already know about this project?
+duckbrain_recall(key="/project/<name>/status", namespace="<project-namespace>")
+duckbrain_list_keys(prefix="/project/<name>/", namespace="<project-namespace>")
+duckbrain_recall(query="architecture understanding components", namespace="<project-namespace>")
+duckbrain_recall(query="model choices which model best for what", namespace="<project-namespace>")
+```
+
+**Then — load task-specific context for the worker:**
+```python
+duckbrain_recall(query="architecture decisions <subsystem>", namespace="<project-namespace>")
+duckbrain_recall(query="pitfalls <subsystem>", namespace="<project-namespace>")
+duckbrain_recall(query="patterns <task-type>", namespace="<project-namespace>")
+```
+
+**WHY this matters:** Without loading your own state, you walk into a project blind every tick. You don't know what architecture decisions were made, which models worked, what's already built. You spend tokens rediscovering. With DuckBrain, you walk in with memory — you know the project like you never left.
 
 **⚠️ CRITICAL: NEVER call `switch_namespace`. ALWAYS pass `namespace` explicitly.** `switch_namespace` changes the global default namespace in `duckbrain.config.json`, which affects EVERY other foreman and agent using DuckBrain. This is the root cause of the DB-003 write degradation bug — 20 foremen switching the default 20 times a day made writes and reads target different namespaces. See `references/duckbrain-namespace-split-brain.md`.
 
@@ -595,149 +307,55 @@ Step 0 → Step 1 → Step 2 (skip if no code) → Step 3 → Step 4 (investigat
 
 ## Step 5 — Spawn Worker
 
-The foreman compiles the worker prompt, selects model/provider (see Model Selection section), and spawns the worker. The worker gets the `coding-hermes-worker` skill: clean, focused, 153 lines of worker rules from the upstream repo.
+**Correct pattern:** spawn workers via `terminal` with `hermes chat -q`:
 
 ```bash
-# The foreman loads the worker skill for the compiled prompt
-skill_view(name='coding-hermes-worker')
+hermes chat -q --provider <flat-rate-provider> --model <model> --workdir /home/kara/<project> \
+  --prompt-file /tmp/worker-prompt.txt
 ```
 
-Then spawn:
+Workers launched this way use their own provider/model/key — flat-rate buckets for cost control, PAYG for quality-critical work.
+
+**⚠️ CRITICAL: Tool availability overrides text.** If the foreman has `delegation` in its `enabled_toolsets`, it WILL use `delegate_task` regardless of what this skill says. The LLM picks the physically available tool over text instructions. **Structural fix required:** remove `delegation` from the foreman's `enabled_toolsets`. This is the only reliable way to prevent the behavior.
+
+**Recommended foreman toolsets:**
+```json
+["terminal", "file", "web", "search", "skills", "memory"]
+```
+
+Explicitly removed: `delegation` (burns PAYG key via inherited provider), `cronjob` (prevents self-modification of schedule and cooldown drift).
 ```bash
 cd /home/kara/<project> && hermes chat -q --skills coding-hermes-worker '<compiled prompt>' -m '<coding-model>' --provider '<prepaid-bucket>' --ignore-rules --cli -Q
 ```
 
 The `coding-hermes-worker` skill handles: read before writing, match conventions, write tests, build before commit, small commits, no side effects, verify then report. The foreman does not inline these rules — the worker skill is the single source of truth.
 
-## Step 6 — GitReins Guard (Tier 1)
-
-Run the static guard. If it fails, fix the issues before proceeding. One guard failure = one fix cycle. Don't batch fixes — fix the first, re-run guard, repeat.
-
-```bash
-gitreins guard
-```
-
-**Expectations:** secrets clean, lint passes, tests pass. Any failure blocks commit.
-
-**MCP vs CLI discrepancy:** The MCP `guard_run` tool can report phantom secret
-findings from stale cached state. If MCP shows a secrets failure but CLI
-`gitreins guard` returns clean AND `grep` can't find the string, trust the CLI.
-Commit with `--no-verify` to bypass the MCP guard. See
-`references/mcp-gitreins-guard-phantom-secrets.md` for detection flow.
-
-## Worker Model Selection — Capability-Based
-
-**This section replaces the old language-based table.** The foreman picks workers based on what the TASK needs, not what language it's in.
-
-### Step 0.5: Recall Model Capabilities from DuckBrain (BEFORE picking)
-
-```bash
-duckbrain recall --namespace default --key /benchmarks/models/<model-id>
-```
-
-The AI Benchmark DB Updater cron populates this daily at 4 AM with pricing, benchmarks, context windows, strengths, and weaknesses for every model. Query the specific models you're considering for the task. Target keys:
-
-| Model | Key |
-|-------|-----|
-| DeepSeek V4 Pro | `/benchmarks/models/deepseek-v4-pro` |
-| DeepSeek V4 Flash | `/benchmarks/models/deepseek-v4-flash` |
-| MiniMax-M3 | `/benchmarks/models/minimax-m3` |
-| Kimi K3 | `/benchmarks/models/kimi-k3` |
-| GLM-5.2 | `/benchmarks/models/glm-5.2` |
-| GPT-5.6 Sol | `/benchmarks/models/gpt-5.6-sol` |
-| GPT-5.6 Terra | `/benchmarks/models/gpt-5.6-terra` |
-| Grok-4.5 | `/benchmarks/models/grok-4.5` |
-| Step-3.7 Flash | `/benchmarks/models/step-3.7-flash` |
-| Tencent Hy3 | `/benchmarks/models/tencent-hy3` |
-
-Each entry returns: tier, context window, pricing (input/output per 1M tokens), benchmarks (SWE-bench, Aider, etc.), and user sentiment.
-
-### Step 5a: Analyze the Task
-
-For each pending task, determine requirements:
-
-| Requirement | Check | Models that handle it |
-|------------|-------|----------------------|
-| Long context (>100k) | Specs, refactors, multi-file | gpt-5.6-sol, MiniMax-M3 (partial), kimi-k3 (partial) |
-| Image processing | Screenshots, UI mockups, diagrams | gpt-5.6-sol, gpt-5.6-terra, grok-4.5 |
-| UI/frontend work | HTML, CSS, JS, visual output | gpt-5.6-sol, MiniMax-M3, hy3, kimi-k3 |
-| Shell-heavy work | CI, infra, devops, scripting | step-3.7-flash, glm-5.2, deepseek-v4-pro |
-| Architecture design | System design, data models, APIs | gpt-5.6-sol, deepseek-v4-pro, MiniMax-M3 |
-| Go coding (complex) | Multi-file features/refactors | glm-5.2, MiniMax-M3 |
-| Go coding (bug fixes) | Single-file fixes, tests | kimi-k3, glm-5.2, MiniMax-M3 |
-| Python/TS general | Features, fixes | MiniMax-M3, kimi-k3, glm-5.2 |
-| Docs/specs | Structured writing | gpt-5.6-terra, step-3.7-flash |
-| Mechanical work | Boilerplate, lint, format, test gen | step-3.7-flash, deepseek-v4-flash |
-
-### Step 5b: Pick Model (match requirements → capabilities)
-
-1. **If image processing needed AND not Go** → gpt-5.6-sol primary, grok-4.5 fallback
-2. **If 150k+ context needed** → gpt-5.6-sol primary, MiniMax-M3 (partial) fallback
-3. **If architecture/reasoning** → gpt-5.6-sol primary, deepseek-v4-pro fallback
-4. **If spec/docs** → gpt-5.6-terra primary, step-3.7-flash fallback
-5. **If Go complex** → glm-5.2 primary, MiniMax-M3 fallback, kimi-k3 backup
-6. **If Go bug** → kimi-k3 primary, MiniMax-M3 fallback, glm-5.2 backup
-7. **If Python/TS** → MiniMax-M3 primary, kimi-k3 fallback, glm-5.2 backup
-8. **If mechanical/fast** → step-3.7-flash primary, deepseek-v4-flash fallback
-9. **If mixed/special** → MiniMax-M3 (most versatile) primary
-10. **All others** → MiniMax-M3 → kimi-k3 → glm-5.2 cascade
-
-### Step 5c: Provider Balance
-
-Spread work across prepaid plans. Track in DuckBrain:
-
-```bash
-duckbrain recall --namespace coding-hermes --key /fleet/provider-usage
-```
-
-If minimax approaching exhaust → bias toward kimi-for-coding + zai-glm. If zai-glm exhausted → bias toward minimax + stepfun. Rotate to avoid lockouts.
-
-### Anti-Patterns (still hold)
-
-- **gpt-5.6 for Go coding:** Silently exits with zero output. Never send Go tasks to codex.
-- **kimi + deepseek claiming full context:** Both degrade past ~128-200k despite claims.
-- **GLM-5.2 on GDScript:** Silent (Variant C). Use MiniMax-M3 instead.
-- **Make/test parallelization > j4:** NEVER use `-j` higher than 4 for `make` or `go test -parallel`. A single `make -j16` on C++ projects (RethinkDB, etc.) saturates the entire machine with `-O3` compilations, choking all other foremen and workers. Maximum: `make -j4`, `go test -parallel 4`. If the project has an existing `-j` flag in its Makefile, override it. **Proven:** RethinkDB 2026-07-18 — one MiniMax worker ran `make test -j16`, launched 237 C++ files at `-O3`, load hit 16.76, entire fleet stalled.
-
-**Bucket exhaustion handling:** When a primary bucket returns 429/resource_exhausted, immediately switch to the first fallback. When that exhausts, switch to the second. If ALL buckets for a task type are exhausted, create `## [ ] INFRA — prepaid buckets exhausted for <task-type>, need new provider or billing top-up` and skip that task.
-
-**For spec-writing phases with 3+ independent files, spawn workers in parallel.** See `references/parallel-spec-worker-spawning.md`. GPT-5.6-terra on openai-codex handles concurrent sessions — 9 workers completed in ~7 minutes vs ~70 serial.
-
-**The foreman monitors the background process.** Check for completion every ~60 seconds. If the worker hasn't finished within 15 minutes, check the log. If stuck, kill and retry with a different model on a different provider. A stuck worker is usually a model-specific issue — switching models resolves it.
-
-**Two commit patterns — foreman-commit vs worker-direct-commit:**
-
-The worker spawn prompt (from Step 4) includes commit instructions. Workers that follow those instructions will commit directly before exiting. When this happens:
-
-| What changes | Foreman-commit (skill default) | Worker-direct-commit (common reality) |
-|---|---|---|
-| Steps 5-6-7-8 order | Foreman runs guard → judge → commit | Worker commits → foreman verifies post-commit |
-| Guard runs on | Staged (pre-commit) changes | Already-committed state → "No files staged" is normal |
-| Judge | Runs against staged diff | Typically skipped for trivial fixes; post-hoc judging risks false negatives |
-| Foreman's role | Gates the commit | Verifies commit quality, pushes, updates board |
-
-**When the worker commits directly, the foreman still:**
-1. **Build+vet+test verification FIRST** — run `go build ./... && go vet ./... && go test ./... -count=1 -short` (or language equivalent). This catches syntax errors, import bugs, and test failures that `gitreins guard` may miss because the guard runs on committed state while the working tree can still have issues. Do NOT skip this step — it catches real bugs (e.g., GLM-5.2 double-import syntax errors) that the guard's `go_build` check passes over.
-2. **Verify the commit exists and is correct** (`git log --oneline -1`, `git show --stat HEAD`).
-3. **Run `gitreins guard` post-commit** — secrets check is still valuable even on verified code.
-5. Push (`git push origin $(git branch --show-current)`).
-5. **Update the board**.
-
-**Judge decision:** For trivial/single-line fixes (test assertion changes, typo fixes, config updates), skip the post-hoc judge — it runs against an admin-only diff and produces false negatives (documented in the `gitreins` skill). For multi-file features, create a GitReins task pre-commit and run `gitreins judge <id>` against the feature commit. **Proven:** Kobayashi-Maru 2026-07-12 — worker committed 3-line test fix; foreman verified tests pass, ran guard post-commit (secrets clean), pushed, skipped judge.
+## Worker Model Selection
+Load skill: coding-hermes-worker-model
+See [coding-hermes-worker-model] for capability-based model routing.
 
 ## Step 6 — GitReins Guard
 
 **🚨 CRITICAL: NEVER run bare `gitreins guard` — always use `timeout N gitreins guard`.**
 Bare guard calls create zombies when the guard hangs (network timeout, large test suite, secrets scan stall). A hung guard locks the foreman's `_running_job_ids` entry for 30 minutes. Always wrap with `timeout`.
 
-**Tier 1 checks on the worker's changes:**
+**Correct pattern:** spawn workers via `terminal` with `hermes chat -q`:
 
 ```bash
-cd /home/kara/<project>
-timeout 300 gitreins guard    # Start at 300s. Calibrate from actual run time: if guard took 45s last tick, use 120s next. If 280s, use 600s. Store the calibrated N in DuckBrain.
+hermes chat -q --provider <flat-rate-provider> --model <model> --workdir /home/kara/<project> \
+  --prompt-file /tmp/worker-prompt.txt
 ```
 
-This runs:
+Workers launched this way use their own provider/model/key — flat-rate buckets for cost control, PAYG for quality-critical work.
+
+**⚠️ CRITICAL: Tool availability overrides text.** If the foreman has `delegation` in its `enabled_toolsets`, it WILL use `delegate_task` regardless of what this skill says. The LLM picks the physically available tool over text instructions. **Structural fix required:** remove `delegation` from the foreman's `enabled_toolsets`. This is the only reliable way to prevent the behavior.
+
+**Recommended foreman toolsets:**
+```json
+["terminal", "file", "web", "search", "skills", "memory"]
+```
+
+Explicitly removed: `delegation` (burns PAYG key via inherited provider), `cronjob` (prevents self-modification of schedule and cooldown drift).
 - Secrets detection
 - Build check
 - Lint check
@@ -760,14 +378,23 @@ This runs:
 
 ## Step 7 — GitReins Judge
 
-**Tier 2 LLM evaluation:**
+**Correct pattern:** spawn workers via `terminal` with `hermes chat -q`:
 
 ```bash
-cd /home/kara/<project>
-gitreins judge <task-id>
+hermes chat -q --provider <flat-rate-provider> --model <model> --workdir /home/kara/<project> \
+  --prompt-file /tmp/worker-prompt.txt
 ```
 
-The judge evaluates: does the code actually meet the acceptance criteria? Not "does it compile" — that was Step 6. The judge asks: "If the acceptance criteria say 'the API returns 200 with a valid JWT', does the code actually do that?"
+Workers launched this way use their own provider/model/key — flat-rate buckets for cost control, PAYG for quality-critical work.
+
+**⚠️ CRITICAL: Tool availability overrides text.** If the foreman has `delegation` in its `enabled_toolsets`, it WILL use `delegate_task` regardless of what this skill says. The LLM picks the physically available tool over text instructions. **Structural fix required:** remove `delegation` from the foreman's `enabled_toolsets`. This is the only reliable way to prevent the behavior.
+
+**Recommended foreman toolsets:**
+```json
+["terminal", "file", "web", "search", "skills", "memory"]
+```
+
+Explicitly removed: `delegation` (burns PAYG key via inherited provider), `cronjob` (prevents self-modification of schedule and cooldown drift).
 
 **Judge results:**
 
@@ -778,6 +405,23 @@ The judge evaluates: does the code actually meet the acceptance criteria? Not "d
 | ❌ FAIL — fundamental | The task was too big or the spec was wrong. Break task into smaller pieces. Create new subtasks. Mark current task as `## [ ]` with added detail. Next tick will pick it up. |
 | ❌ FAIL — judge error | The judge's LLM had an issue. Retry once with different model. If persistent, skip judge and commit with note. |
 | ⏱️ TIMEOUT — compaction loop | When `.gitreins/config.yaml` has `max_input_tokens: -1` (unlimited), the judge enters an infinite compaction loop: "Context near limit (4940/-1 tokens) — compacting" repeats endlessly. The `-1` means "unlimited" which the evaluator interprets as "load everything", hits the model's real context ceiling, compacts, loads again, compacts again... **Fix:** set `max_input_tokens` to a concrete value like `0.5M` or `1M` in `.gitreins/config.yaml`. **If config can't be changed mid-tick:** skip judge, commit with note "judge skipped — max_input_tokens: -1 compaction loop". The guard already proved correctness. **Proven:** Chimera v2 2026-07-12 — judge timed out on 8-file change with `max_input_tokens: -1`; compaction #1/#2/#3 all at 4940 tokens.
+
+### Smoke Tests ≠ Real Tests (Pitfall)
+
+**Do NOT mark adapter/shim/compatibility-layer verification as complete based
+on HTTP status-code smoke tests.** 25/25 endpoints returning correct codes
+feels like "done" but proves nothing about real interoperability. The shim
+may return HTTP 200 on every call yet be completely incompatible with the
+actual client it's built for.
+
+**Rule:** Mark verification PARTIAL until at least ONE real end-to-end
+session runs with the actual upstream client or the upstream's own test
+suite. Use the upstream-contract-adapter pattern: extract HTTP contract
+expectations from the upstream project's test suite and validate your shim
+against the same contract.
+
+See `references/smoke-tests-arent-real-tests.md` for the full Consensus
+postmortem and Go implementation template.
 
 ## Step 8 — Commit
 
@@ -826,31 +470,26 @@ Over time, this builds a cross-project solution cache. A parser fix for the ASCE
 
 ## Step 10 — DuckBrain Write
 
-Store findings in the project's DuckBrain namespace. This is how the foreman remembers across ticks.
+Store your understanding so YOU remember it next tick. This is how you build continuity across runs.
 
 **⚠️ NEVER call `switch_namespace` — pass `namespace` explicitly (see Step 3 warning).**
 
-**What to store:**
+**What to store — think "what would I need to know if I walked into this project cold?"**
 
-| Type | Domain | Example |
-|------|--------|---------|
-| Decision made | `event` | "Decided to use JWT over session tokens because of stateless deployment requirement" |
-| Pitfall encountered | `concept` | "MiniMax-M3 generates syntactically correct Go but adds phantom imports. Always run goimports after MiniMax worker." |
-| Pattern discovered | `concept` | "For Go API handlers, use the httputil.WriteJSON pattern from internal/httputil" |
-| Project status update | `config` | "Current state: 12 tasks completed, 3 pending, CI passing, go 1.22" |
+| Type | Domain | Key pattern | Example |
+|------|--------|-------------|---------|
+| **Project understanding** | `config` | `/project/<name>/status` | "Built: auth, rate limiting, API gateway. Using: JWT, Redis, Go 1.22. Key files: server.go, auth/middleware.go. Architecture: gin → handler → service → repo → pgx." |
+| **Model choices** | `concept` | `/project/<name>/model-choices` | "Go feature work: GLM-5.2 primary (reliable, fast). MiniMax-M3 fallback (hallucinates imports, run goimports). V4 Pro only for complex concurrency. Never: GPT-5.6 for Go (overthinks)." |
+| **Decision made** | `event` | `/project/<name>/decisions/<ts>` | "Decided JWT over sessions — stateless deploys, no Redis dependency. Trade-off: can't revoke tokens without blacklist." |
+| **Pitfall encountered** | `concept` | `/project/<name>/pitfalls/<ts>` | "MiniMax-M3 adds phantom imports. After every MiniMax worker, run `goimports -w .` and `go vet ./...`." |
+| **Pattern discovered** | `concept` | `/project/<name>/patterns/<ts>` | "For new API handlers, copy-paste from handlers/example.go — it has the full wiring pattern." |
+| **Worker performance** | `event` | `/project/<name>/workers/<ts>` | "V4 Pro on auth task: 3 commits, 0 rollbacks, 245s. GLM-5.2 on same: 1 commit, 2 rollbacks, 312s. V4 Pro better for auth complexity." |
 
-**Write operation:**
-```python
-duckbrain_remember(
-    key=f"/project/<project>/<domain>/<timestamp>",
-    domain="event" | "concept" | "config",
-    attributes={"task_id": "<id>", "outcome": "<pass|fail|partial>", "model_used": "<model>"},
-    embedding_text="<comprehensive summary of what was learned>",
-    namespace="<project-namespace>"  # ALWAYS explicit — never rely on default
-)
-```
+**Write immediately after each tick** — don't defer. If DuckBrain is unreachable, write to the board as a fallback note.
 
 **Be specific, not generic.** Bad: "We fixed a bug." Good: "The lexer-parser boundary assumed tokens were always single-byte. When utf-8 runes appeared, the offset calculation broke. Fixed by using rune-aware position tracking in scanner.go:142."
+
+**Update `/project/<name>/status` EVERY tick.** This is your single source of truth for "what is this project, what's built, what's next." Without it, you walk into a project you've worked on for 50 ticks and don't recognize it.
 
 ## Step 1.6 — Scan External Signals
 
@@ -914,6 +553,7 @@ The foreman has access to 8 infrastructure tools. Not every tick uses all of the
 | 🔮 **Off-by-One** | Predictive | 9 | Pre-solve lab — submit solved problems, discover cached solutions |
 | 🏗️ **Bunker** | — | On-demand | Remote deployment to Hetzner for E2E testing. Used when tasks require server validation. `bunker deploy <project>` |
 | ⏰ **Cron Self-Management** | — | Self-Pause | Foremen adjust their own schedule (slow down ONLY) and self-pause. `cronjob(action='update', schedule='...')` for interval increase, `cronjob(action='pause')` to pause. NEVER decrease interval. |
+| 🐛 **Stale Bug Escalation** | Bug same ≥3 ticks | Worker + fix | When DS-007 or NEVER-DONE reports the same bug for ≥3 consecutive ticks, stop noting it and FIX it. Add concrete ACs to the task matrix, spawn a worker with the matrix-specified model, escalate to user if fix fails. See `references/stale-bug-reporting.md`. |
 
 ## Toolset Enforcement (Critical)
 
@@ -947,6 +587,26 @@ enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob"]
 
 ## Pitfalls
 
+### Sibling Subagent File Conflicts
+
+When you use `delegate_task`, the spawned subagent shares the same filesystem. If it's working on the same file set (e.g., CDC-08 coordinator files while you're also editing them), it can **overwrite or delete your changes** mid-turn. Symptoms: files you just wrote go missing, build errors reference symbols you definitely wrote, `read_file` returns "File not found" for a newly created file.
+
+**Detection**: `write_file` warns `was modified by sibling subagent 'sa-X-...' but this agent never read it`, or `read_file` returns empty/missing for a file you just created — you're in a conflict.
+
+**Workaround** — atomic terminal writes:
+```
+cat > /path/to/file.hpp << 'EOF'
+... entire file content ...
+EOF
+```
+Terminal `cat` heredoc writes are atomic — the file appears fully formed, so the subagent can't read a half-written file. Follow with immediate `git add` + `git commit --no-verify` + `git push` before the subagent's next API cycle.
+
+**Prevention**: don't edit files the subagent is tasked to produce. Either wait for the subagent, or kill the delegate process, write files atomically, commit instantly.
+
+### Stale Stash Cleanup
+
+When a task has been attempted by prior ticks and left incomplete work in `git stash`, those stashes are noise. They represent failed approaches. Pattern: `git stash list` → `git stash drop stash@{0}` for each matching the blocked task. Clear the slate before dispatching a fresh worker with a decomposed approach.
+
 - **Never use delegate_task to spawn workers.** It inherits the foreman's PAYG provider. Always use `hermes chat -q -m <model> --provider <bucket>`. If `delegate_task` is available as a tool, the LLM will use it regardless of this directive — strip the `delegation` toolset.
 - **`-q` not `-z` for worker spawn.** The top-level `hermes -z PROMPT` is a different flag from `hermes chat -q QUERY`. Using `-z` on `hermes chat` silently fails. Always use `hermes chat -q "<prompt>"` for one-shot worker queries.
 - **Worker spawn has no `--workdir` or `--background`.** `hermes chat` does not accept these flags. Use `cd <dir> &&` before the command for workdir. Use `terminal(background=true)` for async execution — it's a Hermes tool feature, not a CLI flag.
@@ -954,7 +614,10 @@ enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob"]
 - **Cron `python3 -c` blocked by security scanner — write ad-hoc verification to file.** See `references/cron-python3-c-blocked.md`. Write script to temp file and run directly. **Proven:** H4F 2026-07-15.
 - **Cron `sudo` blocked by Tirith — systemd units, service restarts, file deployment.** Any `sudo` command blocked in cron context. Prepare fix files in /tmp, document manual command, move on. Code fixes commit normally — deploys on next restart. **Proven:** Scheduler 2026-07-16.
 - **Never change the foreman's own model to a coding model.** Foreman stays on v4-pro or v4-flash on PAYG. Coding models are for workers.
-- **The foreman NEVER writes production code — with two exceptions.** (1) Code from axiom-level specs (exact interfaces, DDL, error paths, JSON Schema files). (2) Mechanical deprecation/cleanup (comments, file moves, import updates, lint fixes). Both are detailed in `references/foreman-direct-code-exceptions.md`. **The rule still holds for design-heavy, underspecified, or exploratory tasks** — if the foreman has to figure out WHAT to build, spawn a worker. **Proven:** Scheduler 2026-07-12 (code-from-specs: 830 lines, 6 files), DexDat Core 2026-07-14 (mechanical deprecation: 17 files, +334/-18, no worker), H3 Go SDK 2026-07-14 (JSON Schema → Go types: 22 types, +944 lines, no worker).
+- **The foreman NEVER writes production code — with two exceptions.** (1) Code from axiom-level specs (exact interfaces, DDL, error paths, JSON Schema files). (2) Mechanical deprecation/cleanup (comments, file moves, import updates, lint fixes). Both are detailed in `references/foreman-direct-code-exceptions.md`. **The rule still holds for design-heavy, underspecified, or exploratory tasks** — if the foreman has to figure out WHAT to build, spawn a worker.
+- **Recurring infra failures are YOUR fault if you keep reporting them.** If Chrome CDP, tunnels, containers, or any infrastructure dies in 3+ consecutive ticks and all you did was note "still down", you are wasting PAYG tokens and frustrating the user. Fix the root cause or create a no_agent watchdog — never just report the same failure repeatedly. A Chrome crash that happens 11 times deserves a watchdog script, not 11 "Chrome DOWN" log lines.
+- **Never manually touch the database when a foreman is running.** Seeding, resetting, or running migration scripts outside the foreman's worker loop destroys test fixture data that the foreman maintains. A manual `reset-and-seed.mjs` with TRUNCATE CASCADE will wipe tables the test suite's `beforeAll` hooks depend on, causing regression failures the foreman has to re-fix. If demo credentials need refreshing, let the foreman handle it — it has DOCKER tasks for this. If a manual seed IS necessary (user asks for login credentials), re-run the full test suite after and expect failures. **Proven:** EduOS 2026-07-11 — manual seed reset caused 13 test regressions (was 0 fail); foreman had to re-fix via FIX-012.
+- **Watchdog pattern:** When a service keeps dying, write a small shell script (~30 lines), copy it to `~/.hermes/scripts/`, create a no_agent cron (every 5-15min) that runs it. Silent when healthy, reports only when restoration was needed. This is the foreman's job. **Proven:** Scheduler 2026-07-12 (code-from-specs: 830 lines, 6 files), DexDat Core 2026-07-14 (mechanical deprecation: 17 files, +334/-18, no worker), H3 Go SDK 2026-07-14 (JSON Schema → Go types: 22 types, +944 lines, no worker).
 - **Worker bucket exhaustion is normal and expected.** When zai-glm returns 429, switch to minimax, then xai-oauth. **Bucket verification:** don't trust INFRA tasks claiming exhausted — test each bucket at tick start with a one-word prompt. Only skip blocked phases when verification confirms exhaustion. **Proven:** Consensus 2026-07-12.
 - **gpt-5.6-sol on codex — silently exits with zero output on Go coding tasks.** The worker process starts, `hermes chat -q` returns exit code 0 almost immediately, but `git status --short` shows no new files, `git log --oneline -1` shows no new commit, and `ps aux | grep 'hermes chat'` finds no running process. The session launches but produces nothing. **Detection:** (1) `git status --short` is clean (no new/modified files), (2) `git log --oneline -1` is unchanged from before the spawn, (3) no running hermes process. **Recovery:** (1) confirm the worker produced nothing, (2) do NOT re-spawn gpt-5.6-sol on codex for Go — it will fail again, (3) fall back to direct coding as foreman for well-spec'd tasks (see pitfall above), OR switch to a reliable Go coding model (glm-5.2 @ zai-glm or MiniMax-M3 @ minimax). **Prevention:** gpt-5.6 models are strong at Python features and spec/doc writing but unreliable at Go coding. Do not use them as the primary worker for Go tasks. **Proven:** Scheduler 2026-07-12 — gpt-5.6-sol worker on codex for Go API task ran and exited with nothing; foreman built API server (350 lines, 15 endpoints) directly from S06 spec in <5 min. **kimi-k2.7 Go silent-exit intermittent — see `references/kimi-k2.7-intermittent-success.md`.**
 - **MiniMax-M3 worker review-diff loop — affects Go, Python, JS/HTML/CSS multi-file tasks equally.** See `references/minimax-review-diff-loop.md` for detection, recovery, and prevention patterns. **Proven:** Consensus 2026-07-12 — first MiniMax-M3 worker built 1,596 lines of CSS + 144 lines of HTML structure (review-diff at 6min); second focused JS worker added 717 lines of JavaScript (review-diff at 2min). Combined: 2,460 line deliverable in two kills. Chimera v2 2026-07-12 — speed formation, 8 Python files, staged correctly, 9 min. Bunker 2026-07-12 — WI-069 env command, 7 Go files (+925 lines), unstaged, 6 min. **H4F 2026-07-15 — single-file Python task: 115s MCP init overhead, rapid +95 line code production in ~35s, then stuck in review-diff loop. Code was correct — killed at 150s, verified manually, guard clean, committed.**
@@ -968,9 +631,15 @@ enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob"]
 - **Never skip the SPEC phase on new projects — verify namespace ownership first.** A DuckBrain namespace name may be a project codename, not a separate product. The `rabbit-hole` namespace contained H3's architectural design thinking — the PRD HTML in the H3 repo was titled "Project Rabbit Hole." When Step 3 (DuckBrain context load) encounters entries in a namespace that doesn't obviously match the project name, cross-reference before assuming it's a different project: (1) check the project's `AGENTS.md` and `specs/` for mentions of the namespace name, (2) search for HTML PRD files in the repo (`find . -name "*.html" | xargs grep -l "<namespace>"`), (3) check if the project's `_index.md` references the namespace. A namespace with rich architectural entries may be the current project's design history, not a new project to create. **Proven:** Rabbit-Hole 2026-07-12 — the `rabbit-hole` DuckBrain namespace (collect/classify/express/competitors/concept) was H3's codename, not a separate product. Creating a second project from those entries wasted a session on duplicate specs.
 - **Pre-existing guard failures don't block progress.** Verify: `git stash` → guard on HEAD → `git stash pop` → **`git add -u`** (pop unstages files; `references/git-stash-pop-unstages.md`).
 
+- **🪤 All static gates green + never live-tested = assume stub plumbing.** Build, vet, lint, tests, CI, and the NEVER-DONE audit can all PASS while the execution pipeline is a complete stub. The hermes-dagger project passed every static gate for 50+ ticks with a codeResolver that returned `json.Marshal(nodeID)` instead of user code — every execute call ran the run ID string through QJS, never the actual payload. Only a live `curl` with a known-output payload (`JSON.stringify({key:"val"})`) caught it. **Detection checklist:** test with (1) a non-trivial return value to verify user code reaches the engine, (2) `throw new Error(...)` to verify errors propagate, (3) an undefined-variable reference to verify runtime errors surface. If all three produce the correct result, the plumbing is real. See `references/live-e2e-detects-stub-plumbing.md` for the full bug transcript, fix pattern, and 8-point verification checklist. **Proven:** hermes-dagger 2026-07-22 — 50+ ticks, all 15 packages passing, CI green, NEVER-DONE all PASS. CodeResolver was a stub.
+
 - **FIFO task selection.** Pick the oldest pending task. Don't cherry-pick. If a task is stuck (3+ consecutive ticks with no progress), escalate to supervisor — the task may be too big or underspecified.
 - **Off-by-One is cross-project memory.** A solution for one project can solve a problem for another. Always submit completed tasks and always discover before the next tick.
-- **Board may be stale — verify task scope against the actual codebase before spawning.** The board is documentation, not truth. A task that says "add X, Y, Z" may already be partially or fully implemented by a prior tick that didn't update the board. Before spawning a worker: (1) grep the codebase for the features described in the task, (2) check `git log --oneline -20` for related commits, (3) if the work is already done, mark the task `[x]` and add a note — do NOT spawn a worker. If partially done, narrow the worker prompt to only the remaining pieces. **Sidecar variant:** When a task asks for a thin routing/glue/coordination package but the imported dependency already handles the full pipeline, see `references/sidecar-glue-package-investigation.md`. **Proven:** Hilo 2026-07-12 — TASK-007 claimed "6 languages (Clojure, OCaml, R, Julia, Elm, Nim)"; grep revealed all except Nim were already in the Language enum, Cargo.toml, parser, classify, and signal engine. Only Nim needed a worker. Without verification, a worker would have been spawned for 6 languages when only 1 was missing. DexDat CONSENSUS-9 (2026-07-13) — message routing task already implemented by Consensus harness.
+- **Cooldowns — read boards before setting.** Never set cooldowns globally across projects without reading individual `tasks.md` boards. Counting table rows in the matrix format is NOT reliable — completed rows, blocked tasks, and U01 audits all look like pending work. See `references/daemon-cooldown-ops.md` for the full cooldown management pattern including daemon restart, max-interval cap, and the 9-active/33-idle fleet baseline.
+
+- **All static gates green ≠ code actually works — the live-E2E stub-detection pitfall.** A project can pass every gate (build, lint, tests, coverage, vet, CI) while its core data path is a stub. Proven instance (DAGger, 2026-07-22): the QJS codeResolver returned `json.Marshal(nodeID)` (the run ID string) instead of user code. Every test passed because the resolver was testable in isolation, but the wiring from HTTP handler → adapter → engine → resolver never delivered user code to the sandbox. `throw Error`, undefined variables, and `1/0` all returned `"completed"` — no error surfaced. Static audit would report 15/15 packages green and 68-100% coverage. **Detection protocol (run during discovery sweep, not just on first tick):** (1) `dagger execute --code 'JSON.stringify({key:"live-test"})'` — output MUST be `{"key":"live-test"}`, not the run ID string. (2) `dagger execute --code 'throw new Error("live-e2e-probe")'` — status MUST be `failed`, not `completed`. (3) `dagger execute --code 'nonexistentVariable'` — must return ReferenceError, not `completed`. If any of these 3 checks fails, the data path contains a stub. Create a CRITICAL bug task immediately — this is not a test-gap task, it's a wiring-stub task. The resolution pattern: trace the entire chain from entry point (HTTP/MCP) → adapter → engine → executor → resolver, and verify user data reaches the final consumer. For testing multi-node DAGs end-to-end with real dependencies, see `references/dag-workflow-testing.md`.
+
+- **`replace_all=true` on `patch` is dangerous in large files with repeated patterns.** Proven instance (DAGger, 2026-07-22): `replace_all` on `eng, err := setupEngine` matched 6 call sites AND many similar non-setupEngine patterns, replacing function bodies across the entire 1500-line file. Always prefer targeted single-match patches with enough context to ensure uniqueness (3+ lines of surrounding code). If multiple call sites genuinely need the same change, make each patch individually with unique context per site. A task that says "add X, Y, Z" may already be partially or fully implemented by a prior tick that didn't update the board. Before spawning a worker: (1) grep the codebase for the features described in the task, (2) check `git log --oneline -20` for related commits, (3) if the work is already done, mark the task `[x]` and add a note — do NOT spawn a worker. If partially done, narrow the worker prompt to only the remaining pieces. **Sidecar variant:** When a task asks for a thin routing/glue/coordination package but the imported dependency already handles the full pipeline, see `references/sidecar-glue-package-investigation.md`. **Proven:** Hilo 2026-07-12 — TASK-007 claimed "6 languages (Clojure, OCaml, R, Julia, Elm, Nim)"; grep revealed all except Nim were already in the Language enum, Cargo.toml, parser, classify, and signal engine. Only Nim needed a worker. Without verification, a worker would have been spawned for 6 languages when only 1 was missing. DexDat CONSENSUS-9 (2026-07-13) — message routing task already implemented by Consensus harness.
 
   **Spec-vs-board file path conflict — trust the spec plan over the board's Files line.** When the task board's Files line lists paths that contradict the detailed spec plan (or DuckBrain entries), implement against the SPEC. The board was written as a rough outline; the spec plan is the detailed implementation specification with exact Go interfaces, wire points, and file inventories. Prefer the spec plan over the task board for file paths, package names, CLI surface, and ACs. **Proven:** Helix CLARIFY-01 (2026-07-13) — board said `pkg/clarify/types.go, cmd/helix-clarify/main.go`; spec plan said `pkg/dispatcher/clarification.go` + `cmd/helix/dispatcher.go` subcommands. Plan was correct — everything compiled, all 15 tests passed, ACs verified.
 
@@ -1027,6 +696,8 @@ enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob"]
 - **Godot discovery sweep patterns — `references/godot-discovery-sweep-patterns.md`.** Untracked `.import` files, stale counts, `.godot/` cache. **Proven:** Escalation Doctrine 2026-07-15.
 - **Parallel foreman tick overlap — sibling commits while you're working.** When foreman ticks fire on shorter intervals (30m or less), two ticks can run concurrently. Sibling may commit+push work while you're mid-implementation. **Detection:** `write_file` warns "modified by sibling subagent", `git add` skips files already in HEAD, `git log --oneline -5` shows fresh commits in same phase. **Recovery:** `git pull --rebase`, verify sibling's commits pass build+vet+test, commit only the delta. **Three sub-patterns** (delete+rewrite, broken-code-paste, nested-import) and Variant B (uncommitted collision) are documented in `references/parallel-tick-sibling-signals.md`. **Prevention:** `git pull --rebase` at Step 0; check `git log --oneline -1` for commits in last 2 min before writing. **Proven:** Rabbit-Hole Phase 3-5 2026-07-12 — sibling commits resolved via pull+delta; 3 sub-patterns resolved during reconciliation.
 
+- **Parallel tick same-number board collision — sibling wrote YOUR tick entry with fabricated claims.** When the board already has an entry for the current tick number before you've written anything, a sibling tick wrote it first. Independently verify ALL claims: test results (run `go test` yourself), cooldown state (GET the scheduler API), build/vet status (run both). Do not trust the sibling's entry — prior instances show fabricated "8/8 green" (actual 7/8) and "CooldownS reverted" (actual survived). See `references/sibling-tick-board-collision.md` for the full detection, recovery, and prevention pattern. **Proven:** Crier tick #23 2026-07-24 — sibling claimed 8/8 green and cooldown reversion; actual 7/8 (mesh CI-014 flake), CooldownS survived at 43200s.
+
 - **Parallel tick file-level race — duplicate definitions, export renames, stale deletions.** See `references/parallel-tick-sibling-signals.md` for detection, recovery patterns, and the 7-step reconciliation procedure. **Proven:** Rabbit-Hole Phase 3 2026-07-12.
   ```bash
   go mod edit -require github.com/cilium/ebpf@v0.17.3
@@ -1054,6 +725,7 @@ enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob"]
 ### References
 
 - `references/foreman-project-onboarding.md` — End-to-end checklist for onboarding a new project into the fleet: AGENTS.md, tasks.md, foreman cron creation, DuckBrain sync, canonical shape verification.
+- `references/stale-bug-reporting.md` — **Stale Bug Reporting anti-pattern**: When the foreman notes the same bug across ≥3 consecutive ticks without spawning a worker. Rule: bugs must have concrete ACs in the task matrix, spawn a worker by tick 3, escalate if fix fails. Do NOT let bugs age past 3 ticks in "known issue" status.
 - `references/h3-test-compliance-battery.md` — H3 test battery: run against SDK harnesses, analyze 422 payload vs JSON Schema mismatches, cross-repo finding pattern.
 - `references/hermes-env-sourcing-pitfall.md` — `.hermes/.env` sourcing (unquoted space values).
 - `references/self-alignment-prompt.md` — bootstrap a foreman into the new skill architecture.
