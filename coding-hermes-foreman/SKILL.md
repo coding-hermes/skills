@@ -652,7 +652,8 @@ enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob","
 | search | ✅ | grep codebase, session search |
 | skills | ✅ | Load skills (prompt-foundry) |
 | memory | ✅ | DuckBrain read/write |
-| cronjob | ⚠️ | **Self-pause ONLY** — increase interval (3→4h→12h), pause. NEVER decrease interval, change model, or touch other crons. Any non-self-pause cronjob use is a violation. |
+| `cronjob` | ⚠️ | **Self-pause ONLY** — increase interval (3→4h→12h), pause. NEVER decrease interval, change model, or touch other crons. Any non-self-pause cronjob use is a violation. |
+| `mcp` | ✅ Required | DuckBrain MCP (never-done check #9: recall/remember), GitReins MCP (guard verification). Foremen MUST have DuckBrain access for continuous quality tracking. |
 | delegation | ❌ | `delegate_task` burns PAYG — workers inherit foreman's provider |
 
 **Workers spawned via `hermes chat -q` inherit the default toolset (including `delegation`)** — they CAN use subagents if needed. This restriction is foreman-only.
