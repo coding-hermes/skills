@@ -641,7 +641,7 @@ These are the same commands the remote CI runner executes. Run them. If they pas
 
 ```python
 # Required enabled_toolsets for every foreman cron
-enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob"]
+enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob","mcp"]
 ```
 
 | Toolset | Allowed? | Reason |
