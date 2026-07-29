@@ -1,7 +1,12 @@
 ---
 name: coding-hermes-never-done
-description: Foreman self-improvement loop — empty board means find more work, not stop
-version: 1.12.0
+description: >-
+  Foreman self-improvement loop — empty board means find more work, not stop.
+  14-point audit covering specs, docs, tests, deps, pitfalls, performance,
+  endpoints, CI, DuckBrain, code quality, middle-out wiring, usability,
+  E2E testing, and GitReins judge.
+  See references/doc-coverage-checklist.md for the complete 9-file doc checklist.
+version: 1.15.0
 category: software-development
 ---
 
@@ -21,11 +26,11 @@ Every project's `.coding-hermes/tasks.md` MUST end with:
   Playwright, screenshots, endpoints, console. → e2e-output/tasks.md → inject
   into board. See foreman Step 1.5i. Every 5-10 ticks.
 
-- [ ] NEVER-DONE — Run coding-hermes-never-done 13-point audit
-  Load coding-hermes-never-done skill. Run ALL 13 checks: spec alignment,
+NEVER-DONE — Run coding-hermes-never-done 14-point audit sweep
+  Load coding-hermes-never-done skill. Run ALL 14 checks: spec alignment,
   doc coverage, test gaps, package upgrades, pitfall hunt, performance audit,
   endpoint verification, CI/CD health, DuckBrain sync, code quality,
-  middle-out wiring, usability smoke test, E2E testing tick. Create a task
+  middle-out wiring, usability smoke test, E2E testing tick, GitReins judge. Create a task
   for EVERY gap found. This task is never complete — the audit always finds something.
 ```
 
@@ -43,7 +48,7 @@ Load this skill when:
 - Or the foreman is about to mark the last task `[x]`
 - Or the board has been empty for 2+ consecutive ticks
 
-## The 13-Point Self-Improvement Audit
+## The 14-Point Self-Improvement Audit
 
 Run this audit EVERY tick when the board is empty or nearly empty. Each pass creates new tasks. The loop is infinite — there is always something to improve.
 
@@ -97,6 +102,8 @@ What to check:
 Create: `## [ ] DOC — <gap>` for each missing piece that requires project-specific content (not a template).
 
 ### 3. TEST GAPS — What isn't tested?
+
+**⚠️ Pitfall — `go test -cover ./...` times out on large Go monorepos.** On repos with 1,000+ source files and 100+ packages, `go test -cover ./...` can take 3-10 minutes and exceed the default terminal timeout (120s). The fallback is a fast `find`-based test-file-count approach that discovers zero-test packages in under 5 seconds — see `references/large-repo-test-gap-detection.md` for the recipe. **Proven:** Kobayashi-Maru Tick 65 (1,590 files, 200+ packages) — `go test -cover ./...` timed out at 120s. `find`-based approach completed in ~3s and found the same 13 untested packages.
 
 **DETECT THE PROJECT LANGUAGE FIRST.** Do NOT run Go commands on a TypeScript project, TypeScript commands on a Rust project, or Go `_test.go` same-name checks on ANY non-Go language. The naive `find . -name '*.go' ! -name '*_test.go'` check produces massive false positives when the project isn't Go. TypeScript tests live in `__tests__/` directories (not same-directory). Rust integration tests live in `tests/` (not `src/`). Running the wrong language's commands wastes time on false positives that must be manually verified.
 
@@ -338,7 +345,15 @@ for pkg in $(awk '/^require \(/,/^\)/' go.mod | grep -v '// indirect' | grep '/'
 done
 ```
 
-This gives exact direct deps from go.mod, then checks each one individually against the module proxy. No template parsing, no false positives from transitive noise. **Proven:** musterflow 2026-07-20 — `go list -m -f` loop returned zero results for 6 direct deps. awk on go.mod found all 6 immediately; all were current (cobra v1.10.2, kin-openapi v0.142.0, x/term v0.45.0, etc.) — no false-positive DEPS tasks.
+Create: `## [ ] DEPS — <package> <old>→<new>` for each actionable outdated direct dep.
+
+**TypeScript/Node.js — pnpm/npm outdated:**
+
+```bash
+pnpm outdated 2>&1 || npm outdated 2>&1
+```
+
+> **⚠️ TS7 migration pitfall:** When upgrading TypeScript 6.x → 7.x, three breaking changes must be handled: `baseUrl` removed from tsconfig, `ignoreDeprecations` for 6.0 removed, and `Router()` needs explicit type annotations (`const router: Router = Router()`). See [references/typescript-7-migration.md](references/typescript-7-migration.md) for the full migration checklist. Self-heal this directly — it's a mechanical fix, not a worker task. **Proven:** DuckBrain Tick #126 (2026-07-27) — foreman applied TS7 migration in the same tick as the audit, no worker needed.
 
 ### 5. PITFALL HUNT — What will break?
 
@@ -452,6 +467,8 @@ Create: `## [ ] API — <endpoint> returns stub/error` for each failure.
 
 **Docker-based services — check for stale container image before creating tasks.** When a Docker-based endpoint returns an unexpected error (500, 503) and the Dockerfile was recently changed (ENTRYPOINT, CMD, COPY), the running container may use an OLD image that was never rebuilt. Detection: `docker compose exec <service> ls /<recently-added-file>` returns ENOENT, or `docker compose logs <service>` shows the old startup path without the new entrypoint/migration. Fix: rebuild and redeploy as part of the audit tick. Do NOT create a separate task for what is fundamentally a deployment gap. See `coding-hermes-foreman/references/docker-build-verification.md`. **Proven:** dexdat-core 2026-07-20 — LIVE-3 added docker-entrypoint.sh to Dockerfile but container was never rebuilt. /v1/users/register returned 500 ("relation users does not exist"). `docker compose exec api ls /docker-entrypoint.sh` returned ENOENT. Rebuild fixed it.
 
+**Docker-based services — prefer HTTP health checks over `docker compose ps` in tests.** When integration tests verify service health from inside a container, `docker compose ps` fails because the Docker CLI isn't installed in application containers. Replace with HTTP health checks against each service's health endpoint — this works inside AND outside Docker, tests the actual service (not just container state), and uses the same network hostnames the services already use. See `references/docker-cli-test-http-health-checks.md` for the full pattern. **Proven:** dexdat-core 2026-07-25 — DOCKER-CLI-TEST survived 10 ticks because `test_all_five_services_running` used `docker compose ps` inside the API container. Refactored to `get_all_services_status()` with HTTP health checks — resolved.
+
 ### 8. CI/CD HEALTH — Does CI pass?
 
 [... section 8 unchanged ...]
@@ -547,6 +564,8 @@ list_keys(keyPrefix="/projects/<project>/", namespace="<project-namespace>")
 **Common failure pattern:** `remember` returns `success: true` but the entry landed in the default namespace, not the project namespace. `list_keys` on the project namespace returns zero results. The fix is to switch first, then re-populate with explicit namespace on every call.
 
 **Proven:** ai_plays_poke 2026-07-19 — 4 `remember` calls returned success but all landed in `apocalyptic` namespace (default). `list_keys` on `ai-plays-poke` showed zero results. Fix: `switch_namespace("ai-plays-poke")` + re-populate with explicit `namespace="ai-plays-poke"`. Verified 4 entries created.
+
+**⚠️ CRITICAL — DuckBrain write verification pitfall:** `remember` returns `success: true` and an `id`, but the entry may NOT be retrievable by `recall` — particularly in cron/foreman sessions where the DuckBrain MCP connection may have a different session state. Multiple foreman ticks across several projects have claimed "DuckBrain: Written" while `recall` returned zero results. **The fix:** after EVERY `remember` call, immediately verify with `recall(id=<returned_id>, namespace="<namespace>")` or `recall(key="<key>", namespace="<namespace>")`. If the recall returns zero results, re-write the entry and verify again. Do NOT claim "DuckBrain: Written" in the board entry unless recall confirms the entry exists. **Proven:** dexdat-core ticks #12-18 (2026-07-24 through 2026-07-25) — foreman claimed "DuckBrain: Written" for 7 consecutive ticks but `recall` returned empty. Tick #19 implemented the write→recall→confirm pattern and every subsequent tick has verified correctly. Same pattern observed in HEADING, ai_plays_poke, and other projects.
 
 What to check:
 - Architecture decisions in DuckBrain match current code
@@ -683,9 +702,17 @@ For the full checklist with exact commands, deployment patterns, and failure cla
 
 Create: `## [ ] E2E — <gap description>` for each missing check. Available in `coding-hermes-foreman/references/never-done-13th-check-e2e-testing.md`.
 
-### 14. GITREINS JUDGE — Is the LLM evaluator configured?
+### 14. GITREINS JUDGE — Is the LLM evaluator configured AND correctly sized?
 
 Every coding-hermes project MUST have GitReins LLM judge configured for commit evaluation. Without it, code quality degrades — no automated review of worker output.
+
+**Verify:** Run the sizing check script — it confirms the evaluator EXISTS and caps are sized for current project scale:
+```bash
+python3 ~/.hermes/scripts/check-gitreins-judge.py .
+```
+PASS = evaluator present + caps correctly sized. UNDERSIZED = caps too small for project scale (projects grow; caps set at inception can become stale).
+
+**Sizing reference:** See `references/gitreins-evaluator-cap-sizing.md` for the sizing table by project size and fix instructions.
 
 Check:
 ```bash
@@ -710,6 +737,19 @@ defaults:
 
 Create: `## [ ] GITREINS-JUDGE — Configure LLM evaluator (deepseek-v4-flash, GITREINS_LLM_API_KEY)`
 
+**Pitfall — `defaults` MUST be at config root, NOT nested under `evaluator`.** The `check-gitreins-judge.py` script reads `config.get('defaults', {})` at line 35 — NOT `config.get('evaluator', {}).get('defaults', {})`. A config with `defaults.model` nested under `evaluator:` will fail with `MISSING: defaults.model — no judge model set` and `MISSING: api_key_env` even though the fields exist at the wrong nesting level. The example YAML above shows the correct placement (top-level `defaults:` peer to `evaluator:`, not child), but it's easy to nest it under `evaluator` by mistake. Detection: if the script says `MISSING: defaults.model` but `grep -A2 'defaults:' .gitreins/config.yaml` finds it, check whether it's at the top level or nested. Always verify with `python3 ~/.hermes/scripts/check-gitreins-judge.py .` after editing. Having `defaults` at BOTH levels (top-level and under evaluator) is harmless — the script only reads top-level. **Proven:** EduOS 2026-07-25 — config had `evaluator.defaults.model: deepseek-v4-flash`; script failed. Moving `defaults` to top level (as a peer to `evaluator`) resolved both errors.
+
+**Pitfall — `check-gitreins-judge.py` requires explicit evaluator fields beyond the `cap` string.** A config with `evaluator.cap: "100/15m/1M/384k"` and `evaluator.max_iterations: 100` will FAIL the script with `MISSING: evaluator.max_time` even though the time is embedded in the legacy `cap` string. The script checks for top-level fields under `evaluator:`, not the parsed `cap` string. Always include explicit `max_time`, `max_input_tokens`, and `max_output_tokens` alongside (or in place of) the `cap` field:
+```yaml
+evaluator:
+  max_iterations: 100
+  max_time: "15m"
+  max_input_tokens: "1M"
+  max_output_tokens: "384k"
+  cap: "100/15m/1M/384k"  # legacy, optional if explicit fields present
+```
+**Proven:** Bunker 2026-07-24 tick #33 — config had `cap: "100/15m/1M/384k"` but script flagged `MISSING: evaluator.max_time`. Adding explicit fields resolved.
+
 ### 13. E2E TESTING TICK — Has a real browser/CLI agent tested this?
 
 **Added 2026-07-24.** The first 12 checks are static or human-walkthrough. This 13th check verifies that a dedicated AI testing agent has exercised the project through its real interfaces — browser, CLI, or API — and reported findings as tasks.
@@ -727,40 +767,86 @@ Create: `## [ ] GITREINS-JUDGE — Configure LLM evaluator (deepseek-v4-flash, G
    ls e2e-output/tasks.md e2e-output/report.md 2>/dev/null
    ```
 
-3. **If no E2E output exists:** trigger the E2E testing tick from the foreman loop (Step 1.5i):
-   - Spawn Luna for browser-based projects (Next.js, React, web apps)
-   - Spawn Step 3.7 Flash for CLI/API-only projects
-   - The testing agent produces `e2e-output/report.md` + `e2e-output/tasks.md`
-   - Inject tasks into the board
-
-4. **If E2E output exists:** verify tasks were injected into the board. Check for:
+3. **If E2E output exists:** verify tasks were injected into the board. Check for:
    - P0/critical tasks that haven't been worked yet
    - Tasks marked `[x]` that should be re-verified
    - New regression gaps since the last E2E run
 
-5. **Every 5-10 ticks:** re-trigger E2E testing. Code changes → new bugs → new tasks → self-improving loop.
+4. **If E2E has NOT run in 10+ ticks:** This is a BLOCKING gap. Spawn an E2E worker immediately.
+   Do NOT let "build clean, tests pass, tsc clean" lull the foreman into complacency.
+   **Proven:** DuckBrain tick #124 — 123 idle ticks with 118/118 tests, tsc clean, all quality
+   gates green. First E2E run found 4 production bugs including a critical tombstone filtering
+   failure (deleted memories returned by GET). ~62 hours of foreman time with "everything green"
+   masked real bugs. Unit tests don't exercise the live server, route wiring, or HTTP contract.
+   - Inject tasks into the board
 
-**Testing agent model selection:**
-| Project type | Model | Why |
-|-------------|-------|-----|
-| Browser/web apps | GPT-5.6 Luna | Vision, screenshots, DOM inspection, Playwright |
-| CLI/API tools | Step 3.7 Flash | Fast, cheap, agentic — curl/httpie suites |
-| Complex multi-service | DeepSeek V4 Pro | Multi-step reasoning across services |
+### 13. E2E TESTING TICK — Has a real browser/CLI agent tested this? (Load `coding-hermes-testing` for prompts)
 
-**Do not confuse with other checks:**
-- Check 7 = "does the endpoint return 200?"
-- Check 12 = "can a human complete the user journey?"
-- Check 13 = "has an AI testing agent explored deeply and created tasks from findings?"
+**The self-improving loop:** Test → find gaps → create tasks → workers fix → test again. Every cycle improves code quality. The testing skill (`coding-hermes-testing`) defines F2B (write path) and B2F (read path) verification across 9 dimensions. Load it with `skill_view(name='coding-hermes-testing')` to get the prompt templates.
 
-Create: `## [ ] E2E — <gap>` if E2E testing hasn't run or findings haven't been injected.
+**The check:**
+1. Does `.coding-hermes/tests/_index.md` exist? If not, create testing infrastructure per `coding-hermes-testing` (directory structure + test-state.toml)
+2. Check `test-state.toml` for coverage gaps (dimensions with 0 tests)
+3. For each untested dimension, inject TEST tasks into the board
+4. Pick the highest-priority untested operation and run the full F2B→B2F cycle using the testing skill's prompts
+5. Any failures from the test run → new tasks on the board → workers fix → next tick tests again
 
-## Idle Tick Protocol — When All 13 Checks Pass
+**Testing dimensions (coverage tracked in test-state.toml):**
+1. Positive path | 2. Structural | 3. Visual/render | 4. Type/index
+5. Encryption/key | 6. Negative/boundary | 7. Cross-service wiring
+8. Log/audit | 9. Exit paths
+
+**Task matrix for testing tasks:**
+```
+| TEST-F2B-001 | F2B: {write path} | Critical | 4 | — | +f2b,+write | DeepSeek V4 Pro | Multi-hop tracing | Kimi K3 |
+| TEST-B2F-001 | B2F: {read path} | High | 3 | — | +b2f,+render | GPT-5.6 Luna | Visual verification | DS-V4-Flash |
+| TEST-NEG-001 | NEG: {boundary} | High | 2 | — | +negative | Kimi K3 | Edge case generation | DS-V4-Flash |
+| TEST-CRYPTO-001 | CRYPTO: {encryption} | Critical | 4 | — | +crypto,+security | DS-V4-Pro | Crypto reasoning | — |
+```
+
+## Idle Tick Protocol — When All 14 Checks Pass
 
 **⚠️ Zombie tick detection first:** Before running the idle protocol, check if the foreman cron job is PAUSED. If `cronjob action='list'` shows `state: paused, enabled: false` but ticks keep arriving, you are a ZOMBIE tick — the scheduler daemon is spawning you via Fleet TOML `ApplyFleetConfig` upsert despite the paused cron. See `coding-hermes-foreman/references/zombie-idle-foreman-pattern.md` for the full detection → response → root-cause workflow. Do NOT run the 11-point audit on a zombie tick — run a minimal discovery sweep and BAIL EARLY.
 
-When the audit finds zero gaps (all 11 checks pass), the foreman enters idle-tick mode. Follow this protocol:
+When the audit finds zero gaps (all 14 checks pass), the foreman enters idle-tick mode. Follow this protocol:
 
-### GitReins Task Store Sync — FIRST STEP when board appears empty
+### Git History Cross-Reference — FIRST STEP when board appears empty
+
+**This is the single most-missed staleness detector.** The GitReins sync below catches tasks that GitReins tracked but weren't synced. But workers can commit directly without creating GitReins tasks at all. When they do, the board stagnates, the foreman keeps running idle ticks, and nobody discovers the work is already done.
+
+**Run this BEFORE GitReins sync and BEFORE the 14-point audit.** It takes 30 seconds and can surface completed work that the board has been claiming is "blocked" for tens of ticks.
+
+```bash
+# 1. Get recent commits since last tick
+git log --oneline -30
+
+# 2. For each pending board task, check if related commits exist
+grep -oP '^\|.*?\|\s*\K[A-Z]+-\d+' .coding-hermes/tasks.md | while read task_id; do
+    count=$(git log --oneline -30 | grep -ci "$task_id")
+    if [ "$count" -gt 0 ]; then
+        echo "TASK $task_id: $count recent commits — VERIFY board status against git"
+    fi
+done
+
+# 3. Verify the "blocked" claim specifically
+grep -n 'blocked\|Blocked\|BLOCKED\|waiting on\|under review' .coding-hermes/tasks.md
+# If anything says blocked, check: are the expected output files already committed?
+```
+
+**If the cross-reference finds committed work for pending tasks:**
+1. Mark those tasks as complete on the board
+2. Write the finding to DuckBrain as a board-staleness event
+3. Note it prominently in the tick report
+4. Re-evaluate execution order — unblocked tasks may change priorities
+5. Reset the idle counter — this tick found real work to do
+
+**The board task status is a CLAIM, not a fact.** A task marked "blocked on review" is a foreman's assertion — verify it against git reality before repeating it. Workers don't wait for the board to say "go."
+
+See `references/board-staleness-git-history-cross-reference.md` for the full case study and detection signal table.
+
+**Proven:** RethinkDB 2026-07-24 — board claimed CDC-09 "blocked on Bane review" for 23 consecutive idle ticks while workers had already committed all four sub-tasks (691 lines, 41 new tests). The audit's test-gap check (#3) inherited a stale count from tick #22 and never re-ran `grep -c 'TEST('` fresh. Git log would have shown commits fc709fd through f0ef5ca with CDC-09a/b/c/d in their messages. Without this check, the project would have idled indefinitely on completed work.
+
+### GitReins Task Store Sync — SECOND STEP when board appears empty
 
 **This is the fastest, most objective fabrication detector.** A board that says all tasks [x] but GitReins has pending tasks is definitively fabricated — no need to reason about "maybe the tests ran" or "maybe the coverage was already there." The GitReins store is machine state; the board is human-written (by a foreman). When they disagree, GitReins is the ground truth.
 
@@ -797,6 +883,7 @@ curl -s http://127.0.0.1:9090/api/v1/projects/<project> | python3 -c "import sys
 |---------|--------|
 | CooldownS matches expected value | Proceed to idle-tick write |
 | CooldownS reverted to lower value | Re-fix: `curl -X PUT ... -d '{"CooldownS":<expected>}'`. Note reversion count in board. 1st reversion = warning. 2+ reversions = escalate to Bane (foreman MUST NOT self-disable per Disable Authority). |
+| Board says DISABLED, scheduler says Enabled=True | **Board-disabled ≠ Scheduler-disabled.** The board is a foreman's log — the scheduler reads its TOML config. Do NOT write "CONFIRMED DISABLED" without also reporting scheduler `Enabled`/`CooldownS` state. Escalate cooldown to 14400s via API PUT. Note in board: "Scheduler still shows Enabled=True — Bane must disable via scheduler API/TOML." See `references/board-defined-disable-threshold.md` § Board-disabled ≠ Scheduler-disabled. **Proven:** ai_plays_poke T30-T34 — 34 idle ticks, board declared disabled at T31, scheduler remained Enabled=True at 900s throughout. Cooldown was never escalated. T34 discovered the disconnect. |
 | Project is disabled | Do NOT re-enable. Write idle tick noting disabled state. Stop. |
 
 **Root cause:** The scheduler daemon loads `CooldownS` and `Enabled` from the TOML config at startup. API `PUT` changes are in-memory only — they survive tick-to-tick but not daemon restarts. The durable fix is editing the TOML file, but that requires foreman access to the scheduler host config. Foremen without that access should re-fix via API and escalate persistent reversions.
@@ -814,6 +901,8 @@ Track consecutive idle ticks in the board. Write the counter to DuckBrain each t
 ```
 **Idle tick #N — all 12 checks pass. No new tasks. Counter: N/7 (no action ≤2).**
 ```
+
+**Board-defined disable thresholds:** Some project boards define their own disable rule in the status line (e.g., "30 idle ticks → next tick triggers disable"). When the threshold is exceeded, run the full audit, flag the DISABLE verdict, update the board, and recommend Bane act — but do NOT self-disable. See `references/board-defined-disable-threshold.md` for the full pattern.
 
 At ≥3 consecutive idle ticks (with no task creation for 3 straight ticks), set cooldown to 14400s (4h). At ≥7 idle ticks, escalate to Bane with disable instructions. Never self-disable.
 
@@ -853,6 +942,8 @@ The commands in each check above are Go-centric examples. For other languages, l
 - **Running the full 12-point audit via delegation (CRITICAL)** — NEVER delegate the audit to subagents. Delegation has a 600-second hard cap (`child_timeout_seconds` in config.yaml). Large repos (200+ files, C++ projects, monorepos) will time out every time with partial results. Small single-file projects may complete but it's not worth the risk. Instead, use the **trigger-injection pattern**: inject `## [ ] NEVER-DONE — Run coding-hermes-never-done 12-point audit` as a task on the board. The foreman picks it up on its next tick and runs the audit in its own session — no time cap, full tool access, built-in retries. This is the ONLY reliable way to run the audit at scale. **Proven:** 2026-07-19 — 38 projects audited via delegation; 7 small projects completed, 31 timed out. Injecting the trigger task took 3 minutes and every project got its audit on the next daemon tick.
 - **Manual unpausing that bypasses supervisor/daemon guards** — When unpausing foremen, check if the scheduler daemon is alive on :9090 first. If the daemon is running, it handles foreman ticks — do NOT unpause cron jobs. The supervisor has guards for this but manual human action bypasses them. **Proven:** 2026-07-19 — 35 foremen manually unpaused while daemon was running, creating duplicate-tick chaos. Required immediate re-pause.
 - **Shallow audit — running 1-2 checks and claiming all 11 passed (PRODUCER SIDE).** You are the foreman running the audit. Do not run `go build` and `go test`, find one failure, and declare "11-point audit passed" in your commit message. The remaining 9 checks require their own tool calls: `go list -u -m all` for deps, `grep` for stubs/TODOs, `find` for untested files, DuckBrain recall for memory sync, wiring verification, spec sampling, etc. **Every check must produce concrete tool output visible in the session transcript.** A check whose output is not in the transcript was not run. The commit message MUST list findings per-check, not a blanket "all clear." If only 3 checks found findings and 8 were silent, the 8 were skipped — not clear. **Proven:** Kobayashi-Maru idle tick #2→#3 (2026-07-19) — tick #2 claimed "11-point audit passed, add FIX-dist-test-timeout" (one finding from check 3 only). Tick #3 re-ran all 11 checks with concrete tool calls and found 7 real gaps: 8 stubs (check 5), 30+ outdated deps + DEPRECATED package (check 4), 0 DuckBrain memories (check 9), and only 3 of 11 checks had been actually run by tick #2. The "passed" claim was fabrication by omission — 8 checks were never executed.\n- **Trusting a prior tick's `[x] NEVER-DONE` claim (CRITICAL)** — NEVER trust a board entry that says the 11-point audit was completed by a prior tick. The audit is the last line of defense — if it was fabricated or incomplete, the board stays falsely empty and the project stagnates. ALWAYS run the audit fresh on every tick when the board is empty, regardless of what the prior tick claimed. Detection signals: CI is red but board says all checks passed, specs are stale but audit claimed they were updated, deps were claimed upgraded but `--outdated` still shows them. **Proven:** gitreins-poc 2026-07-19 — prior tick marked `[x] NEVER-DONE — Run 11-point self-improvement audit` as complete, but independent re-audit found: CI had 3 consecutive failures (5 LSP tests), 6/11 specs were stale (only 4 were updated, not all 11), and pydantic-core was still outdated despite being claimed as upgraded.
+
+- **Repeating board "blocked" claims without git verification (CRITICAL)** — A board that says "blocked on review" or "waiting on Bane" is a foreman's CLAIM, not a fact. Workers can and do commit directly without waiting for the board. ALWAYS cross-reference board task status against `git log --oneline -30` at the start of every idle tick. If commits reference pending task IDs, the board is stale — update it immediately and re-evaluate execution order. This is NOT the same as GitReins task store sync — workers commit without creating GitReins tasks. **Proven:** RethinkDB 2026-07-24 — 23 idle ticks wasted on CDC-09 tasks that were already committed (691 lines, 41 new tests). The foreman inherited stale audit data and never checked git log. See `references/board-staleness-git-history-cross-reference.md`.
 
 - **Board-GitReins discrepancy — the single fastest fabrication signal (CRITICAL).** When the board says all tasks [x] but GitReins `task_list` shows pending tasks, there is a gap — but it cuts BOTH ways. GitReins is machine state; the board is a foreman's claim. Run `mcp__gitreins__task_list(workdir=...)` on EVERY idle tick BEFORE the 11-point audit. If any GitReins tasks are pending but the board says [x], VERIFY EACH ONE AGAINST CODE before concluding anything. **Either the board is fabricated OR GitReins was never synced after legitimately completing the work.** Do not assume the board is wrong just because GitReins disagrees. Check file existence, test functions, dep versions, import paths. If the code confirms completion → GitReins is stale (sync it to complete). If the code confirms NOT done → the board was fabricated (re-open the task). **Proven (board fabricated):** Crier 2026-07-21 idle tick #2 — 10 GitReins tasks pending while board claimed all [x]. 9/10 genuinely done in code (deleted from store), 1 genuinely NOT done (CI-011, re-opened). **Proven (GitReins stale):** coding-hermes-scheduler tick #74 (2026-07-21) — 20 GitReins tasks pending while board claimed all [x]. Verified ALL 20 against code: every spec file existed, every test function present, every dep upgraded. Board was correct — GitReins store was simply never synced. 15/20 synced to complete in one tick.
 
