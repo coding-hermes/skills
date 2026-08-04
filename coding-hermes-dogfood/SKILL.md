@@ -28,7 +28,64 @@ future agents how to use the thing.
 
 - A cron job fires every few hours: picks ONE random enabled project, runs
   this skill against it, delivers the verdict to the origin chat.
+- The **Stand-In Gap-Pusher cron** fires HOURLY (human stand-in while the
+  user is away): picks 2 projects that LOOK done, does the gap-sweep mode
+  below, WRITES tasks to wake the foremen. See
+  `references/stand-in-gap-pusher.md` for the full recipe.
 - Manually: `Load skill coding-hermes-dogfood. Field-test <project>.`
+
+## Gap-Sweep Mode (Stand-In / Hourly Variant)
+
+**Purpose:** when foremen report "idle tick" but the project has real gaps,
+the fix is to WRITE the gaps as tasks — the same effect as the user poking
+the project by hand (which provably spins up hours of foreman work). The
+stand-in is the poke, never the worker.
+
+1. **Pick 2 targets** (via `~/.hermes/scripts/standin-pick.py`): weighted
+   toward self-paused foremen (CooldownS ≥ 14400) with clean boards — the
+   "thinks it's done" prime targets. Never re-picks within 8h, never touches
+   disabled projects.
+2. **Ask the basic questions** a user would, then answer by LOOKING: README,
+   AGENTS.md, docs/ (does an integration guide exist? API docs? examples?),
+   run the build/dev server, check test-suite duration. **20 min/project max**
+   — this is the light sweep, not the 2h deep run.
+3. **Find REAL gaps**: integration (nothing shows how to use it), docs/API
+   reference missing, tests too slow or absent on critical paths, UX friction,
+   spec-vs-reality drift. A 2-minute probe that finds 3 gaps is a success —
+   e.g. hermes-canopy claimed "Phase 4-7 COMPLETE" yet had NO integration
+   guide, NO API docs, and `go test -short` hanging past 120s.
+4. **WRITE 2-6 concrete tasks** (IDs `GAP-001`...) onto the board in the
+   board's existing format, commit them. THIS is the critical step — the
+   foreman sees new tasks and spins up real work. No tasks written = the run
+   did nothing.
+5. **Wake the foreman** if self-paused (CooldownS ≥ 14400 → PUT 900). Never
+   re-enable `Enabled=false`.
+6. **Log to DuckBrain** via MCP (namespace=coding-hermes,
+   key `/stand-in/YYYY-MM-DD/<project>`), then report to origin.
+
+**Proof (2026-08-04, hermes-canopy):** all board phases green, but basic
+questions exposed GAP-001 (no integration guide), GAP-002 (no API docs),
+GAP-003 (`go test -short` > 120s). Tasks committed, foreman woken at 900s —
+the loop works end-to-end.
+
+## The Problem You Fight Is Researched: Premature Completion
+
+Foremen declaring "done" on green tests while real gaps remain is a named,
+studied anti-pattern (four independent teams, 2025-26: SRI Lab/ETH
+"fixing correct code", ForgeCode "premature completion", SWE-EVO "premature
+termination", LangChain). "All tests green" ≠ done; agents are systematically
+overconfident and assert success without verifying environment state (false
+success, 9,876 trajectories).
+
+**Proven to fail:** "be thorough" instructions, longer reasoning, CoT.
+**Proven to work:** reproduction-first (run it before believing any claim),
+externalized stopping criteria (done = observable state, not "looks fine"),
+the three-layer termination check (L1 syntax → L2 it RUNS → L3 it WORKS for
+a user end-to-end — foremen stop at L1-2, L3 is where integration/UX/
+usability gaps live), and worker/checker separation (you are the independent
+nitpicky checker; the builder is biased to call it good).
+
+Full evidence pack: `references/premature-completion-research.md`
 
 ## The Dogfood Loop
 
@@ -141,7 +198,17 @@ answer "is this project valuable / does it work" by READING these records.
 
 ## Step 6 — Wake the Foreman (if it was paused)
 
-If the project was idle/slow (cooldown ≥ 43200s or 14400s) but you just added
+First, check registration health — a project can look correctly registered yet
+never tick: NULL/dead `NamespaceID`, `decay_rate=0` (flat urgency), a
+case-insensitive ghost duplicate, or a zombie tick row (`status='running'` +
+`session_id IS NULL`). See
+`coding-hermes-never-done/references/scheduler-registration-health.md`.
+**Proven:** ring-runner (2026-08-02) was registered perfectly (900s,
+coding-hermes, deepseek-v4-flash) but a zombie tick from a mid-restart spawn
+blocked it → zero ticks for 2 days. Clear the zombie row, then
+`POST /api/v1/evaluate`.
+
+Then, if the project was idle/slow (cooldown ≥ 43200s or 14400s) but you just added
 real work to its board, temporarily speed it up so it does the work:
 
 ```bash
@@ -166,6 +233,14 @@ Deliver a compact verdict message:
 
 This report is the answer to "is this project worth anything" — based on a
 real use run and the records now in the repo, not test colors.
+
+## References
+
+- `references/stand-in-gap-pusher.md` — full recipe for the hourly Stand-In
+  cron (picker weights, per-target procedure, hermes-canopy worked example).
+- `references/github-api-skill-push.md` — pushing this skill to
+  `coding-hermes/skills` via the GitHub Contents API without a local clone,
+  including the `-f data=` double-encoding pitfall.
 
 ## Rules
 
