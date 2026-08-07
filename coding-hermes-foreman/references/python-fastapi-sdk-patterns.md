@@ -1,6 +1,6 @@
 # Python FastAPI SDK Patterns — Pitfalls and Conventions
 
-Proven on: H3 SDK for Python (2026-07-14, 2026-07-16), rabbit-hole (2026-07-12).
+Proven on: H3 SDK for Python (2026-07-14, 2026-07-16), <project> (2026-07-12).
 
 ## Pitfall 1: APIRouter prefix doubling
 

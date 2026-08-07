@@ -13,7 +13,7 @@ The foreman already loaded the specs in Step 3 — the translation from spec to 
 
 **Proven:** Scheduler 2026-07-12 — urgency.go, packer.go, spawn.go, lifecycle.go, loop.go, main.go (830 lines, 6 files) written directly from S01-S04 specs + DuckBrain /fleet/scheduler/* entries. Build+vet+test green on first pass, guard passed.
 
-**Proven:** Crier 2026-07-17 — CI-007 MCP server (cmd/crier-mcp/main.go, internal/mcp/{server,tools,types,server_test}.go, +1424 lines, 5 files) written directly from 818-line axiom-level spec (docs/specs/ci-007-mcp-server.md). Spec had exact Go types, pseudocode for all 8 tool handlers, error catalog, Mermaid diagrams, test scenarios, and 10-section structure. 27 tests all pass. Build+vet green. Guard PASS. No worker spawn — foreman completed in one tick. No new deps (stdlib-only JSON-RPC over stdio).
+**Proven:** <project> 2026-07-17 — CI-007 MCP server (cmd/<project>-mcp/main.go, internal/mcp/{server,tools,types,server_test}.go, +1424 lines, 5 files) written directly from 818-line axiom-level spec (docs/specs/ci-007-mcp-server.md). Spec had exact Go types, pseudocode for all 8 tool handlers, error catalog, Mermaid diagrams, test scenarios, and 10-section structure. 27 tests all pass. Build+vet green. Guard PASS. No worker spawn — foreman completed in one tick. No new deps (stdlib-only JSON-RPC over stdio).
 
 ### JSON Schema as Axiom-Level Spec
 
@@ -92,7 +92,7 @@ The foreman MAY write documentation directly when task ACs cover READMEs, archit
 
 **Combining adjacent doc tasks:** When two DOC tasks on the board are about the same project (e.g., "write README" and "fix storage claim in architecture.md"), combine them in one commit. They share the same root cause (project lacks/needs documentation) and touch the same documentation surface. Mark both `[x]` with the same commit hash.
 
-**Proven:** Crier 2026-07-15 — DOC-001 (133-line README.md) + DOC-002 (architecture.md storage fix) handled directly by foreman in one tick. Guard PASS (build/vet unaffected by `.md` changes). One commit `57b3746`. Board update commit `a903f11`. Two tasks, one workerless tick.
+**Proven:** <project> 2026-07-15 — DOC-001 (133-line README.md) + DOC-002 (architecture.md storage fix) handled directly by foreman in one tick. Guard PASS (build/vet unaffected by `.md` changes). One commit `57b3746`. Board update commit `a903f11`. Two tasks, one workerless tick.
 
 **Proven:** H3 2026-07-19 — P6-06 Build Your First H3 Harness guide (docs/guide.html, 747 lines, 34KB HTML) written directly by foreman in one tick. Dark-themed, 5-step walkthrough with language tabs (Go/Python/TS) and copy-paste code. Also updated landing page nav. Docs-only umbrella repo — no worker spawn, no Hilo, no judge. Board: P6-01 through P6-06 all marked done in single tick.
 
@@ -115,8 +115,8 @@ The foreman MAY handle tasks directly when the implementation follows an establi
 
 **Decision:** skip Steps 2-5 (Hilo, DuckBrain, pre-load, worker spawn). Read the target entity's store API and handler files, write the test inputs directly into the existing template block, run the validator to confirm, fix any type mismatches, then proceed to guard → commit.
 
-**Why not a worker:** a worker would spend 5+ minutes loading TotalStack context (35+ prior services' test inputs, 3,300-line validator file) just to write 80 lines of template data. The foreman already has the file open and the pattern memorized from completing the prior task. Worker spawn would burn a prepaid bucket tick for a copy-paste job.
+**Why not a worker:** a worker would spend 5+ minutes loading <project> context (35+ prior services' test inputs, 3,300-line validator file) just to write 80 lines of template data. The foreman already has the file open and the pattern memorized from completing the prior task. Worker spawn would burn a prepaid bucket tick for a copy-paste job.
 
 **Verification:** run the validator for the service (`python3 development/aws-shape-validator.py <service>`). All ops must show ✅. Fix any type mismatches (common: int vs str in model defaults) and re-verify.
 
-**Proven:** TotalStack 2026-07-18 — CI-GAP-042 (backup): 20 ops, 83 lines of test inputs, 1 model fix (PercentDone int→str). All 20/20 PASS. No worker spawned. Preceded by CI-GAP-006 through CI-GAP-041 (36 prior services using the same pattern).
+**Proven:** <project> 2026-07-18 — CI-GAP-042 (backup): 20 ops, 83 lines of test inputs, 1 model fix (PercentDone int→str). All 20/20 PASS. No worker spawned. Preceded by CI-GAP-006 through CI-GAP-041 (36 prior services using the same pattern).

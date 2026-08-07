@@ -50,7 +50,7 @@ metadata:
       - `foreman-pitfalls.md` — Scheduler duplicates, .env.production wipes, tunnel instability
       - `never-done-12th-check-usability.md`
     - references/cloudflare-tunnel-demos.md
-    - references/post-heading-pitfalls.md
+    - references/post-<project>-pitfalls.md
     - references/testing-with-dummy-projects.md
     - references/typescript-pnpm-foreman-scaffold.md
     - references/go-ci-creation-pattern.md
@@ -75,7 +75,7 @@ metadata:
       - `foreman-pitfalls.md` — Scheduler duplicates, .env.production wipes, tunnel instability
       - `never-done-12th-check-usability.md`
     - references/cloudflare-tunnel-demos.md
-    - references/post-heading-pitfalls.md
+    - references/post-<project>-pitfalls.md
     - references/parallel-spec-worker-spawning.md
     - references/frontend-worker-api-type-mapping.md
     - references/sudo-blocked-cron-workaround.md
@@ -253,7 +253,7 @@ duckbrain_recall(key="/project/<name>/status", domain="config", namespace="<proj
 
 **Format for the worker:** Summarize, don't dump raw output. "Last time we touched the parser, we broke the lexer because of a token ordering assumption. Use the TokenStream interface, not raw tokens."
 
-**Semantic search fallback:** when `recall()` returns `"requires embedding model"`, a BigInt serialization error (`"Do not know how to serialize a BigInt"`), or any transport-level failure, fall back to `list_keys(prefix="/project/<name>/")`. If empty (no keys), skip to Step 4. Don't burn time retrying — all three failures are DuckBrain MCP transport issues that won't resolve on retry. Proven: musterflow 2026-07-16.
+**Semantic search fallback:** when `recall()` returns `"requires embedding model"`, a BigInt serialization error (`"Do not know how to serialize a BigInt"`), or any transport-level failure, fall back to `list_keys(prefix="/project/<name>/")`. If empty (no keys), skip to Step 4. Don't burn time retrying — all three failures are DuckBrain MCP transport issues that won't resolve on retry. Proven: <project> 2026-07-16.
 ```python
 # List what keys exist under the project namespace
 duckbrain_list_keys(prefix="/project/<name>/", maxDepth=3)
@@ -452,7 +452,7 @@ git status --short                # confirm working tree is clean
 
 If anything unexpected is staged, unstage it. Only the worker's changes get committed. If there are untracked files the worker created but didn't add, check: are they build artifacts (ignore), or legitimate new files the worker forgot to add (add them)?
 
-****.coding-hermes/ is gitignored — use `git add -f` for board updates.** Without `-f`, the board update commit is empty. **Proven:** Rabbit-Hole 2026-07-12.
+****.coding-hermes/ is gitignored — use `git add -f` for board updates.** Without `-f`, the board update commit is empty. **Proven:** <project> 2026-07-12.
 
 ## Step 9 — Off-by-One Submit
 
@@ -487,7 +487,7 @@ curl -s -X POST http://localhost:8766/api/v1/problems/discover \
 curl -s http://localhost:8766/api/v1/queue/<submission_id>
 ```
 
-**Cross-project learning:** Over time, this builds a fleet-wide solution cache. A parser fix for ASCE might solve the same problem for Helios. A Go concurrency pattern for bunker might help hermes-dagger. Always submit completed tasks and always discover before the next tick.
+**Cross-project learning:** Over time, this builds a fleet-wide solution cache. A parser fix for ASCE might solve the same problem for Helios. A Go concurrency pattern for bunker might help <project>. Always submit completed tasks and always discover before the next tick.
 
 **Proven:** 2026-07-24 — off-by-one is live with 51 problems, solving on 60s cron. Zero foreman hits recorded — foremen have not been using the discover endpoint. Start using it.
 
@@ -595,7 +595,7 @@ The foreman can dispatch a dedicated testing worker that exercises the project e
 
 3. **Self-improvement loop:** Worker fixes tasks → code improves → next testing tick finds NEW issues → loop continues. The project gets better every cycle.
 
-**Proven:** HEADING 2026-07-24 — Luna cron found 5 Playwright failures, 4 API contract mismatches, 1 combobox bug. Produced 10 actionable tasks (LUNA-001 through LUNA-010) with exact file paths, priorities, complexity levels, and dependency chains. All committed as E2E evidence.
+**Proven:** <project> 2026-07-24 — Luna cron found 5 Playwright failures, 4 API contract mismatches, 1 combobox bug. Produced 10 actionable tasks (LUNA-001 through LUNA-010) with exact file paths, priorities, complexity levels, and dependency chains. All committed as E2E evidence.
 
 **Testing worker model selection:**
 | Task | Model | Why |
@@ -662,7 +662,7 @@ enabled_toolsets=["terminal","file","web","search","skills","memory","cronjob","
 
 **Verification:** After creating or updating a foreman cron, confirm `enabled_toolsets` contains exactly the 7 allowed sets (terminal, file, web, search, skills, memory, cronjob) and does NOT include "delegation". Run `cronjob(action='list')` and inspect.
 
-**Seen:** Imhotep 2026-07-12 — foreman used `delegate_task` despite skill saying "never use this." The delegation toolset was available (no enabled_toolsets restriction → all tools inherited). The same foreman shortened its schedule from `0 */2 * * *` to `*/30 * * * *` via cronjob self-management. Stripping delegation closed the delegate_task violation. Adding cronjob BACK with strict self-pause-only rules enables the idle-tick slowdown mechanism while the "never decrease interval" directive in the self-pause section prevents schedule drift.
+**Seen:** <project> 2026-07-12 — foreman used `delegate_task` despite skill saying "never use this." The delegation toolset was available (no enabled_toolsets restriction → all tools inherited). The same foreman shortened its schedule from `0 */2 * * *` to `*/30 * * * *` via cronjob self-management. Stripping delegation closed the delegate_task violation. Adding cronjob BACK with strict self-pause-only rules enables the idle-tick slowdown mechanism while the "never decrease interval" directive in the self-pause section prevents schedule drift.
 
 ## Pitfalls
 

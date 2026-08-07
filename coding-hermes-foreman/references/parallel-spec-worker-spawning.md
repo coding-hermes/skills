@@ -18,7 +18,7 @@ for prompt in /tmp/spec-worker-*.txt; do
 done
 ```
 
-## Proven Instance: Heading Spec Phase (2026-07-15)
+## Proven Instance: <project> Spec Phase (2026-07-15)
 
 - **9 workers** spawned simultaneously on `gpt-5.6-terra @ openai-codex`
 - **Tasks:** SPEC-1 through SPEC-9 (API, Data Model, Agentic Loop, Preference Engine, Transcript Layer, Disruption Intel, Amadeus Integration, Customer Export, Mock Data)

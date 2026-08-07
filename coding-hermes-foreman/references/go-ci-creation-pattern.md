@@ -85,7 +85,7 @@ The template `ci-gitlab-go.yml` uses `{{GO_VERSION}}` and `{{BINARY_NAME}}` plac
 
 Uses 4-stage pipeline: build → vet → test → vulncheck. Golang image, Go module cache between jobs, binary artifact with 1-day expiry. `govulncheck` has `allow_failure: true` — stdlib vulns shouldn't block CI on commits that don't touch deps.
 
-**Proven:** Rabbit-Hole 2026-07-18 — `.gitlab-ci.yml` created for self-hosted GitLab (gitlab.readydedis.com), 4 stages, golang:1.26, 17 stdlib vulns under allow_failure, all 8 GitReins criteria PASS, commit ed044bb.
+**Proven:** <project> 2026-07-18 — `.gitlab-ci.yml` created for self-hosted GitLab (gitlab.readydedis.com), 4 stages, golang:1.26, 17 stdlib vulns under allow_failure, all 8 GitReins criteria PASS, commit ed044bb.
 
 ## CI status check without log retrieval
 

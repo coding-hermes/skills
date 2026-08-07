@@ -1,6 +1,6 @@
 # Go HTTP Server Test Patterns
 
-Patterns discovered during Rabbit-Hole Phase 5 foreman tick (2026-07-12), where parallel sibling ticks exposed three recurring Go test/server pitfalls.
+Patterns discovered during <project> Phase 5 foreman tick (2026-07-12), where parallel sibling ticks exposed three recurring Go test/server pitfalls.
 
 ## 1. Use `net.Listen` Before `Serve` to Capture Actual Port
 
@@ -37,7 +37,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 Then tests can simply call `NewServer(store, logger, "127.0.0.1:0")` and `srv.Start()` — no port-finding dance needed. `srv.Addr()` returns the actual port.
 
-**Proven:** Rabbit-Hole Phase 5 2026-07-12 — sibling test's `newTestServer` did the pre-listen+close+rebind workaround which failed intermittently; fixing `Start()` with `net.Listen` made all 22 tests pass reliably.
+**Proven:** <project> Phase 5 2026-07-12 — sibling test's `newTestServer` did the pre-listen+close+rebind workaround which failed intermittently; fixing `Start()` with `net.Listen` made all 22 tests pass reliably.
 
 ---
 
@@ -58,7 +58,7 @@ func withMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
 }
 ```
 
-**Proven:** Rabbit-Hole Phase 5 2026-07-12 — `TestMiddleware_PanicRecovery` called `withMiddleware(mux, nil)` and the panic-recovery handler crashed on nil `logger.Error()` call. Adding the nil guard fixed it immediately.
+**Proven:** <project> Phase 5 2026-07-12 — `TestMiddleware_PanicRecovery` called `withMiddleware(mux, nil)` and the panic-recovery handler crashed on nil `logger.Error()` call. Adding the nil guard fixed it immediately.
 
 ---
 
@@ -81,4 +81,4 @@ if body != nil {
 // http.NewRequest handles nil io.Reader correctly
 ```
 
-**Proven:** Rabbit-Hole Phase 5 2026-07-12 — `doJSON(t, "GET", url, nil)` in a sibling's test crashed with `bytes.(*Buffer).Len` nil pointer dereference. Changing to `var bodyReader io.Reader` fixed it.
+**Proven:** <project> Phase 5 2026-07-12 — `doJSON(t, "GET", url, nil)` in a sibling's test crashed with `bytes.(*Buffer).Len` nil pointer dereference. Changing to `var bodyReader io.Reader` fixed it.

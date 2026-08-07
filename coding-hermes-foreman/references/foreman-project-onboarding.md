@@ -18,7 +18,7 @@ Bane typically stages these before asking for the foreman:
 
 Document the project: name, purpose, tech stack, architecture overview, quality
 gates, development commands, commit rules. Pattern from existing projects
-(heading, hermes-dagger, helix). The AGENTS.md is what the foreman loads to
+(<project>, <project>, helix). The AGENTS.md is what the foreman loads to
 understand the project context on every tick.
 
 ### 2. .coding-hermes/tasks.md
@@ -161,7 +161,7 @@ Commit all scaffolding files (AGENTS.md, README.md, .coding-hermes/tasks.md,
   interval is fast enough.
 
 - **GitHub org invitation may be pending.** When Bane creates a new GitHub org
-  for a project (e.g., `Hermes-DAGger`) separately from the repo, the
+  for a project (e.g., `<project>`) separately from the repo, the
   `totalwindupflightsystems` account may have a pending membership. Accept it
   before transferring repos:
   ```bash

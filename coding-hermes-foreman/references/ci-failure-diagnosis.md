@@ -198,4 +198,4 @@ npm error notsup Unsupported platform for @next/swc-darwin-arm64@15.5.15:
 
 **Also check:** Does the project have BOTH `package-lock.json` (npm) AND `pnpm-lock.yaml` (pnpm)? This is a package-manager conflict — CI uses one, dev uses the other. The workflow's `cache:` key and install command must match the lockfile present in the repo. If `pnpm-lock.yaml` exists, CI should use pnpm, not npm.
 
-**Proven:** EduOS 2026-07-15 — `@next/swc-darwin-arm64` in `apps/web/package.json` devDependencies caused EBADPLATFORM on Linux CI. Dev machine was macOS so the failure was invisible locally. Removed dep, switched `npm ci` → `npm install --legacy-peer-deps`, bumped Node 20→22 (deprecated).
+**Proven:** <project> 2026-07-15 — `@next/swc-darwin-arm64` in `apps/web/package.json` devDependencies caused EBADPLATFORM on Linux CI. Dev machine was macOS so the failure was invisible locally. Removed dep, switched `npm ci` → `npm install --legacy-peer-deps`, bumped Node 20→22 (deprecated).

@@ -44,7 +44,7 @@ across ticks, so stale state can accumulate.
 
 ## Proven
 
-- **Rabbit-Hole P7-01 (2026-07-13):** MCP `guard_run` reported
+- **<project> P7-01 (2026-07-13):** MCP `guard_run` reported
   `DEFAULT_KEY = "sk-test-12345678901234567890"` as a secrets failure.
   CLI `gitreins guard` returned `✓ secrets — clean`. `grep` across the
   entire repo (excluding `.git/`) found no match. The phantom finding

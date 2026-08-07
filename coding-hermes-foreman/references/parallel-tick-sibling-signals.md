@@ -83,7 +83,7 @@ than your implementation. But always fix type mismatches against the ACTUAL
 types package — the test may reference non-existent type constants. Run
 `go doc <pkg>` on the types package to verify which constants exist.
 
-**Proven:** Rabbit-Hole P7-01 (2026-07-13) — sibling wrote attach_test.go
+**Proven:** <project> P7-01 (2026-07-13) — sibling wrote attach_test.go
 with `New()`, `AttachManager.Attach()`, `types.FlowPhaseExecution`,
 `types.Time`, `session.PID` (should be `AgentPID`), `SessionStatusComplete`
 (should be `SessionStatusCompleted`). Rewrote test to match actual
@@ -91,10 +91,10 @@ Pipeline/SessionManager API with correct type constants.
 
 ## Proven Instances
 
-- **Rabbit-Hole P1 (2026-07-12):** sibling committed P1-01 through P1-06 while foreman
+- **<project> P1 (2026-07-12):** sibling committed P1-01 through P1-06 while foreman
   was writing the same files. Foreman verified, committed only P1-07/P1-08.
 
-- **Rabbit-Hole P3 (2026-07-12):** 3+ parallel ticks wrote conflicting ebpf.go
+- **<project> P3 (2026-07-12):** 3+ parallel ticks wrote conflicting ebpf.go
   (duplicate types), renamed ringBuffer→RingBuffer, and deleted/recreated C files.
   Sibling ultimately produced 5 clean commits covering P3-01 through P3-07 with
   exported types and graceful eBPF degradation. Yielding to the sibling was correct.

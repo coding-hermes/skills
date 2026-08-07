@@ -83,7 +83,7 @@ Helix REVIEW-QUEUE-01 (2026-07-14):
   `cmd/helix/review.go` (+125 lines) in ~15 tool calls
 - Build+vet+test green, guard PASS
 
-Imhotep Normalization (2026-07-14):
+<project> Normalization (2026-07-14):
 - GLM-5.2 @ zai-glm: 180s silent, zero files (via `hermes -z`)
 - kimi-k2.7 @ kimi-for-coding: 45s silent, zero files (via `hermes -z`)
 - Both spawned with `hermes -z "$(cat file)"` — `hermes chat -q` failed first

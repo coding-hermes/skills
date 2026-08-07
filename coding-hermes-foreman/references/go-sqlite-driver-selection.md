@@ -76,4 +76,4 @@ Error: "no such module: fts5"
 **Fix:** Explicitly `go get modernc.org/sqlite@latest` then `go mod tidy`.
 
 ## Proven Instance
-Rabbit-Hole 2026-07-12 — Phase 2 storage layer. Initial implementation used `mattn/go-sqlite3`; FTS5 virtual table creation failed with "no such module: fts5". Attempted `-tags sqlite_fts5` but the security scanner blocked `go get` for the CGO-dependent driver. Switched to `modernc.org/sqlite` — one-line import change, all 14 storage tests passed including FTS5 full-text search. No CGO, no compile tags, no cross-compile headaches.
+<project> 2026-07-12 — Phase 2 storage layer. Initial implementation used `mattn/go-sqlite3`; FTS5 virtual table creation failed with "no such module: fts5". Attempted `-tags sqlite_fts5` but the security scanner blocked `go get` for the CGO-dependent driver. Switched to `modernc.org/sqlite` — one-line import change, all 14 storage tests passed including FTS5 full-text search. No CGO, no compile tags, no cross-compile headaches.

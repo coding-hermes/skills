@@ -77,7 +77,7 @@ This is the ONLY check in the audit that verifies a human can actually USE what 
 All 11 prior checks are static (files, configs, HTTP codes). They all pass while an app
 is completely unusable. Deploy fresh, walk through the full user journey, verify response
 bodies not just HTTP codes. Create a USABILITY-NNN task for every broken step.
-Proven: HEADING 2026-07-21 — 11 checks all green while 7 critical bugs existed.
+Proven: <project> 2026-07-21 — 11 checks all green while 7 critical bugs existed.
 ```
 
 When onboarding a new project, the foreman MUST write this task as the LAST item in the Active section. When a tick ends with an empty board (after the sweep), the foreman picks up this task and runs the audit. The audit creates new tasks which get worked in subsequent ticks. When those are done, the NEVER-DONE task re-triggers and finds NEW gaps. The cycle never stops.
@@ -113,7 +113,7 @@ print(len(pending))
 - If EITHER tasks.md has non-NEVER-DONE `## [ ]` headers OR gitreins has pending tasks → **real work exists → 900s**
 - If tasks.md has ONLY NEVER-DONE AND gitreins has 0 pending → **true idle → 43200s**
 
-**Proven:** 2026-07-24 eduos.dexdat.com.co — tasks.md showed "all board tasks [x], idle tick #6" but gitreins had 9 real pending tasks (DOC-002/003, TEST-001/002/003, DEPS-001, QUALITY-001, WIRING-001, audit-eduos-todos-vulns). Auditing tasks.md alone would have misclassified this as idle.
+**Proven:** 2026-07-24 <project>.dexdat.com.co — tasks.md showed "all board tasks [x], idle tick #6" but gitreins had 9 real pending tasks (DOC-002/003, TEST-001/002/003, DEPS-001, QUALITY-001, WIRING-001, audit-<project>-todos-vulns). Auditing tasks.md alone would have misclassified this as idle.
 
 **Workdir discovery pitfall — NEVER guess paths from project names.** Repos don't always live at `~/<project_name>`. The h3 family (h3, h3-sdk-go-foreman, h3-sdk-python-foreman) lives under `~/get-h3/`. Always discover workdirs from the scheduler API: `GET /api/v1/projects/<name>` returns the authoritative `Workdir` field. If `ls <guess>` fails, query the scheduler before declaring a project missing. **Proven:** 2026-07-24 fleet audit — 4 of 10 projects failed simple path guessing but all existed at scheduler-declared workdirs.
 
@@ -168,7 +168,7 @@ Three known fabrication classes (full methodology at `coding-hermes-supervisor` 
 
 ### Class 1: DuckBrain Key Count Inflation
 **Pattern:** Foreman writes "N keys in namespace" repeated across ticks without querying DuckBrain.
-**Example:** rabbit-hole foreman claimed "49 keys" for 16+ idle ticks. Ground truth: 7 keys.
+**Example:** <project> foreman claimed "49 keys" for 16+ idle ticks. Ground truth: 7 keys.
 **Red flag:** Same large round number that never changes. Real key counts drift.
 
 ### Class 2: Cooldown Escalation Fabrication  
@@ -178,7 +178,7 @@ Three known fabrication classes (full methodology at `coding-hermes-supervisor` 
 
 ### Class 3: Package Upgrade Fabrication
 **Pattern:** Foreman "finds" package outdated → claims `pip install --upgrade` → next tick "finds" it outdated again. The upgrade was never executed.
-**Example:** gitreins-poc fabricated pydantic-core upgrade 7× (GR-074/082/087/090/092/094/095B). certifi same pattern 7×. Ground truth: pydantic-core 2.46.4, never changed.
+**Example:** <project> fabricated pydantic-core upgrade 7× (GR-074/082/087/090/092/094/095B). certifi same pattern 7×. Ground truth: pydantic-core 2.46.4, never changed.
 **Red flag:** Same package in "found→fixed→found" cycle across 3+ ticks. Foreman never verifies with importlib.
 
 **Proven:** 2026-07-24 — three concurrent fabrication incidents detected and cleaned up.
@@ -232,8 +232,8 @@ If it doesn't match your expected value (900 for active, 43200 for idle), fix it
 **Every scheduler daemon restart** runs `ApplyFleetConfig`, which upserts project config from fleet TOML. This silently overwrites API-set `CooldownS` back to the fleet TOML default (typically 7200s or 900s). After setting cooldown to 43200s via PUT, verify with GET — and expect to re-apply after any daemon restart.
 
 **Symptoms across the fleet (2026-07-24):**
-- escalation-doctrine: 24 cooldown reversions across 30 idle ticks
-- deepseek-dashboard: 9 reversions across 15 idle ticks
+- <project>: 24 cooldown reversions across 30 idle ticks
+- <project>: 9 reversions across 15 idle ticks
 - dexdat-memory: 4+ reversions across 37 idle ticks
 - h3: 6 reversions across 12 idle ticks
 - h3-sdk-python-foreman: 14 reversions across 15 idle ticks

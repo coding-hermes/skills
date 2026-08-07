@@ -34,12 +34,12 @@ Before creating ANYTHING (repo, specs, foreman) from a DuckBrain namespace:
 
 ## Proven Incidents
 
-### Rabbit-Hole / H3 (2026-07-12)
+### <project> / H3 (2026-07-12)
 
-- **DuckBrain namespace:** `rabbit-hole` with 5 entries: `/project/concept`, `/project/collect`, `/project/classify`, `/project/express`, `/project/competitors`
+- **DuckBrain namespace:** `<project>` with 5 entries: `/project/concept`, `/project/collect`, `/project/classify`, `/project/express`, `/project/competitors`
 - **What the entries described:** Three-layer architecture (collect → classify → express), competitive landscape, killer features
-- **What was actually found:** `rabbit-hole-prd.html` at `~/get-h3/h3/rabbit-hole-prd.html` — title: "Project Rabbit Hole — H3 PRD & Spec Summary"
+- **What was actually found:** `<project>-prd.html` at `~/get-h3/h3/<project>-prd.html` — title: "Project Rabbit Hole — H3 PRD & Spec Summary"
 - **The truth:** "Project Rabbit Hole" was H3's codename. The DuckBrain entries were H3's architectural design thinking.
-- **The mistake:** Created an entirely separate `rabbit-hole` project with 6 axiom-level specs, GitLab repo, and coding foreman — duplicating what was already H3.
+- **The mistake:** Created an entirely separate `<project>` project with 6 axiom-level specs, GitLab repo, and coding foreman — duplicating what was already H3.
 - **User correction:** "Read that html file it says rabbit hole but it is H3 project." and "Is this for project rabbit hole or a H3 because you Named one thing hut contents different"
 - **Lesson:** A DuckBrain namespace with project-like entries does NOT mean "create a new project." Cross-reference with HTML PRDs first.

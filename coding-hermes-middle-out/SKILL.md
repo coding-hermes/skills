@@ -67,9 +67,9 @@ If ANY answer is "no," the phase is NOT complete. Create WIRING tasks.
 
 ## Proven Failure Pattern
 
-**Dagger/Crier 2026-07:** 12 packages with green tests. Foreman marked "done." No `cmd/`, no `main.go`, no HTTP listener. Engine running in a vacuum — completely unusable.
+**Dagger/<project> 2026-07:** 12 packages with green tests. Foreman marked "done." No `cmd/`, no `main.go`, no HTTP listener. Engine running in a vacuum — completely unusable.
 
-**Imhotep after wiring:** Same foreman, 1 tick later. 12 packages → wired to `dagger serve`. Works, tests, health endpoint responds. All 8 wiring questions answered.
+**<project> after wiring:** Same foreman, 1 tick later. 12 packages → wired to `dagger serve`. Works, tests, health endpoint responds. All 8 wiring questions answered.
 
 ## Integration with never-done Audit
 

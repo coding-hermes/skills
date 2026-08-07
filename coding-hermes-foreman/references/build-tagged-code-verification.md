@@ -37,7 +37,7 @@ already ran. Board update notes the skip reason.
 
 ## Proven
 
-- Imhotep Phase 5 DWG/DXF extraction (2026-07-16) — 2 files (+483 lines)
+- <project> Phase 5 DWG/DXF extraction (2026-07-16) — 2 files (+483 lines)
   behind `//go:build dwg`. libreDWG not installed. Guard PASS, judge skipped,
   manual review verified interface compliance, error wrapping, context
   cancellation, and test coverage.

@@ -31,7 +31,7 @@ worker_provider TEXT DEFAULT ''
 
 ### `ticks` — Tick History
 ```
-id TEXT PRIMARY KEY         — e.g. HEADING-2026-07-24-06-14-29
+id TEXT PRIMARY KEY         — e.g. <project>-2026-07-24-06-14-29
 project_name TEXT NOT NULL  — references projects.name
 session_id TEXT
 status TEXT NOT NULL DEFAULT 'queued'
@@ -68,16 +68,16 @@ namespace_id TEXT
 
 ### Project config for a specific project
 ```sql
-SELECT * FROM projects WHERE name='HEADING';
+SELECT * FROM projects WHERE name='<project>';
 ```
-**PITFALL:** `name`, NOT `project_name`. And names are case-sensitive — `HEADING` ≠ `heading`.
+**PITFALL:** `name`, NOT `project_name`. And names are case-sensitive — `<project>` ≠ `<project>`.
 
 ### Recent ticks for a project
 ```sql
 SELECT id, status, outcome, spawned_at, completed_at, commits, files_changed, 
        tokens_in, tokens_out, cost_usd, error 
 FROM ticks 
-WHERE project_name='HEADING' 
+WHERE project_name='<project>' 
 ORDER BY spawned_at DESC LIMIT 10;
 ```
 **PITFALL:** `project_name` in ticks, but `name` in projects. Inconsistent schema.
@@ -86,12 +86,12 @@ ORDER BY spawned_at DESC LIMIT 10;
 ```sql
 -- Zero-commit ticks (likely zombies)
 SELECT COUNT(*) FROM ticks 
-WHERE project_name='HEADING' AND commits=0 AND files_changed=0;
+WHERE project_name='<project>' AND commits=0 AND files_changed=0;
 
 -- Percentage that are zombies
 SELECT 
   ROUND(100.0 * SUM(CASE WHEN commits=0 AND files_changed=0 THEN 1 ELSE 0 END) / COUNT(*), 1) 
-FROM ticks WHERE project_name='HEADING';
+FROM ticks WHERE project_name='<project>';
 ```
 
 ### Cost summary
@@ -100,7 +100,7 @@ SELECT COUNT(*),
        ROUND(SUM(CAST(cost_usd AS REAL)), 2) as total_cost,
        SUM(CAST(tokens_in AS INTEGER)) as total_tokens_in,
        SUM(CAST(tokens_out AS INTEGER)) as total_tokens_out
-FROM ticks WHERE project_name='HEADING';
+FROM ticks WHERE project_name='<project>';
 ```
 **PITFALL:** `cost_usd` is stored as TEXT or REAL depending on SQLite version. Always CAST.
 
@@ -121,7 +121,7 @@ db = sqlite3.connect('~/.hermes/coding-hermes/scheduler.db')
 db.row_factory = sqlite3.Row
 
 # Project config
-row = db.execute("SELECT * FROM projects WHERE name='HEADING'").fetchone()
+row = db.execute("SELECT * FROM projects WHERE name='<project>'").fetchone()
 config = dict(row)
 
 # Tick history
@@ -129,7 +129,7 @@ for r in db.execute(
     "SELECT id, status, outcome, spawned_at, completed_at, commits, "
     "files_changed, tokens_in, tokens_out, cost_usd, error "
     "FROM ticks WHERE project_name=? ORDER BY spawned_at DESC LIMIT 10",
-    ('HEADING',)
+    ('<project>',)
 ).fetchall():
     print(dict(r))
 ```

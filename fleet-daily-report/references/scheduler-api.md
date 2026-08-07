@@ -10,7 +10,7 @@ The main dashboard. Contains three tables:
 **Table 0 — Project List** (all enabled projects):
 ```
 Project | W | P | Last Tick | Outcome | Running
-HEADING | 25 | 10 | 06:14 | committed |
+<project> | 25 | 10 | 06:14 | committed |
 bunker  | 15 | 10 | 06:26 |          | running
 ...
 ```
@@ -25,7 +25,7 @@ bunker  | 15 | 10 | 06:26 |          | running
 Project | Status | Outcome | Spawned | Commits | Files
 bunker | running | | 06:26 | 0 | 0
 consensus | completed | committed | 06:22 | 0 | 0
-eduos-e2e | failed | failed | 06:25 | 0 | 0
+<project>-e2e | failed | failed | 06:25 | 0 | 0
 ```
 
 **Table 2 — Namespace Budgets**:

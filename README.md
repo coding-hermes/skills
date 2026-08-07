@@ -10,10 +10,16 @@ This repository contains the skill files that power the Coding Hermes autonomous
 |-------|-------|-------------|
 | [`coding-hermes-config`](coding-hermes-config/SKILL.md) | Foundation | First-run setup — asks for API keys, models, project paths |
 | [`coding-hermes-north-star`](coding-hermes-north-star/SKILL.md) | Foundation | Architecture overview — the full system explained |
+| [`coding-hermes-discovery`](coding-hermes-discovery/SKILL.md) | Foundation | Discovery sweep — finds work across all languages |
+| [`coding-hermes-map`](coding-hermes-map/SKILL.md) | Foundation | Skill map — what each fleet skill does and when to use it |
 | [`coding-hermes-foreman`](coding-hermes-foreman/SKILL.md) | Foreman | Per-project tick loop — inspects, plans, spawns workers |
+| [`coding-hermes-self-heal`](coding-hermes-self-heal/SKILL.md) | Foreman | Pre-tick self-heal — identity, deps, CI, transient fixes |
+| [`coding-hermes-worker-model`](coding-hermes-worker-model/SKILL.md) | Foreman | Worker model selection — cheapest model that works |
 | [`coding-hermes-supervisor`](coding-hermes-supervisor/SKILL.md) | Supervisor | Fleet-wide oversight — health, starvation, failures, costs |
+| [`coding-hermes-scheduler`](coding-hermes-scheduler/SKILL.md) | Broker | Operating the fleet scheduler daemon — API, config, ops |
 | [`coding-hermes-broker`](coding-hermes-broker/SKILL.md) | Broker | Scheduling algorithm — weight-budget, urgency, packing |
 | [`coding-hermes-worker`](coding-hermes-worker/SKILL.md) | Worker | Code implementation — writes code, runs tests, commits |
+| [`coding-hermes-jsonl-board-append`](coding-hermes-jsonl-board-append/SKILL.md) | Board | JSONL board append + cache rebuild tooling |
 
 ---
 

@@ -204,7 +204,7 @@ never tick: NULL/dead `NamespaceID`, `decay_rate=0` (flat urgency), a
 case-insensitive ghost duplicate, or a zombie tick row (`status='running'` +
 `session_id IS NULL`). See
 `coding-hermes-never-done/references/scheduler-registration-health.md`.
-**Proven:** ring-runner (2026-08-02) was registered perfectly (900s,
+**Proven:** <project> (2026-08-02) was registered perfectly (900s,
 coding-hermes, deepseek-v4-flash) but a zombie tick from a mid-restart spawn
 blocked it → zero ticks for 2 days. Clear the zombie row, then
 `POST /api/v1/evaluate`.

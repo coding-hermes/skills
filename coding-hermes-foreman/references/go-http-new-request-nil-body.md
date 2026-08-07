@@ -40,4 +40,4 @@ req, err := http.NewRequest(method, url, bodyReader)
 
 ## Proven
 
-Rabbit-Hole 2026-07-12 — `doJSON` helper in `server_test.go` used `var bodyReader *bytes.Buffer`; test `TestListSessions_Empty` passed `nil` body → panic during `http.NewRequest`. Fix: change to `var bodyReader io.Reader`. All 22 express tests passed immediately after.
+<project> 2026-07-12 — `doJSON` helper in `server_test.go` used `var bodyReader *bytes.Buffer`; test `TestListSessions_Empty` passed `nil` body → panic during `http.NewRequest`. Fix: change to `var bodyReader io.Reader`. All 22 express tests passed immediately after.

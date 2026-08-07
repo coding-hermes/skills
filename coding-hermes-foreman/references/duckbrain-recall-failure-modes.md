@@ -22,7 +22,7 @@ The DuckBrain MCP transport (Python JSON encoder) cannot serialize a large integ
 
 **Action:** Fall back to `list_keys()`. Do NOT retry `recall()` — the same BigInt values will be in the response.
 
-**Proven:** MusterFlow 2026-07-16 — `recall(keyPrefix="/project/musterflow/")` returned the BigInt error; `list_keys()` worked correctly.
+**Proven:** <project> 2026-07-16 — `recall(keyPrefix="/project/<project>/")` returned the BigInt error; `list_keys()` worked correctly.
 
 ## Failure Mode 3: MCP Transport Timeout / Connection Closed
 
@@ -41,7 +41,7 @@ The MCP server process may be down, restarting, or overloaded — or the transpo
 **Do NOT retry `recall()` or `list_keys()` in 3b** — retrying won't open a new connection within the same tick. But `remember()` is a different operation — try it once.
 
 **Proven:**
-- Mode 3a: MusterFlow 2026-07-16 (ClosedResourceError, `list_keys` worked)
+- Mode 3a: <project> 2026-07-16 (ClosedResourceError, `list_keys` worked)
 - Mode 3b: Mythos 2026-07-19 ("Connection was never established or has been closed already", `list_keys` also failed)
 - Mode 3b with successful write: DexDat Memory 2026-07-19 — recall + list_keys both returned connection error, but `remember()` succeeded on first attempt. The write path outlives the read path.
 
@@ -53,7 +53,7 @@ This is NOT a transport failure or serialization error. It's a recall-index stal
 
 **Detection:** recall returns `count: 0` with empty `memories` array, no error string. `remember()` to the same key works (returns UUID, partition, author). Subsequent `recall()` for the same key may still return empty — the index lag can persist across ticks.
 
-**Proven:** Hivemind-work 2026-07-19 and many prior ticks (77–95): `recall(key="/project/hivemind-work/idle-counter")` returned `{"memories":[],"count":0}` on ~70% of ticks, while `remember()` to the same key always succeeded. Ticks where recall worked: 73, 75, 79, 85, 88, 90, 91. Ticks where recall was empty: 74, 76, 77, 80, 81, 82, 83, 84, 86, 87, 89, 92, 93, 94, 95. This is a persistent intermittent index-staleness pattern, not a transient failure.
+**Proven:** <project> 2026-07-19 and many prior ticks (77–95): `recall(key="/project/<project>/idle-counter")` returned `{"memories":[],"count":0}` on ~70% of ticks, while `remember()` to the same key always succeeded. Ticks where recall worked: 73, 75, 79, 85, 88, 90, 91. Ticks where recall was empty: 74, 76, 77, 80, 81, 82, 83, 84, 86, 87, 89, 92, 93, 94, 95. This is a persistent intermittent index-staleness pattern, not a transient failure.
 
 **Action:**
 1. Do NOT retry `recall()` — the index is stale and retrying in the same tick won't help.

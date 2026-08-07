@@ -1,6 +1,6 @@
 # DuckBrain Memory → Full Project Launch Pattern
 
-When a project exists as DuckBrain memory entries but has no repo, no specs, and no foreman, this is the launch sequence. Proven on Rabbit-Hole (2026-07-12): 5 DuckBrain entries → 6 axiom specs → scaffold → GitLab → foreman running.
+When a project exists as DuckBrain memory entries but has no repo, no specs, and no foreman, this is the launch sequence. Proven on <project> (2026-07-12): 5 DuckBrain entries → 6 axiom specs → scaffold → GitLab → foreman running.
 
 ## When to Use
 
@@ -92,4 +92,4 @@ For self-hosted GitLab (`gitlab.readydedis.com`):
 
 ## Session Evidence
 
-Rabbit-Hole (2026-07-12): 5 DuckBrain entries under `/project/{concept,collect,classify,express,competitors}` → 6 axiom-level specs (S01-S06, ~65 pages, exact Go interfaces, DDL, eBPF C code, error catalogs, Mermaid diagrams) → scaffold (go.mod, Makefile, .gitignore, AGENTS.md) → GitLab group + project (rabbit-hole/rabbit-hole, ID 17) → foreman cron `256fd74b93d8` (every 30m, deepseek-v4-pro PAYG, toolsets locked). First tick completed 2 commits (scaffold + GitReins config).
+<project> (2026-07-12): 5 DuckBrain entries under `/project/{concept,collect,classify,express,competitors}` → 6 axiom-level specs (S01-S06, ~65 pages, exact Go interfaces, DDL, eBPF C code, error catalogs, Mermaid diagrams) → scaffold (go.mod, Makefile, .gitignore, AGENTS.md) → GitLab group + project (<project>/<project>, ID 17) → foreman cron `256fd74b93d8` (every 30m, deepseek-v4-pro PAYG, toolsets locked). First tick completed 2 commits (scaffold + GitReins config).

@@ -26,8 +26,8 @@ Key signals:
 
 ## Proven
 
-**EduOS 2026-07-15:** Browser E2E Tester (d838ce4f5ddc) paused by supervisor on Jul 11 with reason
-"Replaced by EduOS Alpha Dev Loop (supervisor auto-pause)". The Dev Loop (a3bfd8f8fe14) was ALSO paused
+**<project> 2026-07-15:** Browser E2E Tester (d838ce4f5ddc) paused by supervisor on Jul 11 with reason
+"Replaced by <project> Alpha Dev Loop (supervisor auto-pause)". The Dev Loop (a3bfd8f8fe14) was ALSO paused
 with error. Both crons dead for 4 days. Neither showed up in normal cron health checks because:
 - The E2E Tester's pause was intentional (had a reason)
 - The Dev Loop's pause just looked like a normal error

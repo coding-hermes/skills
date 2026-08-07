@@ -57,4 +57,4 @@ This pattern works for ANY code generation tool where:
 
 ## Proven
 
-Rabbit-Hole 2026-07-12 — `internal/collector/ebpf.go` used this pattern for `loadBpfObjects`. Without it, the package wouldn't compile on machines without clang, libbpf, and kernel headers. The stub allowed 17 collector tests to pass, build+vet green, and guard to pass — all without running bpf2go. The real eBPF loading path is exercised later when the toolchain is available.
+<project> 2026-07-12 — `internal/collector/ebpf.go` used this pattern for `loadBpfObjects`. Without it, the package wouldn't compile on machines without clang, libbpf, and kernel headers. The stub allowed 17 collector tests to pass, build+vet green, and guard to pass — all without running bpf2go. The real eBPF loading path is exercised later when the toolchain is available.

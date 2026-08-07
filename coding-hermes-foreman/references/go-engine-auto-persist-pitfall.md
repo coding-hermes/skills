@@ -43,7 +43,7 @@ BEFORE adding explicit store calls to the test.
 
 ## Proven
 
-Rabbit-Hole 2026-07-14 — `ClassificationEngine.Classify()` at
+<project> 2026-07-14 — `ClassificationEngine.Classify()` at
 `internal/classify/engine.go:104-108` calls `e.store.StoreFlows(ctx, flows)`
 after classification. E2E test `TestE2E_ServeAttachSearchDetach` hit UNIQUE
 constraint on the test's subsequent `store.StoreFlows()`. Removing the

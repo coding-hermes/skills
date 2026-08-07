@@ -51,4 +51,4 @@ This is NOT caught by `go vet` or `go build` — it's a runtime type-assertion f
 
 ## Provenance
 
-Rabbit-Hole Phase 5 (2026-07-12) — 24 express tests all passed except `TestWebSocket`. The `responseWriter` in `middleware.go` wrapped `http.ResponseWriter` for status-code capture and logging, but lacked `Hijack()`. Adding the delegation method fixed it instantly. The same pattern applies to any Go HTTP service that uses middleware wrappers and wants WebSocket support.
+<project> Phase 5 (2026-07-12) — 24 express tests all passed except `TestWebSocket`. The `responseWriter` in `middleware.go` wrapped `http.ResponseWriter` for status-code capture and logging, but lacked `Hijack()`. Adding the delegation method fixed it instantly. The same pattern applies to any Go HTTP service that uses middleware wrappers and wants WebSocket support.

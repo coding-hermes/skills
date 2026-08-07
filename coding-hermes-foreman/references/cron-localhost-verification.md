@@ -43,7 +43,7 @@ printf "GET /health HTTP/1.0\r\nHost: 127.0.0.1:PORT\r\n\r\n" | nc -w 2 127.0.0.
 printf "POST /api/query HTTP/1.0\r\nHost: 127.0.0.1:PORT\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}" | nc -w 2 127.0.0.1 PORT
 ```
 
-The response includes HTTP status line, headers, and body — parse with `grep` or read directly. This is how rabbit-hole's health endpoint was verified in a cron context (2026-07-18): `{"status":"ok","uptime":"14.8s","version":"1.0.0"}`.
+The response includes HTTP status line, headers, and body — parse with `grep` or read directly. This is how <project>'s health endpoint was verified in a cron context (2026-07-18): `{"status":"ok","uptime":"14.8s","version":"1.0.0"}`.
 
 **Do NOT** pipe nc output to `python3 -m json.tool` — that triggers the pipe-to-interpreter rule. Use `grep` or read the raw JSON.
 

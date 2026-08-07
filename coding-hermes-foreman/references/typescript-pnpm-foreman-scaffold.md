@@ -26,7 +26,7 @@ config/                    # YAML/JSON config files
 ### Package Template (shared library)
 ```json
 {
-  "name": "@heading/<name>",
+  "name": "@<project>/<name>",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -39,7 +39,7 @@ config/                    # YAML/JSON config files
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@heading/core": "workspace:*"
+    "@<project>/core": "workspace:*"
   }
 }
 ```
@@ -54,13 +54,13 @@ config/                    # YAML/JSON config files
 ```
 
 ### Next.js Web App (`apps/web`)
-- **package.json:** depends on `next`, `react`, `react-dom`, `@heading/core`
+- **package.json:** depends on `next`, `react`, `react-dom`, `@<project>/core`
 - **NO `rootDir` or `outDir` in tsconfig** — Next.js uses `noEmit: true` and generates `.next/types/` which falls outside `rootDir`. See pitfall below.
 - **next.config.ts:** `export default { output: 'standalone' };`
 - **layout.tsx:** Starts with `<html><body>`, no global styles needed initially
 
 ### Express API App (`apps/api`)
-- **package.json:** depends on `express`, `cors`, `ws`, all `@heading/*` packages
+- **package.json:** depends on `express`, `cors`, `ws`, all `@<project>/*` packages
 - **dev script:** `tsx watch src/index.ts` (tsx for watch mode)
 - **Explicit return type required** on factory functions (see pitfall below)
 
@@ -70,29 +70,29 @@ config/                    # YAML/JSON config files
 **Symptom:** `next build` fails with "File '.next/types/app/layout.ts' is not under 'rootDir'."
 **Cause:** Next.js auto-generates type declarations in `.next/types/` which is outside `src/`.
 **Fix:** Remove `outDir` and `rootDir` from the web app's tsconfig. These are not needed with `noEmit: true`.
-**Proven:** Heading 2026-07-15.
+**Proven:** <project> 2026-07-15.
 
 ### Express 5 strict type inference (TS2742)
 **Symptom:** `tsc` fails with "The inferred type of 'createApp' cannot be named without a reference to '.pnpm/@types+express-serve-static-core@...'."
 **Cause:** Express's `Express` type comes from a deep transitive dependency; TypeScript can't name it in the public API.
 **Fix:** Add explicit return type annotation: `import express, { type Express } from 'express';` then `export function createApp(): Express { ... }`.
-**Proven:** Heading 2026-07-15.
+**Proven:** <project> 2026-07-15.
 
 ### PNPM approve-builds for esbuild/sharp
 **Symptom:** `pnpm install` exits 1 with `[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: esbuild, sharp`.
 **Fix:** `pnpm approve-builds esbuild sharp` — these are needed for Next.js production builds.
-**Proven:** Heading 2026-07-15.
+**Proven:** <project> 2026-07-15.
 
 ### GitReins init uses `npm test` for pnpm workspaces
 **Symptom:** `gitreins init` detects TypeScript but sets `test_command: npm test`.
 **Fix:** Post-init, edit `.gitreins/config.yaml` to use `test_command: pnpm test`. Also add pipeline stages and evaluator caps appropriate for project size. See `.gitreins/config.yaml` template below.
-**Proven:** Heading 2026-07-15.
+**Proven:** <project> 2026-07-15.
 
 ### TypeScript "No tests yet" stub passes guard
 **Symptom:** `gitreins guard` shows `✓ tests` even though no real tests exist.
 **Cause:** Each package has `"test": "echo 'No tests yet' && exit 0"` — this exits 0.
 **This is correct for Phase 0 scaffold.** Tests are added by workers in later phases. The guard verifies the test command succeeds — a stub that exits 0 is a valid placeholder. Do NOT create a task for "missing tests" — test tasks are already on the board.
-**Proven:** Heading 2026-07-15.
+**Proven:** <project> 2026-07-15.
 
 ## GitReins Config Template (TypeScript/pnpm)
 

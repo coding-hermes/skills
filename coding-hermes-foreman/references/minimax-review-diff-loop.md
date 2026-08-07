@@ -34,6 +34,6 @@ MiniMax-M3, gpt-5.6-terra, and kimi-k3 all exhibit a review-diff loop behavior o
 | 2026-07-16 | Hermes DAGger SPEC-006 | MiniMax-M3 | DAG generation (Go) | ~5min, 13 tests, completed |
 | 2026-07-16 | Hermes DAGger SPEC-007 | kimi-k3 | Bridge + MCP (Go, 4 files, 1,166 lines) | ~4min productive, 6+min review-diff, killed, guard clean, committed |
 | 2026-07-18 | H3 umbrella P6-01 | MiniMax-M3 | HTML landing page (756 lines, dark theme, SVG diagram, JS tabs) | ~360s, killed after file verified correct, all 7 ACs met |
-| 2026-07-18 | HEADING API-003 | gpt-5.6-terra | TypeScript/Express endpoint (+94 lines) | ~3min, review-diff, killed, build+guard clean |
-| 2026-07-18 | HEADING API-004 | gpt-5.6-terra | TypeScript/Express + analytics router (+232 lines, 3 files) | ~3min, review-diff, killed, staged but uncommitted, build+guard clean |
-| 2026-07-18 | HEADING API-005 | MiniMax-M3 | TypeScript/Express travel restrictions (+260 lines, 3 files) | ~5min, review-diff, killed, unstaged, build+guard clean |
+| 2026-07-18 | <project> API-003 | gpt-5.6-terra | TypeScript/Express endpoint (+94 lines) | ~3min, review-diff, killed, build+guard clean |
+| 2026-07-18 | <project> API-004 | gpt-5.6-terra | TypeScript/Express + analytics router (+232 lines, 3 files) | ~3min, review-diff, killed, staged but uncommitted, build+guard clean |
+| 2026-07-18 | <project> API-005 | MiniMax-M3 | TypeScript/Express travel restrictions (+260 lines, 3 files) | ~5min, review-diff, killed, unstaged, build+guard clean |

@@ -96,4 +96,4 @@ Wrong order (server before WS) causes the WS close to race against server shutdo
 
 ## Proven
 
-HEADING SRV-003 (2026-07-19) — worker implemented POST /api/chat endpoint. Smoke test booted Express + WS in-process, ran 10 scenarios (valid POST, missing body, bad IATA, unknown fields, idempotency dedup, different idempotency key, follow-up session reuse), all 20 assertions passing. Test caught 2 issues: phase_change broadcast timing (setImmediate → setTimeout 250ms) and error code mismatch (VALIDATION_ERROR → INVALID_BODY).
+<project> SRV-003 (2026-07-19) — worker implemented POST /api/chat endpoint. Smoke test booted Express + WS in-process, ran 10 scenarios (valid POST, missing body, bad IATA, unknown fields, idempotency dedup, different idempotency key, follow-up session reuse), all 20 assertions passing. Test caught 2 issues: phase_change broadcast timing (setImmediate → setTimeout 250ms) and error code mismatch (VALIDATION_ERROR → INVALID_BODY).

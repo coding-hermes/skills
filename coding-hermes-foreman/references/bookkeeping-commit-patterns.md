@@ -28,7 +28,7 @@ git commit -m "chore: add <namespace-a> and <namespace-b> namespaces to config" 
 git push origin main
 ```
 
-**Proven:** DuckBrain 2026-07-15 — `vip-travel-agent` and `hermes-dagger` namespace additions were the only diff. `git diff --stat` showed 4 insertions, 2 deletions in `duckbrain.config.json`. No source code changed. Committed as chore, pushed, then `git pull --rebase` succeeded.
+**Proven:** DuckBrain 2026-07-15 — `vip-travel-agent` and `<project>` namespace additions were the only diff. `git diff --stat` showed 4 insertions, 2 deletions in `duckbrain.config.json`. No source code changed. Committed as chore, pushed, then `git pull --rebase` succeeded.
 
 ### Lockfile-Less Config (Config Only)
 

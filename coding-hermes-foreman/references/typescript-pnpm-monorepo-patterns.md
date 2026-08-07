@@ -23,7 +23,7 @@ cd apps/api && npx vitest run
 
 **Detection:** vitest errors with `Cannot find module '/@fs/~/project/vitest.global.ts'` and `ERR_MODULE_NOT_FOUND`. The path shown is at repo root, but the file exists in the package subdirectory.
 
-**Proven:** EduOS 2026-07-15 — `vitest run --config apps/api/vitest.config.ts` from repo root failed with `Cannot find module .../vitest.global.ts`; `cd apps/api && npx vitest run` succeeded (1681 tests, 0 fail).
+**Proven:** <project> 2026-07-15 — `vitest run --config apps/api/vitest.config.ts` from repo root failed with `Cannot find module .../vitest.global.ts`; `cd apps/api && npx vitest run` succeeded (1681 tests, 0 fail).
 
 ## Test Discovery — Vitest Watch Mode Pitfall
 
@@ -207,7 +207,7 @@ This unblocks the pipeline. File a follow-up task (INFRA-style) to properly conf
 
 **Why not just create an eslint config on the spot:** The `@next/eslint-plugin-next` package may not be installed, `pnpm install` in cron mode can fail on peer-dependency prompts, and the full fix takes multiple tool calls. The self-heal pass-through is one line and restores pipeline health immediately.
 
-**Proven:** HEADING 2026-07-19 — foreman tick blocked by web lint interactive prompt; `next lint` → `echo pass` unblocked the pipeline in one commit.
+**Proven:** <project> 2026-07-19 — foreman tick blocked by web lint interactive prompt; `next lint` → `echo pass` unblocked the pipeline in one commit.
 
 ## zod v4 `z.record()` — Requires 2 Arguments (Breaking from v3)
 
@@ -231,7 +231,7 @@ z.record(z.string(), z.unknown())     // Record<string, unknown>
 
 **Why this happens in new projects:** `pnpm install --save zod` resolves to the latest (v4.x) even when the prompt says "zod@3". The caret range `^4.4.3` means v4 was explicitly requested by the resolver. Pin to `"zod": "^3.23.0"` if v3 API is desired, or adapt to v4's `z.record(keySchema, valueSchema)`.
 
-**Proven:** HEADING 2026-07-19 — schemas.ts with 7 `z.record()` calls failed build; changing all to `z.record(z.string(), ...)` resolved.
+**Proven:** <project> 2026-07-19 — schemas.ts with 7 `z.record()` calls failed build; changing all to `z.record(z.string(), ...)` resolved.
 
 ## pnpm --filter for Targeted Builds — Avoid Next.js Timeout
 
@@ -240,20 +240,20 @@ z.record(z.string(), z.unknown())     // Record<string, unknown>
 **Pattern:** Use `pnpm --filter` to build only what changed:
 ```bash
 # Build only the changed package + its dependents:
-pnpm --filter @heading/core build           # single package
+pnpm --filter @<project>/core build           # single package
 pnpm --filter "./packages/*" build          # all packages, skip apps
-pnpm --filter @heading/core... build        # package + dependents
+pnpm --filter @<project>/core... build        # package + dependents
 ```
 
 **For verification after changing a package:**
 ```bash
 # 1. Build the changed package itself (fast):
-pnpm --filter @heading/core build
+pnpm --filter @<project>/core build
 
 # 2. Verify dependents still compile (faster than full Next.js build):
-pnpm --filter "./packages/*" --filter @heading/api build
+pnpm --filter "./packages/*" --filter @<project>/api build
 ```
 
 **Detection:** `pnpm build` from repo root times out at 60s+ because `apps/web` runs `next build` which compiles all pages, static generation, and route optimization.
 
-**Proven:** HEADING 2026-07-19 — `pnpm build` timed out at 60s; `pnpm --filter "./packages/*" --filter @heading/api build` completed in ~20s confirming all non-web packages compiled correctly.
+**Proven:** <project> 2026-07-19 — `pnpm build` timed out at 60s; `pnpm --filter "./packages/*" --filter @<project>/api build` completed in ~20s confirming all non-web packages compiled correctly.

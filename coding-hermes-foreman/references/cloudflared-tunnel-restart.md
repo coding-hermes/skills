@@ -116,13 +116,13 @@ section AND any completed TUNNEL task entries.
 
 | Project | Date | Task | Old → New |
 |---------|------|------|-----------|
-| EduOS | 2026-07-15 | TUNNEL-005 | 4 stale URLs → coverage-folding-recipes-attract (web), pricing-other-extended-scripting (api) |
-| EduOS | 2026-07-16 | TUNNEL-012 | All containers Exited(255) + stale URLs → conjunction-sender-gained-searching (web), intelligence-deployment-listening-trader (api). Required Docker API restart first, then tunnel recreation. |
-| EduOS | 2026-07-14 | TUNNEL-004 | stayed-vacuum-remark-roommates (web), rankings-minnesota-manually-faces (api) |
-| EduOS | 2026-07-17 | TUNNEL-013 | uniprotkb-charge-differential-constitutes (web), subscribers-combination-counted-could (api) |
-| EduOS | 2026-07-12 | TUNNEL-003 | lands-salon-reef-advert (web), undefined-vitamin-autumn-impose (api) |
-| EduOS | 2026-07-07 | TUNNEL-002 | remote-ratings-bedford-riding (web), fri-highlighted-upper-mechanical (api) |
-| EduOS | 2026-07-07 | TUNNEL-001 | role-cartridges-portraits-rugby (web), retail-shake-assured-joe (api) |
+| <project> | 2026-07-15 | TUNNEL-005 | 4 stale URLs → coverage-folding-recipes-attract (web), pricing-other-extended-scripting (api) |
+| <project> | 2026-07-16 | TUNNEL-012 | All containers Exited(255) + stale URLs → conjunction-sender-gained-searching (web), intelligence-deployment-listening-trader (api). Required Docker API restart first, then tunnel recreation. |
+| <project> | 2026-07-14 | TUNNEL-004 | stayed-vacuum-remark-roommates (web), rankings-minnesota-manually-faces (api) |
+| <project> | 2026-07-17 | TUNNEL-013 | uniprotkb-charge-differential-constitutes (web), subscribers-combination-counted-could (api) |
+| <project> | 2026-07-12 | TUNNEL-003 | lands-salon-reef-advert (web), undefined-vitamin-autumn-impose (api) |
+| <project> | 2026-07-07 | TUNNEL-002 | remote-ratings-bedford-riding (web), fri-highlighted-upper-mechanical (api) |
+| <project> | 2026-07-07 | TUNNEL-001 | role-cartridges-portraits-rugby (web), retail-shake-assured-joe (api) |
 
 **Recurrence:** Tunnels expire roughly every 1-3 days (TUNNEL-008 through TUNNEL-013 were within 48 hours). This is normal TryCloudflare behavior — Quick Tunnels are ephemeral by design. A permanent tunnel solution (named tunnel with CNAME) would eliminate this recurring operational task. This is normal TryCloudflare behavior —
 Quick Tunnels are ephemeral by design. A permanent tunnel solution (named tunnel with CNAME)

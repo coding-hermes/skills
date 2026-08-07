@@ -65,4 +65,4 @@ A gap where the spec says "two implementations" but only one was ever committed 
 
 ## Proven Instances
 
-- **Rabbit-Hole 2026-07-15**: Method B found 4 gaps (S03 ClassificationBackend interface, S03 remote gRPC backend, S03 ModelInfo partial fields, S05 Storage interface not exported). Method A only found 1 TODO.
+- **<project> 2026-07-15**: Method B found 4 gaps (S03 ClassificationBackend interface, S03 remote gRPC backend, S03 ModelInfo partial fields, S05 Storage interface not exported). Method A only found 1 TODO.

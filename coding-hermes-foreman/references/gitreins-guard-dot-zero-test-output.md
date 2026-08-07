@@ -60,5 +60,5 @@ When `.0` is **new** (only with your changes):
 
 ## Proven
 
-- **TotalStack 2026-07-13**: Guard showed `.0` consistently across multiple commits (pyproject.toml, AGENTS.md, workflow YAMLs). All were docs/config changes with no Python code modifications. Confirmed pre-existing on clean HEAD. Bypassed with `--no-verify`. Root cause: GitReins test runner configured for Go-style `go test ./...` but project uses `pytest` with complex venv setup.
+- **<project> 2026-07-13**: Guard showed `.0` consistently across multiple commits (pyproject.toml, AGENTS.md, workflow YAMLs). All were docs/config changes with no Python code modifications. Confirmed pre-existing on clean HEAD. Bypassed with `--no-verify`. Root cause: GitReins test runner configured for Go-style `go test ./...` but project uses `pytest` with complex venv setup.
 - **Muster 2026-07-12**: `.0` in a Rust/Python hybrid project — test runner couldn't find `pytest` because it wasn't in PATH when guard invoked it.

@@ -408,7 +408,7 @@ When the foreman creates testing tasks, use this matrix format:
 - **coding-hermes-never-done:** Check #13 (E2E Testing Tick) uses this skill's prompt templates to run comprehensive testing
 - **coding-hermes-foreman:** Foreman injects testing tasks into the board using the matrix format above
 - **coding-hermes-board:** Testing tasks follow the same model-router matrix format
-- **hermes-dagger:** Future support for building these testing pipelines as Dagger workflows
+- **<project>:** Future support for building these testing pipelines as Dagger workflows
 
 ## Version History
 

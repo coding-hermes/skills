@@ -50,7 +50,7 @@ Group issues by TYPE so you know where to focus:
 │ Active: 14  Idle: 28  Risks: 6         │
 ├─ PROBLEMS ────────────────────────────┤
 │ 🔴 Needs Decision: CI billing for 3 orgs
-│ 🔴 Burning: HEADING $5.07 on zombies  │
+│ 🔴 Burning: <project> $5.07 on zombies  │
 │ 🟡 Blocked: rethinkdb CDC-08 review   │
 ├─ ACTIVE PROJECTS ─────────────────────┤
 │ ┌─ hermes-canopy 🟢 ─────────────────┐ │

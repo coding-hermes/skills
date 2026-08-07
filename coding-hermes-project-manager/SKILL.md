@@ -142,7 +142,7 @@ Every cycle, check the fleet's dependency edges — where do projects consume
 each other?
 
 - **Shared repos / libraries**: which projects import or vendor another
-  fleet project (e.g. projects consuming `gitreins-poc`, `duckbrain`,
+  fleet project (e.g. projects consuming `<project>`, `duckbrain`,
   `coding-hermes-scheduler` skills, `hermes-canopy` as a dependency)?
   `grep -rl "coding-hermes\|gitreins\|duckbrain" <workdir>/go.mod|package.json|pyproject.toml`
   per project is a cheap probe.
@@ -172,7 +172,7 @@ The PM tracks them in `~/.hermes/stand-in/initiatives.json`:
   "name": "Real done, not green tests",
   "started": "2026-08-04",
   "criteria": "Every enabled project has: integration guide, API docs, <60s short tests, verified fixes",
-  "projects": ["hermes-canopy", "ring-runner", "..."],
+  "projects": ["hermes-canopy", "<project>", "..."],
   "status": "in_progress",
   "last_updated": "2026-08-04T..."
 }]}
