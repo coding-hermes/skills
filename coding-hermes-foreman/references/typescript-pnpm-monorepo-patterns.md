@@ -8,10 +8,10 @@ When running `npx vitest run --config apps/api/vitest.config.ts` from the **repo
 
 **Incorrect — resolves paths from repo root:**
 ```bash
-# From /home/kara/project/
+# From ~/project/
 npx vitest run --config apps/api/vitest.config.ts
-# ❌ globalSetup: ['./vitest.global.ts'] → resolves to /home/kara/project/vitest.global.ts
-# ❌ include: ['src/**/*.test.ts'] → resolves to /home/kara/project/src/
+# ❌ globalSetup: ['./vitest.global.ts'] → resolves to ~/project/vitest.global.ts
+# ❌ include: ['src/**/*.test.ts'] → resolves to ~/project/src/
 ```
 
 **Correct — `cd` into the package first:**
@@ -21,7 +21,7 @@ cd apps/api && npx vitest run
 # ✅ include: ['src/**/*.test.ts'] → resolves to apps/api/src/
 ```
 
-**Detection:** vitest errors with `Cannot find module '/@fs//home/kara/project/vitest.global.ts'` and `ERR_MODULE_NOT_FOUND`. The path shown is at repo root, but the file exists in the package subdirectory.
+**Detection:** vitest errors with `Cannot find module '/@fs/~/project/vitest.global.ts'` and `ERR_MODULE_NOT_FOUND`. The path shown is at repo root, but the file exists in the package subdirectory.
 
 **Proven:** EduOS 2026-07-15 — `vitest run --config apps/api/vitest.config.ts` from repo root failed with `Cannot find module .../vitest.global.ts`; `cd apps/api && npx vitest run` succeeded (1681 tests, 0 fail).
 

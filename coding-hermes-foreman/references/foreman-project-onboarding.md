@@ -107,7 +107,7 @@ Create via `cronjob(action='create', ...)`. **Must match canonical shape exactly
 | provider | `deepseek-foreman` (PAYG — never prepaid) |
 | schedule | `every 30m` (interval format, not cron `*/30`) |
 | enabled_toolsets | `["terminal","file","web","search","skills","memory"]` — NO delegation, NO cronjob |
-| workdir | `/home/kara/<project>` |
+| workdir | `~/<project>` |
 | deliver | `telegram:-1003310984808:<thread_id>` — explicit, never `origin` |
 | name | `<project>-coding-foreman` |
 

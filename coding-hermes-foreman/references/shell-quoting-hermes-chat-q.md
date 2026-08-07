@@ -23,7 +23,7 @@ Write the prompt to a temp file first, then pass it via `$(cat file)`:
 write_file(path="/tmp/task-prompt.txt", content="...full prompt...")
 
 # Pass via cat — the prompt content never touches the shell parser
-cd /home/kara/<project> && hermes chat -q "$(cat /tmp/task-prompt.txt)" \
+cd ~/<project> && hermes chat -q "$(cat /tmp/task-prompt.txt)" \
   -m <model> --provider <bucket> --ignore-rules --cli -Q
 ```
 

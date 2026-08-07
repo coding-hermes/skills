@@ -49,10 +49,33 @@ This repository contains the skill files that power the Coding Hermes autonomous
 
 ## Getting Started
 
-### 1. Clone the skills
+> **Onboarding guide — complete install from zero to a running fleet scheduler.**
+> If anything in this flow fails, the README of the
+> [scheduler repo](https://github.com/coding-hermes/scheduler) is the
+> authoritative reference, and `docs/fleet.md` there covers operations.
+
+### 0. Prerequisites
+
+- **Hermes Agent installed** — `hermes doctor` passes (install: https://hermes-agent.nousresearch.com/docs)
+- **Hermes gateway running with the API server enabled** — `curl http://127.0.0.1:8642/health` returns `{"status":"ok",...}`. The API server key lives in `~/.hermes/.env` as `API_SERVER_KEY=...` (generate one: `openssl rand -hex 32`)
+- **Go 1.23+** — `go version`
+- **SQLite3** — `sqlite3 --version`
+
+### 1. Install the skills
+
+The skills are plain markdown folders — install them where Hermes can load them:
 
 ```bash
-git clone https://github.com/coding-herms/skills.git ~/.hermes/skills/coding-hermes/
+# Recommended: add this repo as a skill source (tap), then enable what you need
+hermes skills tap add https://github.com/coding-hermes/skills
+hermes skills enable coding-hermes-config coding-hermes-foreman coding-hermes-worker
+
+# Alternative: manual clone + symlink (one symlink per skill folder)
+git clone https://github.com/coding-hermes/skills.git ~/coding-hermes-skills
+mkdir -p ~/.hermes/skills
+for d in ~/coding-hermes-skills/coding-hermes-*; do
+  ln -s "$d" ~/.hermes/skills/$(basename "$d")
+done
 ```
 
 ### 2. Run the config skill
@@ -67,21 +90,81 @@ The config skill will ask you for:
 - Which models to use for foreman vs worker
 - Your project paths and repos
 
-### 3. Clone the scheduler
+### 3. Build the scheduler
 
 ```bash
-git clone https://github.com/coding-herms/scheduler.git ~/coding-herms-scheduler
-cd ~/coding-herms-scheduler
+git clone https://github.com/coding-hermes/scheduler.git
+cd scheduler
 make build
-make migrate
-make deploy
 ```
 
-### 4. Verify
+This produces `./bin/schedulerd` (the daemon) and `./bin/migrate` (cron-job importer).
+
+### 4. Create your fleet configuration
+
+Copy the example config and edit it for your projects:
 
 ```bash
-curl http://localhost:9090/
-/fleet status
+cp fleet.example.toml fleet.toml
+$EDITOR fleet.toml   # add one [[projects]] block per repo you want the fleet to manage
+```
+
+Minimal project block (see `fleet.example.toml` for all fields):
+
+```toml
+[[projects]]
+name = "my-project"
+repo_url = "https://github.com/user/my-project"
+workdir = "/absolute/path/to/my-project"
+weight = 10
+priority = 5
+cooldown_s = 7200          # 2h minimum between ticks; 900 for hot projects
+model = "deepseek-v4-flash"
+provider = "deepseek"
+namespace_id = "coding-hermes"
+enabled = true
+```
+
+### 5. Run the scheduler
+
+Quick test (foreground):
+
+```bash
+./bin/schedulerd -db ~/.hermes/coding-hermes/scheduler.db \
+  -config fleet.toml \
+  -listen 127.0.0.1:9090 \
+  --namespace-mode --max-concurrent 4 --min-interval 30s --tick-timeout 7200s \
+  --gateway-url http://127.0.0.1:8642 --gateway-key "$API_SERVER_KEY"
+```
+
+Install as a systemd user service (template included in the scheduler repo):
+
+```bash
+# 1. Put your gateway key in a root-owned env file
+sudo sh -c 'echo "API_SERVER_KEY=<your-key>" > /etc/coding-hermes/gateway.env && chmod 600 /etc/coding-hermes/gateway.env'
+
+# 2. Install + start the service
+cp deploy/coding-hermes-scheduler.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now coding-hermes-scheduler
+
+# 3. (Optional) watchdog — auto-restarts the daemon if it dies
+cp deploy/watchdog.service deploy/watchdog.sh ~/.config/systemd/user/ 2>/dev/null || true
+```
+
+### 6. Verify
+
+```bash
+curl http://127.0.0.1:9090/api/v1/health        # {"status":"ok",...}
+curl http://127.0.0.1:9090/api/v1/projects       # your projects, scheduled state
+```
+
+### 7. Import existing cron jobs (optional)
+
+If you already run per-project `hermes cron` foremen, migrate them:
+
+```bash
+make migrate        # dry run first: make migrate-dry
 ```
 
 ---
@@ -120,5 +203,5 @@ Each skill references the ones above it. The foreman loads config → north-star
 
 ## Related Repos
 
-- [`coding-herms/scheduler`](https://github.com/coding-herms/scheduler) — The Go scheduler binary
-- [`coding-herms/`](https://github.com/coding-herms) — GitHub organization
+- [`coding-hermes/scheduler`](https://github.com/coding-hermes/scheduler) — The Go scheduler binary
+- [`coding-hermes/`](https://github.com/coding-hermes) — GitHub organization

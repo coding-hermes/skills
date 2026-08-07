@@ -69,7 +69,7 @@ For self-hosted GitLab (`gitlab.readydedis.com`):
   "skills": ["coding-hermes-foreman", "coding-hermes-cron", "hilo-usage", "gitreins"],
   "enabled_toolsets": ["terminal","file","web","search","skills","memory"],
   "model": {"model": "deepseek-v4-pro", "provider": "deepseek-foreman"},
-  "workdir": "/home/kara/<project>",
+  "workdir": "~/<project>",
   "schedule": "every 30m",
   "deliver": "telegram:-1003310984808:<thread_id>"
 }

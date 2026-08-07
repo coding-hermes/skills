@@ -149,7 +149,7 @@ Every tick gets a unique ID: `<project>-<YYYY-MM-DD-HH-MM-SS>`. Session IDs from
 
 ```bash
 # Build
-git clone https://github.com/coding-herms/scheduler
+git clone https://github.com/coding-hermes/scheduler
 cd scheduler
 make build
 

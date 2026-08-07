@@ -6,7 +6,7 @@
 
 ```
 -bwrap /usr/bin/bwrap
--pi-agent /home/kara/.local/bin/pi-agent
+-pi-agent ~/.local/bin/pi-agent
 -cron-interval 60s (or any non-zero interval)
 -load-threshold -1 (or any non-zero threshold)
 ```
@@ -25,17 +25,17 @@ After=network.target
 
 [Service]
 Type=simple
-User=kara
-Group=kara
-EnvironmentFile=/home/kara/off-by-one/.env
-ExecStart=/home/kara/off-by-one/off-by-one \
+User=<fleet-user>
+Group=<fleet-user>
+EnvironmentFile=~/off-by-one/.env
+ExecStart=~/off-by-one/off-by-one \
   --port 8766 \
   -load-threshold -1 \
   -cron-interval 60s \
-  -pi-agent /home/kara/.local/bin/pi-agent \
+  -pi-agent ~/.local/bin/pi-agent \
   -bwrap /usr/bin/bwrap
-WorkingDirectory=/home/kara/off-by-one
-Environment="PATH=/home/kara/.local/bin:/usr/local/bin:/usr/bin:/bin"
+WorkingDirectory=~/off-by-one
+Environment="PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin"
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -50,8 +50,8 @@ WantedBy=multi-user.target
 | Gotcha | Why It Happens | Fix |
 |--------|---------------|-----|
 | **Solver dead, health OK** | Missing `--bwrap`, `--pi-agent`, or `--cron-interval` flags | Add all flags to ExecStart |
-| **bwrap permission denied** | Service running as root, can't access `/home/kara/.local/bin` | Add `User=kara` to [Service] |
-| **DeepSeek 401 auth error** | Stale API key hardcoded in service file | Use `EnvironmentFile=/home/kara/off-by-one/.env` instead |
+| **bwrap permission denied** | Service running as root, can't access `~/.local/bin` | Add `User=<fleet-user>` to [Service] |
+| **DeepSeek 401 auth error** | Stale API key hardcoded in service file | Use `EnvironmentFile=~/off-by-one/.env` instead |
 | **Systemd restarts silently** | `Restart=always` means bad flags cause crash loop | Check `journalctl -u off-by-one` for the error before restart count |
 
 ## Live Verification Checklist
@@ -81,4 +81,4 @@ curl -s -X POST http://localhost:8766/api/v1/problems/discover \
   -d '{"problem_class":"shell-echo-hello"}'
 ```
 
-**Session evidence (2026-07-19):** Off-by-One ran as a systemd service for 69+ hours with bare `--port 8766`. Health endpoint returned `{"status":"ok"}` but the cron loop was dead — 18 problems accumulated in the queue, 0 solved. Root cause: systemd ExecStart had no solver flags. Fixed by adding User=kara, EnvironmentFile, and full flags. Solved in 60s after restart.
+**Session evidence (2026-07-19):** Off-by-One ran as a systemd service for 69+ hours with bare `--port 8766`. Health endpoint returned `{"status":"ok"}` but the cron loop was dead — 18 problems accumulated in the queue, 0 solved. Root cause: systemd ExecStart had no solver flags. Fixed by adding User=<fleet-user>, EnvironmentFile, and full flags. Solved in 60s after restart.

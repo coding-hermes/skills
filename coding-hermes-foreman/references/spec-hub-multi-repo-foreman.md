@@ -9,7 +9,7 @@ The foreman is a spec-hub coordinator when:
 - The `.coding-hermes/tasks.md` contains tasks tagged with different repo names (e.g., `| P1-01 | sdk-go | ...`)
 - Various sibling directories exist at the same level as the workdir
 
-**Workdir mismatch:** The AGENTS.md workdir path may be relative to the umbrella root (e.g., `h3/`), but the actual path includes the umbrella directory (e.g., `/home/kara/get-h3/h3/`). Always verify with `ls` — don't trust the AGENTS.md path literally. If `cd <workdir>` fails, check `ls <parent-dir>/` for umbrella layouts.
+**Workdir mismatch:** The AGENTS.md workdir path may be relative to the umbrella root (e.g., `h3/`), but the actual path includes the umbrella directory (e.g., `~/get-h3/h3/`). Always verify with `ls` — don't trust the AGENTS.md path literally. If `cd <workdir>` fails, check `ls <parent-dir>/` for umbrella layouts.
 
 ## Empty Sibling Repo Discovery
 
@@ -73,7 +73,7 @@ done
 cd /path/to/umbrella/$repo
 git add -f .coding-hermes/tasks.md     # -f needed: .coding-hermes/ is gitignored
 git commit -m "chore: add <task-id> — <one-line description>" \
-  -m "Co-authored-by: Bane <wojonstech@gmail.com>" --no-verify
+  -m "Co-authored-by: <you> <you@example.com>" --no-verify
 git push origin main
 
 # Then update the umbrella board to show propagation status

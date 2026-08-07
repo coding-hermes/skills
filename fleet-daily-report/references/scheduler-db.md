@@ -1,6 +1,6 @@
 # Scheduler SQLite Database — Direct Query Reference
 
-The scheduler stores full tick history in SQLite at `/home/kara/.hermes/coding-hermes/scheduler.db`. Direct queries give far more detail than the web UI: per-tick cost, token counts, individual duration, and the ability to detect case-sensitivity duplicates.
+The scheduler stores full tick history in SQLite at `~/.hermes/coding-hermes/scheduler.db`. Direct queries give far more detail than the web UI: per-tick cost, token counts, individual duration, and the ability to detect case-sensitivity duplicates.
 
 ## Tables
 
@@ -117,7 +117,7 @@ HAVING COUNT(*) > 1;
 ```python
 import sqlite3, json
 
-db = sqlite3.connect('/home/kara/.hermes/coding-hermes/scheduler.db')
+db = sqlite3.connect('~/.hermes/coding-hermes/scheduler.db')
 db.row_factory = sqlite3.Row
 
 # Project config

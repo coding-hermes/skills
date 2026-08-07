@@ -55,7 +55,7 @@ wasteful. The worker will either:
 
 **Proven:** DexDat CONSENSUS-9 (2026-07-13) — task asked for
 `consensus-sidecar/internal/routing/` to implement message pipeline (user→LLM→user).
-The Consensus module (`/home/kara/consensus`) already had:
+The Consensus module (`~/consensus`) already had:
 - `internal/harness/` — ReadActiveContext, heartbeat, LLM call, AgentOutput parsing,
   memory_state_changes, system_actions, tool_requests, audit logging
 - `internal/api/` — EventBus, SSE, session management, message service

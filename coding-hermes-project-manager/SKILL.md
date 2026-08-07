@@ -103,7 +103,7 @@ can show "added X tasks, woke Y foremen, cleared Z zombies".
 - Each task includes observable pass criteria (what "fixed" looks like —
   this is what you'll verify next cycle).
 - Commit board changes in each project repo (co-author trailer
-  `Co-authored-by: Alexis Okuwa <wojonstech@gmail.com>`).
+  `Co-authored-by: Your Name <you@example.com>`).
 - Record every item in the ledger with `status: added`, `added_at`, `project`.
 - Wake foremen per G5. Trigger `POST /api/v1/evaluate` once after all writes.
 

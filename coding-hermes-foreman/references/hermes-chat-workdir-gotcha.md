@@ -2,25 +2,25 @@
 
 ## Problem
 
-When spawning a worker via `hermes chat -q`, the running Hermes agent (spawned by the chat command) uses its **own configured working directory**, NOT the terminal shell's `$PWD`. This means the `cd /home/kara/<project> && hermes chat ...` pattern from the foreman skill's Step 5 is **insufficient** — the shell CWD is correct for the terminal, but the spawned agent reads its own workdir from Hermes session config.
+When spawning a worker via `hermes chat -q`, the running Hermes agent (spawned by the chat command) uses its **own configured working directory**, NOT the terminal shell's `$PWD`. This means the `cd ~/<project> && hermes chat ...` pattern from the foreman skill's Step 5 is **insufficient** — the shell CWD is correct for the terminal, but the spawned agent reads its own workdir from Hermes session config.
 
 ## Manifestation
 
 The spawned agent reports that target files don't exist, even though they clearly exist on disk:
 
 ```
-The current working directory /home/kara/helix is the [different project]...
+The current working directory ~/helix is the [different project]...
 No internal/api/handlers/websocket/ directory exists.
 ```
 
 The foreman confirms the files exist:
 ```
 $ pwd && ls internal/api/handlers/websocket/handler.go
-/home/kara/helios-work
+~/helios-work
 handler.go  (file exists)
 ```
 
-But the spawned agent (running from its own workdir `/home/kara/helix`) can't see them.
+But the spawned agent (running from its own workdir `~/helix`) can't see them.
 
 **Another manifestation — `--workdir` flag rejected:** `hermes chat` does NOT accept a `--workdir` flag. Passing `--workdir /path/to/project` produces `error: unrecognized arguments: --workdir`. The correct approach is `cd /path/to/project` in the wrapper script, combined with absolute paths in the prompt. The spawned agent's session config determines its effective workdir; `cd` in the shell wrapper affects the parent shell but the spawned agent may still use its configured workdir.
 
@@ -28,7 +28,7 @@ But the spawned agent (running from its own workdir `/home/kara/helix`) can't se
 
 `hermes chat` creates a **new Hermes session** that starts in the workdir defined by its own session configuration. This is NOT the parent shell's CWD, even though `cd` was run in the parent shell before the `hermes chat` command. The `terminal(workdir=...)` parameter sets the terminal shell's CWD for the foreman's own reading/writing, but does NOT propagate to the `hermes chat` subprocess as a workdir override.
 
-The spawned agent's session config may point to a different project entirely (e.g., `/home/kara/helix`) because that was the last session's workdir or a configured default.
+The spawned agent's session config may point to a different project entirely (e.g., `~/helix`) because that was the last session's workdir or a configured default.
 
 ## Fix
 
@@ -36,11 +36,11 @@ The spawned agent's session config may point to a different project entirely (e.
 
 ```bash
 # DO NOT rely on relative paths in the prompt
-hermes chat -q 'Modify /home/kara/helios-work/internal/api/handlers/websocket/handler.go ...'
+hermes chat -q 'Modify ~/helios-work/internal/api/handlers/websocket/handler.go ...'
 
 # The prompt should explicitly state:
-# "Your working directory is /home/kara/helios-work.
-#  All file paths are relative to /home/kara/helios-work.
+# "Your working directory is ~/helios-work.
+#  All file paths are relative to ~/helios-work.
 #  Use absolute paths when reading files."
 ```
 
@@ -69,4 +69,4 @@ The issue is invisible when the spawned agent's configured workdir happens to ma
 
 ## Proven
 
-- **Helios 2026-07-16** — MiniMax-M3 @ minimax spawned with `cd /home/kara/helios-work && hermes chat ...` reported cwd as `/home/kara/helix`. All 3 worker attempts (glm-5.2 429, kimi-k2.7 silent exit, MiniMax-M3 workdir mismatch) failed to touch `internal/api/handlers/websocket/handler.go`. Foreman applied fixes directly via `patch` tool. 49 insertions, 23 deletions, 8/8 GitReins judge PASS.
+- **Helios 2026-07-16** — MiniMax-M3 @ minimax spawned with `cd ~/helios-work && hermes chat ...` reported cwd as `~/helix`. All 3 worker attempts (glm-5.2 429, kimi-k2.7 silent exit, MiniMax-M3 workdir mismatch) failed to touch `internal/api/handlers/websocket/handler.go`. Foreman applied fixes directly via `patch` tool. 49 insertions, 23 deletions, 8/8 GitReins judge PASS.

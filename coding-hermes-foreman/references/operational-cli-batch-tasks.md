@@ -54,7 +54,7 @@ process(action='wait', session_id='<id>', timeout=60)
 When the CLI command operates in a different repo:
 
 ```bash
-cd /home/kara/<other-repo> && export VAR=value && node packages/cli/dist/index.js batch <type> --yes
+cd ~/<other-repo> && export VAR=value && node packages/cli/dist/index.js batch <type> --yes
 ```
 
 The foreman's workdir remains `<foreman-repo>` for the board update and commit. The execution happens in the other repo via `cd` prefix. No git operations happen in the execution repo — the foreman only commits board updates to its own repo.

@@ -24,7 +24,17 @@ Extracted from `coding-hermes-foreman` (Steps 1 and Self-Pause). Loaded by forem
 
 ## Step 1 — Read Board
 
-Read `.coding-hermes/tasks.md`. This is the project's single source of truth for what needs to be done.
+> **Board storage (current doctrine — Bane 08-07):** the git-tracked board store
+> is **JSONL** — `.coding-hermes/board/tasks.jsonl` + `events.jsonl`, one JSON
+> record per line, diffable, uploadable to git, and **DuckDB reads it natively**
+> (`read_json_auto`). `board.db` and `*.parquet` are **untracked rebuildable
+> caches** — never commit them; if a cache is stale or broken, rebuild it from
+> the JSONL (`COPY tasks TO ... (FORMAT PARQUET)`) and move on. No cache-parity
+> ceremony — the JSONL is the only store that must be correct. The legacy
+> `tasks.md` markdown matrix below is a readable mirror, not the store of
+> record. Every task row MUST carry `primary_model` + `primary_provider`.
+
+Read `.coding-hermes/tasks.md` (legacy mirror) or `tasks.jsonl` (canonical). This is the project's single source of truth for what needs to be done.
 
 **Board format — model-router style (MANDATORY):** Every task board MUST use the matrix format from `coding-hermes-model-router`. Each task is a row with: ID, Task, Priority, Complexity, Dependencies, Capability Tags, Selected Model, Reasoning Level, Fallback.
 
@@ -105,7 +115,7 @@ print(len(pending))
 
 **Proven:** 2026-07-24 eduos.dexdat.com.co — tasks.md showed "all board tasks [x], idle tick #6" but gitreins had 9 real pending tasks (DOC-002/003, TEST-001/002/003, DEPS-001, QUALITY-001, WIRING-001, audit-eduos-todos-vulns). Auditing tasks.md alone would have misclassified this as idle.
 
-**Workdir discovery pitfall — NEVER guess paths from project names.** Repos don't always live at `/home/kara/<project_name>`. The h3 family (h3, h3-sdk-go-foreman, h3-sdk-python-foreman) lives under `/home/kara/get-h3/`. Always discover workdirs from the scheduler API: `GET /api/v1/projects/<name>` returns the authoritative `Workdir` field. If `ls <guess>` fails, query the scheduler before declaring a project missing. **Proven:** 2026-07-24 fleet audit — 4 of 10 projects failed simple path guessing but all existed at scheduler-declared workdirs.
+**Workdir discovery pitfall — NEVER guess paths from project names.** Repos don't always live at `~/<project_name>`. The h3 family (h3, h3-sdk-go-foreman, h3-sdk-python-foreman) lives under `~/get-h3/`. Always discover workdirs from the scheduler API: `GET /api/v1/projects/<name>` returns the authoritative `Workdir` field. If `ls <guess>` fails, query the scheduler before declaring a project missing. **Proven:** 2026-07-24 fleet audit — 4 of 10 projects failed simple path guessing but all existed at scheduler-declared workdirs.
 
 ### Decision Logic
 

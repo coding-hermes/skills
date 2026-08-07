@@ -24,7 +24,7 @@ The same happens with `python3 -c` for any inline Python — the scanner treats 
 write_file(path="/tmp/verify_feature.py", content="""...script content...""")
 
 # Run the file directly — no -c flag, no scanner block
-cd /home/kara/<project> && python3 /tmp/verify_feature.py
+cd ~/<project> && python3 /tmp/verify_feature.py
 ```
 
 The file-based approach bypasses the scanner because the `python3` invocation has no inline script payload — just a file path argument.

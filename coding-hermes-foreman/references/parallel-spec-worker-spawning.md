@@ -12,7 +12,7 @@ tasks, they all make API calls in parallel and complete within ~7 minutes total.
 
 # Spawn all workers simultaneously in background
 for prompt in /tmp/spec-worker-*.txt; do
-  cd /home/kara/<project> && \
+  cd ~/<project> && \
   hermes chat -q "$(cat $prompt)" -m gpt-5.6-terra --provider openai-codex \
     --ignore-rules --cli -Q &
 done

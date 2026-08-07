@@ -52,7 +52,7 @@ func main() {
 
 Run from the project directory (needs go.mod for `modernc.org/sqlite`):
 ```bash
-cd /home/kara/<project> && go run /tmp/check_schema.go
+cd ~/<project> && go run /tmp/check_schema.go
 ```
 
 ## PRAGMA Queries Available

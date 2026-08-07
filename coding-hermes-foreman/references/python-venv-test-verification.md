@@ -21,7 +21,7 @@ If a worker or prior tick claims tests pass, the foreman MUST verify:
 
 ```bash
 # Quick smoke: does pytest exist in the venv?
-cd /home/kara/get-h3/<repo>
+cd ~/get-h3/<repo>
 uv run python3 -m pytest --version 2>&1
 
 # If "No module named pytest" → venv is broken, fix it
@@ -30,7 +30,7 @@ uv run python3 -m pytest --version 2>&1
 ## Fix Recipe
 
 ```bash
-cd /home/kara/get-h3/<repo>
+cd ~/get-h3/<repo>
 uv add --dev pytest pytest-asyncio pytest-mock httpx2
 uv run python3 -m pytest tests/ -v --tb=short
 ```

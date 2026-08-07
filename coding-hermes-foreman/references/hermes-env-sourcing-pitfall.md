@@ -2,7 +2,7 @@
 
 ## The Problem
 
-The Hermes `.env` file (`/home/kara/.hermes/.env`) contains a line like:
+The Hermes `.env` file (`~/.hermes/.env`) contains a line like:
 
 ```
 API_SERVER_MODEL_NAME=Hermes Agent
@@ -14,7 +14,7 @@ pattern:
 
 ```bash
 set -a
-source /home/kara/.hermes/.env
+source ~/.hermes/.env
 set +a
 exec hermes chat -q "..." -m MiniMax-M3 --provider minimax --ignore-rules --cli -Q
 ```
@@ -23,7 +23,7 @@ bash tokenizes the unquoted `Hermes Agent` value, then tries to execute
 `Agent` as a command. The wrapper exits with:
 
 ```
-/home/kara/.hermes/.env: line 39: Agent: command not found
+~/.hermes/.env: line 39: Agent: command not found
 ```
 
 The `hermes chat` process never starts. The terminal tool reports exit 126.
@@ -51,7 +51,7 @@ default tokenization would misbehave:
 ```bash
 #!/bin/bash
 # /tmp/run-<project>-worker.sh
-cd /home/kara/<project>
+cd ~/<project>
 while IFS= read -r line; do
   [[ "$line" =~ ^#.*$ ]] && continue
   [[ -z "$line" ]] && continue
@@ -60,7 +60,7 @@ while IFS= read -r line; do
   if [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]]; then
     export "$key=$val"
   fi
-done < /home/kara/.hermes/.env
+done < ~/.hermes/.env
 exec hermes chat -q "$(cat /tmp/<project>-task.txt)" \
   -m <model> --provider <bucket> --ignore-rules --cli -Q \
   > /tmp/<project>-worker.log 2>&1
@@ -99,7 +99,7 @@ Brittle — breaks if more unquoted-with-space lines exist. Use Path A.
 **SpecLang 2026-07-13 — FIX-VALIDATE-002 worker spawn:**
 
 - First 3 worker attempts failed silently in <2s with `Agent: command not
-  found` (lines 39 of `/home/kara/.hermes/.env`).
+  found` (lines 39 of `~/.hermes/.env`).
 - Each failed wrapper was followed by a retried wrapper using the same
   `set -a; source .env` pattern — every retry hit the same error.
 - Diagnostic: `cat ~/.hermes/.env | sed -n '39p'` showed

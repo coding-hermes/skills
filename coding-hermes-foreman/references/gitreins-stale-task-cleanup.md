@@ -19,7 +19,7 @@ For each stale task, two paths:
 The MCP tool bypasses the evaluator re-run, which saves time and avoids false negatives from admin-only diffs:
 
 ```
-mcp_gitreins_task_complete(id="<task-id>", workdir="/home/kara/<project>")
+mcp_gitreins_task_complete(id="<task-id>", workdir="~/<project>")
 ```
 
 Use this when the task criteria are already verified by build + tests + guard and you just need the status updated. The MCP path returns `passed: true, tier1_passed: true, tier2_verdict: null` — the Tier 2 evaluator doesn't run, so there's no risk of false negatives from examining the wrong diff.
@@ -29,7 +29,7 @@ Use this when the task criteria are already verified by build + tests + guard an
 When you need a full Tier 2 verdict with per-criterion evidence:
 
 ```bash
-cd /home/kara/<project> && timeout 120 gitreins task complete <task-id>
+cd ~/<project> && timeout 120 gitreins task complete <task-id>
 ```
 
 Runs the evaluator which examines the **current commit's diff**. **CAUTION:** If the current commit only contains administrative changes (board updates, config syncs), all criteria may incorrectly FAIL because "no relevant code was changed." See the three-branch decision tree in `coding-hermes-cron:references/post-hoc-evaluator-false-negative.md`.

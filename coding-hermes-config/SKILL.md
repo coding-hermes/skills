@@ -124,9 +124,14 @@ Setup complete. Your fleet is configured:
 • Scheduler: <db> on :<port>
 
 Next steps:
-1. Run the migration: `make migrate`
-2. Start the scheduler: `make deploy`
-3. Use `/fleet status` to verify
+1. Build the scheduler binary: `git clone https://github.com/coding-hermes/scheduler && cd scheduler && make build`
+2. Create `fleet.toml` from `fleet.example.toml` (one `[[projects]]` block per repo)
+3. Run the daemon: `./bin/schedulerd -db ~/.hermes/coding-hermes/scheduler.db -config fleet.toml -listen 127.0.0.1:9090 --namespace-mode --max-concurrent 4 --min-interval 30s --tick-timeout 7200s --gateway-url http://127.0.0.1:8642 --gateway-key "$API_SERVER_KEY"`
+4. Verify: `curl http://127.0.0.1:9090/api/v1/health`
+
+> Full step-by-step install (prerequisites, gateway key, systemd service,
+> cron-job migration): the **Getting Started** section of the skills repo
+> README — https://github.com/coding-hermes/skills#getting-started
 ```
 
 ---

@@ -94,8 +94,8 @@ stale_h = round(stale_min / 60, 1)
 ps aux | grep schedulerd
 
 # Typical invocation:
-# /home/kara/coding-herms-scheduler/bin/schedulerd \
-#   -db /home/kara/.hermes/coding-hermes/scheduler.db \
+# ~/coding-herms-scheduler/bin/schedulerd \
+#   -db ~/.hermes/coding-hermes/scheduler.db \
 #   -listen 127.0.0.1:9090 \
 #   -gateway-url http://127.0.0.1:8642 \
 #   -max-interval 12h -min-interval 30s \
