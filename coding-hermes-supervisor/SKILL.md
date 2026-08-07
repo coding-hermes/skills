@@ -155,7 +155,7 @@ For every enabled foreman:
 
 When daemon is active:
 1. Scan `~/` for directories with `.coding-hermes/tasks.md`
-2. **Differentiate umbrella dirs from real orphans:** Not every directory with a task board is a real project. Umbrella repos (coding-hermes-scheduler, get-h3, hermes4friends) have task boards inherited from sub-projects that are already registered in the scheduler. Check for source code markers to confirm:
+2. **Differentiate umbrella dirs from real orphans:** Not every directory with a task board is a real project. Umbrella repos have task boards inherited from sub-projects that are already registered in the scheduler. Check for source code markers to confirm:
    ```bash
    has_code = any(os.path.isfile(os.path.join(d, f)) for f in ['go.mod', 'package.json', 'Cargo.toml', 'setup.py', 'requirements.txt', '*.sln'])
    ```
@@ -165,7 +165,7 @@ When daemon is active:
 5. **Cross-reference orphans against existing entries with non-matching workdirs.** Some flagged orphans are NOT missing from the scheduler — the scheduler HAS an entry for them, but at a DIFFERENT (stale/empty) workdir. Example: `helios-work` (has go.mod, 5 pending tasks on `github.com/dexdat/Helios`) is flagged by scanning as an orphan because `GET /api/v1/projects/helios` returns `Workdir=~/helios` (not `~/helios-work`). The scheduler's `helios` entry workdir is a stale fork — it has `.coding-hermes/` and `.git/` but NO source code markers and NO git remote. The real project code is at `~/helios-work` (go.mod, Git remote, source code). **Detection during orphan scan:** after flagging a dir as orphan, check if ANY scheduler entry has a name that partially matches the orphan dir name (e.g., `helios` matches `helios-work`). If found, check whether that entry's workdir is a stale dir (no go.mod/package.json/setup.py). Report it as a workdir drift, not a missing entry. **Fix:** manual SQLite update to correct the Workdir — the scheduler API does NOT support changing Workdir via PUT. **Proven:** 2026-07-21 — helios at `~/helios` (empty, no remote), real project at `~/helios-work` (go.mod, 5 pending, GitHub remote).
 **⚠️ Drift tracking:** Human-action items reported by Phase 0D may not be immediately resolved. Track unresolved items across ticks using `references/drift-tracking.md` — re-flag any previously-reported drift that is still present.
 
-6. Report orphans that cannot be registered to Bane — they need manual addition to the scheduler's SQLite database. Known orphans (as of 2026-07-20): hermes4friends (4 pending, no go.mod — may be umbrella or config project)
+6. Report orphans that cannot be registered to Bane — they need manual addition to the scheduler's SQLite database. Known orphans (as of 2026-07-20): <project> (4 pending, no go.mod — may be umbrella or config project)
 
 7. Use the scheduler API's `GET /api/v1/projects` response to differentiate between existing projects (which can be updated) and genuine orphans (which return 404 on GET)
 
