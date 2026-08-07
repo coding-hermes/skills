@@ -129,8 +129,9 @@ and skip to Step 1.6. Don't burn ticks fighting the environment.
 
 ## Step 1 — Read Board
 
-Read `.coding-hermes/tasks.md`. This is the project's single source of
-truth for what needs to be done.
+Read `.coding-hermes/board/tasks.jsonl`. This is the project's single source of
+truth for what needs to be done (JSONL canonical store — `tasks.md` is a legacy
+mirror; see `coding-hermes-foreman/references/board-storage-canonical.md`).
 
 **Count:** `## [ ]` pending task headers, `- [ ]` pending subtasks.
 

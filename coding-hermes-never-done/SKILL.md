@@ -910,7 +910,7 @@ At ≥3 consecutive idle ticks (with no task creation for 3 straight ticks), set
 
 ### Commit Board Updates (Even During Idle Ticks)
 
-The idle tick entry written to `tasks.md` IS a code change. Commit it. The standard idle-tick "Actions Taken" says "no code committed" — this is misleading when the board itself was modified. Replace "no code committed" with the commit hash after committing. **Proven:** hermes-dagger 2026-07-20 — tick #52 wrote the board update but never committed it (working tree showed `M .coding-hermes/tasks.md`). Tick #53 picked up both uncommitted changes. The board update is real code — commit it.
+The idle tick entry written to the JSONL board (`tasks.jsonl`/`events.jsonl`) IS a code change. Commit it. The standard idle-tick "Actions Taken" says "no code committed" — this is misleading when the board itself was modified. Replace "no code committed" with the commit hash after committing. **Proven:** hermes-dagger 2026-07-20 — tick #52 wrote the board update but never committed it (working tree showed `M .coding-hermes/tasks.md`). Tick #53 picked up both uncommitted changes. The board update is real code — commit it.
 
 ## The Infinite Loop
 

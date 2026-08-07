@@ -166,9 +166,10 @@ Answer four questions with evidence from Step 2, not vibes:
 
 ## Step 4 — Write the Findings as Tasks
 
-Add a `## Dogfood Findings (YYYY-MM-DD)` section to `.coding-hermes/tasks.md`
-in the project. Match the board's existing task format (v2.1 `|||` rows or
-classic `- [ ]` items — copy the format already in the file). One task per
+Add a `## Dogfood Findings (YYYY-MM-DD)` section to the JSONL board
+(`.coding-hermes/board/tasks.jsonl` — append one task object per line; or
+append a `dogfood_findings` event to `events.jsonl`). Match the board's
+existing task format. One task per
 finding, each with: the concrete problem, how you hit it, the fix direction.
 Prioritize: P0 = breaks real use, P1 = major friction, P2 = polish/docs.
 

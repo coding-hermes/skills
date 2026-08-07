@@ -358,7 +358,7 @@ Verify per project:
 Report in fleet HTML: projects missing judge, projects with undersized limits, projects fully configured.
 
 **Primary rule: pending-task-based formula** (as directed by Bane 2026-07-19):
-Count open tasks via `grep -c '^## \\[ \\]' .coding-hermes/tasks.md`, **then subtract 1 if NEVER-DONE is present** (it is NOT a real task — it's the perpetual improvement engine that fires when the board is empty):
+Count open tasks from the JSONL board: `python3 -c "import json;[print(json.loads(l)['id']) for l in open('.coding-hermes/board/tasks.jsonl') if json.loads(l).get('status') not in ('complete','done','verified')]"` — **or** `grep -c '"status": "pending"' .coding-hermes/board/tasks.jsonl`, **then subtract 1 if NEVER-DONE is present** (it is NOT a real task — it's the perpetual improvement engine that fires when the board is empty):
 - **1+ real pending** (excluding NEVER-DONE) → 15m (900s) — active project, needs fast iteration
 - **0 real pending** (only NEVER-DONE remains) → 12h (43200s) — truly idle, save PAYG budget. Do NOT speed up.
 - **NEVER-DONE missing?** If a project has a board but no NEVER-DONE task, ADD it as the last row: `| NEVER-DONE | Run 11-point self-improvement audit | High | 3±1 | — | — | foreman-direct | Med | — |`. This is a gap — the project can't self-improve without it.
@@ -581,7 +581,7 @@ Full changelog in `references/changelog.md`. Latest entries:
 - **MEDIA: deliver HTML files directly, not just links.** GitHub Pages links are secondary. The primary delivery is the local file via MEDIA — Bane opens it directly in the browser from Telegram.
 - **Side-channel trap:** Use `cronjob` tool for state changes, not direct `jobs.json` edits. Direct edits bypass scheduler state.
 - **`hermes gateway restart` is BLOCKED from inside the gateway.** If zombie locks require restart, report to Bane — restart must happen from an external shell.
-- **Task board edits: use `patch`, NEVER `write_file`.** When adding a CI fix task or any other line to `.coding-hermes/tasks.md`, using `write_file` **replaces the entire file**. If you read the board with offset/limit pagination, every line beyond your read window is silently truncated and lost. `patch` (find-and-replace) is the only safe way to add lines to a task board. To add a new task, find a unique anchor (e.g., `## Active Tasks` heading or the last row of a table) and `patch` a new entry after it. If you already used `write_file` and lost content, restore from git: `git -C <workdir> checkout -- .coding-hermes/tasks.md`. **Proven:** 2026-07-23 — rethinkdb board overwritten while adding CI task; restored from HEAD commit.
+- **Task board edits: JSONL append, NEVER whole-file writes.** When adding a task/event, append a line to `.coding-hermes/board/tasks.jsonl` or `events.jsonl` (one JSON object per line — see `coding-hermes-foreman/references/board-storage-canonical.md`). `tasks.md` (if present) is a legacy mirror — never the primary write target. If a board file was clobbered, restore from git: `git -C <workdir> checkout -- .coding-hermes/board/tasks.jsonl`.
 - **Phase 0 should NOT change schedules** — only fix schema validity and zombie state. Phase 2D handles speed changes.
 - **`repeat` field is polymorphic** — can be `int` or `dict`. Dict format is the standard: `{"times": null, "completed": N}`. Only 2 legacy jobs use int format. Always write in dict format.
 - **Pinned projects:** Bane-set model/provider combos. Audit them but never change them.

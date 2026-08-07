@@ -148,7 +148,9 @@ delegate_task(goal="...", context="...", role="leaf")
 │   ↓                                                                 │
 │ 0. SELF-HEAL — identity, deps, CI, transient fixes                  │
 │   ↓                                                                 │
-│ 1. READ BOARD — .coding-hermes/tasks.md, count pending              │
+│ 1. READ BOARD — .coding-hermes/board/tasks.jsonl (JSONL canonical store;     │
+│    board.db/parquet = untracked caches; doctrine: references/               │
+│    board-storage-canonical.md), count pending                               │
 │   ├── Board has tasks? → PICK TASK → continue to Step 2             │
 │   └── Board empty? → 1.5 DISCOVERY SWEEP → 1.5h E2E VERIFY          │
 │        ├── Sweep found work? → create tasks → 1.6 → NEXT            │

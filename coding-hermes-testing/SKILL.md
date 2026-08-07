@@ -124,7 +124,11 @@ Each project creates a `tests/` directory inside `.coding-hermes/` alongside `ta
 
 ```
 .coding-hermes/
-├── tasks.md              # Task board (matrix format)
+├── board/
+│   ├── tasks.jsonl           # Task board (JSONL canonical store — git-tracked)
+│   ├── events.jsonl          # Event log (JSONL canonical store — git-tracked)
+│   ├── board.db              # DuckDB cache (untracked, rebuildable)
+│   └── schema.sql            # Table definitions
 ├── tests/                # Testing directory
 │   ├── _index.md         # Testing manifest — what's tested, what's not
 │   ├── f2b/              # Front-to-Back tests (write paths)
