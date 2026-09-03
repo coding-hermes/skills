@@ -1,0 +1,30 @@
+{
+  "tick": <TICK_NUMBER>,
+  "verdict": "idle",
+  "idle_ticks": <N>,
+  "tasks_total": <TOTAL>,
+  "tasks_pending": 0,
+  "work": [],
+  "gates": {
+    "guard": "PASS secrets+lint full test mode",
+    "npm_test": "10/10 <SEC>S (Board evidence <TOTAL>/<TOTAL>, dist freshness, math known-answers)",
+    "liveness": "deployed <APP>.html byte-identical to local master (sha <SHA>, HTTP 200)",
+    "ci": "green 3/3 pages-build-deployment latest <TS>Z",
+    "storm_watch": "clean (0 dups, no stray hermes chat/run in workdir)",
+    "single_fire": "latest_tick.id == <THIS_TICK_ID> status running"
+  },
+  "gitreins": "<N_COMPLETED> completed / <N_OPEN> open",
+  "board": "<TOTAL>/<TOTAL> complete, 0 pending",
+  "cooldown_s": <COOLDOWN>,
+  "off_by_one": {
+    "health": "ok (/healthz 200)",
+    "discover": "skipped (idle tick, no debug needed)",
+    "submit": "skipped"
+  },
+  "duckbrain": {
+    "status": "written",
+    "audit_<TICK_NUMBER>": "written"
+  },
+  "head_commit": "<PRE_TICK_HEAD>",
+  "notes": "Idle tick #<N> (counter reset by productive #<LAST_PRODUCTIVE>): board <TOTAL>/<TOTAL> complete, all gates green. E2E-001 window <W0>-<W1> battery already executed at opener <W0> (<X>/<X>) - skipped post-execution. No worker dispatch, no gitreins lifecycle (no task picked, no commit to judge). Cooldown <COOLDOWN> == fleet.toml pin, NO PUT."
+}

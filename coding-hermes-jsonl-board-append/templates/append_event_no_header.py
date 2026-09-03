@@ -25,10 +25,28 @@ TICKS_IDLE = 1                                           # idle: prior+1; produc
 
 EVENTS = f"{BOARD}/events.jsonl"
 DB = f"{BOARD}/board.db"
+# ⚠️ Match the BOARD's committed timestamp style: space-separated UTC (default) vs
+# T-format isoformat on boards like h3-sdk-typescript (proven tick #103):
+#   TS = datetime.now(timezone.utc).isoformat()   # -> "2026-08-10T13:11:22.999806+00:00"
+# ⚠️ LOCAL-NAIVE variant (proven dexdat-memory tick #181, 2026-08-16): dexdat-memory's
+# committed events #174-#181 use local-naive space-separated timestamps (e.g.
+# "2026-08-16 02:59:26.000000" for a 02:56 -05:00 fire) even though its ops-ref says
+# "audit events in UTC" — the committed tail is ground truth. Override here with
+# `datetime.now().strftime(...)` (naive local) or the new event's clock drifts from the tail.
+# ALSO LOCAL-NAIVE: hermes-dagger (proven tick #362, 2026-08-18) and warpfs (proven tick #132, 2026-08-21)
+# — committed tail is local-naive space-separated; see references/hermes-dagger-audit-append.md.
+# VERIFY before appending: run `date` and compare wall-clock with the last committed event
+# timestamp (wall-clock match = local-naive; N-hour gap = UTC). Correcting a wrongly-written
+# TS after append = touch events.jsonl line + board.db events row + header in BOTH stores.
 TS = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000000")
 
 with open(DETAIL) as f:
     detail = json.load(f)
+# ⚠️ ensure_ascii must match the board's committed escape style: escaped \uXXXX
+# boards (h3-sdk-typescript) need True in BOTH dumps calls; raw-UTF-8 boards
+# (consensus, hermes-dagger — verified tick #362: literal — and → in committed tail;
+# warpfs — verified tick #132: literal em-dash in raw event 188 line)
+# keep False. Check the last committed events.jsonl line first.
 detail_json = json.dumps(detail, ensure_ascii=False)
 
 # next id from JSONL (source of truth) — never from DB auto-increment
