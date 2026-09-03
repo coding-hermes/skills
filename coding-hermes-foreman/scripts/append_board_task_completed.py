@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Append a task_completed event + audit summary + tasks-row update + header bump to a JSONL-tracked DuckDB v2.1 board.
+"""Append a task_completed event + audit summary + tasks-row update + header bump to a JSONL foreman board.
 
-JSONL files are the source of truth (board.db is gitignored in most repos and LAGS the JSONL; a best-effort duckdb sync keeps readers coherent). Run with a python that has duckdb if you want the DB sync (e.g. ~/gitreins-poc/.venv/bin/python).
+JSONL is the canonical store - board.db was retired 2026-09-03 (fleet
+doctrine: no db cache file; the JSONL files ARE the board). Plain python3,
+no duckdb needed.
 
 Usage:
   python3 append_board_task_completed.py REPO TASK_ID TICK_NUMBER COMMIT_HASH \
-      --summary "tick 137 — TASK complete (commit, +N/-M). ..." \
+      --summary "tick 137 - TASK complete (commit, +N/-M). ..." \
       [--guard PASS] [--ci PASS] [--judge "PASS verdict abc (n/n criteria)"] \
       [--note "foreman_note for the tasks row"]
 
@@ -15,18 +17,12 @@ Conventions (verified dexdat-core tick #137):
 - tasks.jsonl row: status/worker_status -> complete, completed_at=now, commit_hash, guard_result, ci_result, foreman_note.
 - board.jsonl header: ticks_total = the COMPLETING tick number (dispatch-only ticks do NOT bump), last_commit, last_tick, updated_at, ticks_idle=0.
 
-After running, commit with explicit files (never the dir, board.db is gitignored):
-  git add -f .coding-hermes/board/events.jsonl .coding-hermes/board/tasks.jsonl .coding-hermes/board/board.jsonl
-Check `git ls-files .coding-hermes/board/` first for topology — parquet-tracked boards use append_board_event_parquet.py instead.
+After running, commit with explicit files (never the whole dir):
+  git add .coding-hermes/board/events.jsonl .coding-hermes/board/tasks.jsonl .coding-hermes/board/board.jsonl
 """
 import argparse
 import datetime
 import json
-
-try:
-    import duckdb
-except ImportError:
-    duckdb = None
 
 
 def main():
@@ -91,32 +87,6 @@ def main():
     with open(hd_path, "w") as f:
         json.dump(hdr, f, default=str)
         f.write("\n")
-
-    if duckdb:
-        try:
-            con = duckdb.connect(f"{bdir}/board.db")
-            con.execute("DELETE FROM events WHERE id IN (?,?)", [nid, nid + 1])
-            for e in new_events:
-                con.execute(
-                    "INSERT INTO events (id, timestamp, event_type, task_id, actor, detail, tick_number) VALUES (?,?,?,?,?,?,?)",
-                    [e["id"], e["timestamp"], e["event_type"], e["task_id"], e["actor"], e["detail"], e["tick_number"]],
-                )
-            if row:
-                con.execute(
-                    "UPDATE tasks SET status='complete', worker_status='complete', completed_at=?, updated_at=?, "
-                    "commit_hash=?, guard_result=?, ci_result=?, foreman_note=? WHERE id=?",
-                    [now, now, args.commit, args.guard, args.ci or "PASS", args.note, args.task_id],
-                )
-            try:
-                con.execute("UPDATE board SET ticks_total=?, last_commit=?, last_tick=?, updated_at=?",
-                            [args.tick, args.commit, now, now])
-            except Exception:
-                pass  # header table name varies per project; JSONL remains authoritative
-            con.close()
-        except Exception as ex:
-            print("duckdb sync failed (non-fatal):", ex)
-    else:
-        print("duckdb not available; JSONL authoritative, DB sync skipped")
 
     print(f"OK: events [{nid},{nid + 1}] tick {args.tick} commit {args.commit} task {args.task_id}")
 

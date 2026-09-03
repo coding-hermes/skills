@@ -1,43 +1,44 @@
 #!/usr/bin/env python3
-"""DuckDB board-v2 status read — counts by status, meta row, last events.
+"""JSONL board status read — counts by status, header meta, last events.
 
 Usage: python3 board_status.py [board_dir]
 Defaults: board_dir=.coding-hermes/board  (run from repo root)
 
-Why this script exists: the board consistency gate is run every tick, and the
-schema has two traps discovered by trial and error:
-- The meta table is named `board`, NOT `board_meta`.
-- The `board` meta row is POSITIONAL, not key/value: (name, project_type,
-  home_id, last_tick, ticks_total, ticks_idle, cooldown, ..., last_commit,
-  updated_at). The 5th field is ticks_total, the 9th-ish is last_commit.
-- tasks columns: id, title, status, priority, complexity, depends_on, blocks,
-  primary_model, primary_provider, fallback_model, fallback_provider,
-  reasoning, capability_tags, worker_status, dispatched_at, completed_at,
-  attempts, exit_code, commit_hash, files_changed, lines_added, lines_removed,
-  guard_result, ci_result, worker_summary, foreman_note, blocked_reason,
-  review_notes, created_at, updated_at, blocked_since.
-  No `task` or `name` column — id is the task ID (e.g. UI-09).
-- Maintenance-tick discipline: when no status changed, do NOT re-export
-  parquet / advance ticks_total (single-write discipline, T116/T120/T132
-  precedent). Only write when a task changed status or a real event happened.
+Reads the canonical JSONL store directly (board.db retired 2026-09-03).
+For richer queries use boardctl (github.com/coding-hermes/boardctl).
 """
-import duckdb, os, sys
+import json, os, sys
 
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else '.coding-hermes/board'
-    con = duckdb.connect(os.path.join(root, 'board.db'), read_only=True)
-    print('tables:', con.execute(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema='main'").fetchall())
-    print('status counts:', con.execute(
-        "SELECT status, count(*) FROM tasks GROUP BY status ORDER BY 1").fetchall())
-    print('in_progress:', con.execute(
-        "SELECT id, title FROM tasks WHERE status='in_progress'").fetchall())
+    counts = {}
+    in_progress = []
+    with open(os.path.join(root, 'tasks.jsonl')) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            t = json.loads(line)
+            st = t.get('status', 'unknown')
+            counts[st] = counts.get(st, 0) + 1
+            if st == 'in_progress':
+                in_progress.append((t.get('id'), t.get('title')))
+    print('status counts:', sorted(counts.items()))
+    print('in_progress:', in_progress)
     try:
-        print('meta:', con.execute("SELECT * FROM board LIMIT 5").fetchall())
+        with open(os.path.join(root, 'board.jsonl')) as f:
+            hdr = json.load(f)
+        print('meta:', {k: hdr.get(k) for k in ('project', 'last_tick', 'ticks_total', 'ticks_idle', 'last_commit', 'updated_at')})
     except Exception as e:
         print('meta read err:', e)
-    print('last events:', con.execute(
-        "SELECT id, event_type, task_id, tick_number FROM events ORDER BY id DESC LIMIT 5").fetchall())
+    events = []
+    with open(os.path.join(root, 'events.jsonl')) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                events.append(json.loads(line))
+    for e in events[-5:]:
+        print('event:', e.get('id'), e.get('event_type'), e.get('task_id'), e.get('tick_number'))
 
 if __name__ == '__main__':
     main()

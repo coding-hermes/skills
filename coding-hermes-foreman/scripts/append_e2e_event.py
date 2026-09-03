@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Append an e2e_verified event (task_id set) to a board-v2 JSONL board + best-effort board.db insert.
+"""Append an e2e_verified event (task_id set) to a board-v2 JSONL board.
+
+(board.db retired 2026-09-03 — JSONL-only doctrine; this script now writes events.jsonl only.)
 
 WHY: append_board_event.py hardcodes event_type="audit"/task_id=None, so E2E fixture
 ticks need a FIRST event carrying the task id (e.g. E2E-001) logged before the audit event.
 
 USAGE:
-  uv run --with duckdb python3 scripts/append_e2e_event.py <repo_path> <tick> <detail.json> [task_id]
+  python3 scripts/append_e2e_event.py <repo_path> <tick> <detail.json> [task_id]
 
   - repo_path: absolute path to the project repo (board at .coding-hermes/board/)
   - tick:      tick number (int)
@@ -13,7 +15,7 @@ USAGE:
   - task_id:   default "E2E-001"
 
 MECHANICS (proven crier ticks 72-102):
-  - events.jsonl is the AUTHORITATIVE git-tracked store; board.db is a best-effort mirror.
+  - events.jsonl is the AUTHORITATIVE git-tracked store.
   - new id = MAX(existing id)+1 — json.loads per line tolerates BOTH "id": 87 and "id":87 forms.
   - board.db is a DUCKDB file despite the .db extension: plain INSERT INTO via the duckdb
     module, NEVER sqlite3 ("file is not a database"), NEVER INSERT OR REPLACE
@@ -39,7 +41,6 @@ task_id = sys.argv[4] if len(sys.argv) > 4 else "E2E-001"
 
 board = os.path.join(repo, ".coding-hermes", "board")
 events_path = os.path.join(board, "events.jsonl")
-db_path = os.path.join(board, "board.db")
 
 with open(events_path) as f:
     lines = [l for l in f.read().splitlines() if l.strip()]
@@ -60,15 +61,3 @@ event = {
 with open(events_path, "a") as f:
     f.write(json.dumps(event, ensure_ascii=False) + "\n")
 print("JSONL appended, id", new_id)
-
-try:
-    import duckdb
-    con = duckdb.connect(db_path)
-    con.execute(
-        "INSERT INTO events (id, timestamp, event_type, task_id, actor, detail, tick_number) VALUES (?,?,?,?,?,?,?)",
-        [event["id"], event["timestamp"], event["event_type"], event["task_id"], event["actor"], event["detail"], event["tick_number"]],
-    )
-    con.close()
-    print("board.db insert ok")
-except Exception as e:
-    print("board.db insert skipped/failed:", e)

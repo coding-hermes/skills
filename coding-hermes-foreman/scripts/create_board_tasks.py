@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Create one or more tasks on a JSONL-tracked DuckDB foreman board in one shot.
 
-Appends task rows to tasks.jsonl (tracked git mirror), inserts them into
-board.db (gitignored live store, best-effort), and appends task_created
-events to events.jsonl + board.db with explicit max-id sequence.
+Appends task rows to tasks.jsonl (canonical git store) and appends
+task_created events to events.jsonl with explicit max-id sequence.
+(board.db retired 2026-09-03 — JSONL-only doctrine.)
 
 Usage (cron-safe: no python3 -c, no heredocs, no pipes):
-  uv run --with duckdb python3 create_board_tasks.py REPO TICK_NUMBER TASKS_JSON [--reason '...']
+  python3 create_board_tasks.py REPO TICK_NUMBER TASKS_JSON [--reason '...']
 
   REPO          absolute path to the project repo
   TICK_NUMBER   tick number creating the tasks (stamped on events)
@@ -63,7 +63,6 @@ def main():
     board = f"{args.repo.rstrip('/')}/.coding-hermes/board"
     tasks_path = f"{board}/tasks.jsonl"
     events_path = f"{board}/events.jsonl"
-    db_path = f"{board}/board.db"
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
     with open(args.tasks_json) as f:
@@ -122,27 +121,6 @@ def main():
         for ev in events:
             f.write(json.dumps(ev, default=str, separators=(",", ":")) + "\n")
     print(f"events.jsonl: appended {len(events)} task_created events")
-
-    try:
-        import duckdb
-        con = duckdb.connect(db_path)
-        cols = list(added[0].keys()) if added else []
-        for t in added:
-            con.execute(
-                f"INSERT OR REPLACE INTO tasks ({','.join(cols)}) VALUES ({','.join(['?'] * len(cols))})",
-                [t[c] for c in cols],
-            )
-        for ev in events:
-            con.execute(
-                "INSERT INTO events (id, timestamp, event_type, task_id, actor, detail, tick_number) "
-                "VALUES (?,?,?,?,?,?,?)",
-                [ev["id"], ev["timestamp"], ev["event_type"], ev["task_id"], ev["actor"], ev["detail"], ev["tick_number"]],
-            )
-        con.close()
-        print("board.db: tasks + events inserted")
-    except Exception as exc:
-        print(f"WARN: board.db insert skipped ({exc}) - JSONL mirror has the rows; re-sync later")
-
     print("done")
 
 

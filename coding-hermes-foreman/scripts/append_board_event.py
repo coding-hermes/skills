@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Append a foreman audit event to a DuckDB foreman board in ONE shot.
+"""Append a foreman audit event to a JSONL foreman board in ONE shot.
 
-Keeps the three board artifacts in sync (the tracked JSONL mirror is
-authoritative; board.db is the live gitignored read source):
+JSONL is the canonical store - board.db was retired 2026-09-03 (fleet
+doctrine: no db cache file; the JSONL files ARE the board). Writes:
 
   1. .coding-hermes/board/events.jsonl   <- appended (tracked in git)
-  2. .coding-hermes/board/board.db       <- INSERT into events table (gitignored)
-  3. .coding-hermes/board/board.jsonl    <- header merge (ticks_total/ticks_idle/last_commit)
+  2. .coding-hermes/board/board.jsonl    <- header merge (ticks_total/ticks_idle/last_commit)
 
 Usage (cron-safe: no python3 -c, no heredocs, no curl pipes):
   # 1. write the detail object to a file (write_file, avoids shell quoting)
   # 2. run:
-  uv run --with duckdb python3 append_board_event.py REPO TICK_NUMBER DETAIL_JSON \
+  python3 append_board_event.py REPO TICK_NUMBER DETAIL_JSON \
       [--ts 'YYYY-MM-DD HH:MM:SS.mmmmmm'] \
       [--set last_commit=abc123] [--set ticks_idle=10] [--set ticks_total=34]
 
@@ -22,19 +21,11 @@ Usage (cron-safe: no python3 -c, no heredocs, no curl pipes):
   --set        repeatable KEY=VALUE pairs merged into the board.jsonl header
                (e.g. last_commit=<pre-tick HEAD>, ticks_total, ticks_idle)
 
-Event id is computed as MAX(id)+1 across events.jsonl (explicit sequence per
-duckdb-board-events-id-sequence.md — never trust auto-increment; ids are the
-sync key between DB and mirror).
+Event id is computed as MAX(id)+1 across events.jsonl (explicit sequence -
+never trust implicit ordering). Read status with boardctl
+(github.com/coding-hermes/boardctl) or jq on the JSONL files.
 
-The DuckDB INSERT is best-effort: if a live sibling foreman holds the write
-handle and the insert locks, the JSONL mirror (tracked artifact) is still
-updated and the DB can be re-synced next tick. Verify sync afterwards with
-`python3 ~/.hermes/skills/coding-hermes-foreman/scripts/read_duckdb_board.py REPO 1`
-(⚠️ the read script is NOT executable — direct invocation without the
-`python3` prefix fails with `Permission denied`; proven: bunker tick #159).
-
-Proven: ring-runner tick 34 (2026-08-02) — DB + JSONL tails matched exactly
-(max id 78 = tick 34) after one run.
+Proven: ring-runner tick 34 (2026-08-02).
 """
 import argparse
 import json
@@ -52,7 +43,6 @@ def main() -> None:
     board = f"{args.repo.rstrip('/')}/.coding-hermes/board"
     events = f"{board}/events.jsonl"
     header = f"{board}/board.jsonl"
-    db = f"{board}/board.db"
 
     ts = args.ts
     if ts is None:
@@ -73,8 +63,11 @@ def main() -> None:
                 continue
             try:
                 e = json.loads(line)
-                if e.get("id", 0) > max_id:
-                    max_id = e["id"]
+                eid = e.get("id", 0)
+                if isinstance(eid, str):
+                    eid = int(eid) if eid.isdigit() else 0
+                if eid > max_id:
+                    max_id = eid
             except json.JSONDecodeError:
                 print(f"WARN: skipping malformed events.jsonl line: {line[:80]}")
     next_id = max_id + 1
@@ -91,21 +84,6 @@ def main() -> None:
     with open(events, "a") as f:
         f.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
     print(f"events.jsonl appended id={next_id} tick={args.tick_number}")
-
-    # best-effort DuckDB insert (lock-safe vs live sibling)
-    try:
-        import duckdb
-
-        con = duckdb.connect(db)
-        con.execute(
-            "INSERT INTO events (id, timestamp, event_type, task_id, actor, detail, tick_number) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [next_id, ts, "audit", None, "foreman", detail_json, args.tick_number],
-        )
-        con.close()
-        print("board.db inserted")
-    except Exception as exc:  # ImportError or file-lock contention
-        print(f"WARN: board.db insert skipped ({exc}) — JSONL mirror already has the event; re-sync later")
 
     # header merge
     with open(header) as f:
