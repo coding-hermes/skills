@@ -102,6 +102,15 @@ def main():
         loc = run('find . -maxdepth 2 -name "*.py" -not -path "./.venv/*" 2>/dev/null | xargs wc -l 2>/dev/null | tail -1', args.repo)
         f.write(f"=== LOC (top-level py, adjust per project) ===\n{loc}\n")
 
+    # 5. DuckBrain tick keys (project narrative history; optional)
+    duck_ns = os.path.expanduser(f"~/duckbrain/namespaces/{args.name}")
+    with open(os.path.join(out, "duckbrain-state.txt"), "w") as f:
+        if os.path.isdir(duck_ns):
+            keys = run(f"find '{duck_ns}' -name '*.md' -o -name '*.json' 2>/dev/null | head -40", None)
+            f.write(f"=== DUCKBRAIN KEYS (first 40) ===\n{keys}\n")
+        else:
+            f.write(f"no duckbrain namespace at {duck_ns}\n")
+
     print(f"collected -> {out}")
     print("next: distill facts.md, dispatch 3 analysts, synthesize HTML (see SKILL.md)")
 

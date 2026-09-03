@@ -86,6 +86,8 @@ cycle: retro → gaps → board rows → ticks close them → next retro.
 - **Subagent dispatch can 401** (invalid/stale API key) — if all 3 analysts
   fail instantly with auth errors, write the three analyses YOURSELF from
   facts.md rather than blocking the deliverable; flag the key to the user.
+  The analyses are reasoning over a fixed digest — the orchestrator can do
+  them directly when the lanes are down.
 - **Scheduler `status='timeout'` is NOT "did nothing"** — legacy deadline
   bookkeeping includes rows that did real work; sum from
   `commits`/`files_changed`, read `error` text before reporting.
@@ -94,7 +96,9 @@ cycle: retro → gaps → board rows → ticks close them → next retro.
 - **Consistency check before publishing** — every number must appear
   identically in stat card, section text, and tables (a stat card saying
   12,344 while the section says 29,189 is a credibility kill). Re-derive
-  zombie/aggregate counts at build time, not from memory.
+  zombie/aggregate counts at build time, not from memory — and re-check the
+  BUILT HTML (regex the rendered numbers) after any data fix, since the
+  builder script and the prose live in different files.
 - **Cost numbers**: ticks.cost_usd covers tick-spawned sessions only, not
   interactive chat. Say so rather than implying whole-fleet cost.
 - **Non-Python projects**: collect.py's LOC probe is Python-shaped; pass
@@ -102,8 +106,8 @@ cycle: retro → gaps → board rows → ticks close them → next retro.
 - **Boards vary**: `--board-rel` covers `.coding-hermes/board`; legacy
   parquet-only boards may need one-off collection.
 - Timeline arithmetic: use `--date=format:"%G-W%V"` (ISO week), not `%U`.
-- Model-name drift in billing data (gateway restarts re-stamp provider
-  labels) — count by immutable fields (base_url / per-call ledger), never
+- Model-name drift in billing data (gateways re-stamp provider labels on
+  restart) — count by immutable fields (base_url / per-call ledger), never
   by the re-stamped label column, when the report splits by provider.
 
 ## Proven
