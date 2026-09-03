@@ -20,6 +20,8 @@ This repository contains the skill files that power the Coding Hermes autonomous
 | [`coding-hermes-broker`](coding-hermes-broker/SKILL.md) | Broker | Scheduling algorithm — weight-budget, urgency, packing |
 | [`coding-hermes-worker`](coding-hermes-worker/SKILL.md) | Worker | Code implementation — writes code, runs tests, commits |
 | [`coding-hermes-jsonl-board-append`](coding-hermes-jsonl-board-append/SKILL.md) | Board | JSONL board append + cache rebuild tooling |
+| [`fleet-daily-report`](fleet-daily-report/SKILL.md) | Reporting | Daily hybrid report — narrative + per-project deep data |
+| [`fleet-retrospective`](fleet-retrospective/SKILL.md) | Reporting | 90-day / year-in-review retrospective — data to HTML, gaps to board |
 
 ---
 
