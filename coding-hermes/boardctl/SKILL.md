@@ -4,7 +4,7 @@ description: >-
   Use when reading, writing, or validating coding-hermes JSONL foreman
   boards — boardctl CLI (list/show/create/update/event/header/validate/stats).
   The JSONL files ARE the board; board.db/parquet retired 2026-09-03.
-version: 1.0.0
+version: 1.0.1
 author: Bane + Hermes
 metadata:
   hermes:
@@ -71,6 +71,15 @@ for interactive/one-off reads and validation.
 
 ## Pitfalls
 
+- **`create` cannot bootstrap an empty board** — it mirrors the task schema
+  and JSON style from an existing row; on an empty `tasks.jsonl` it errors
+  with "no row to mirror the schema from". Seed one task row by hand (or via
+  `create_board_tasks.py`) when initializing a brand-new board.
+- **`update` requires the task to already exist** — there is no upsert; use
+  `create` first.
+- `show <id>` prints pretty JSON by default (no `--json` flag exists).
+- `event --detail-text` values are stored base64-encoded in the `detail`
+  field of events.jsonl — decode before diffing details.
 - Never write `board.db`/`*.parquet` — the JSONL is the whole store.
 - `tasks.jsonl` rewrites preserve line order; only the target row changes.
 - Legacy boards may carry STRING ids/counters — boardctl int-coerces on read.
