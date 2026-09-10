@@ -26,8 +26,8 @@ This skill handles ALL configuration for coding-hermes. It is loaded FIRST by ev
 
 Ask which LLM providers they have access to. For each one they confirm, ask for:
 
-| Provider | Config Key | What To Ask |
-|----------|-----------|-------------|
+| Provider class | Config Key | What To Ask |
+|---------------|-----------|-------------|
 | DeepSeek | `deepseek_api_key` | "Do you have a DeepSeek API key? If so, paste it." |
 | OpenAI | `openai_api_key` | "Do you have an OpenAI API key? If so, paste it." |
 | Anthropic | `anthropic_api_key` | "Do you have an Anthropic API key? If so, paste it." |

@@ -6,7 +6,7 @@ description: >-
   endpoints, CI, DuckBrain, code quality, middle-out wiring, usability,
   E2E testing, and GitReins judge.
   See references/doc-coverage-checklist.md for the complete 9-file doc checklist.
-version: 1.15.0
+version: 1.16.0
 category: software-development
 ---
 
@@ -22,7 +22,8 @@ Every project's `.coding-hermes/tasks.md` MUST end with:
 
 ```
 - [ ] E2E-001 — E2E Testing Tick (self-improving loop)
-  Spawn Luna (browser/screenshots) or Step 3.7 Flash (CLI/API). Deploy/build,
+  Spawn the config-declared browser/E2E model (vision bucket) for
+  browser/screenshots, the fast bucket for CLI/API. Deploy/build,
   Playwright, screenshots, endpoints, console. → e2e-output/tasks.md → inject
   into board. See foreman Step 1.5i. Every 5-10 ticks.
 

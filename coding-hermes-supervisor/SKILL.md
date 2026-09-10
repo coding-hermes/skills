@@ -4,7 +4,7 @@ description: >-
   Fleet-level maintenance cron — monitors and balances all coding-hermes
   projects. Heals broken foremen, audits fleet health, rebalances models
   and schedules, detects orphans, and produces HTML reports. Runs every 4h.
-version: 2.42.1
+version: 2.42.2
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -27,10 +27,17 @@ Maintenance cron that monitors and balances all coding-hermes projects. Runs eve
 
 | Role | Model | Provider Type | Why |
 |------|-------|---------------|-----|
-| **Supervisor** | deepseek-v4-flash | Flat-rate (opencode-go) | Light work. If bucket locks, fleet healing pauses but foremen keep running. |
-| **Foreman** | deepseek-v4-flash | **PAYG** (deepseek-foreman) | All foremen use V4 Flash. Workers use separate models (see worker skill). |
-| **Worker (heavy)** | glm-5.2 / MiniMax-M3 / gpt-5.6-sol | Prepaid flat-rate | Burn quota. Foreman switches if bucket locks. |
-| **Worker (light)** | grok-4.5 / kimi-k3 | Prepaid flat-rate | Bug fixes. Same bucket-switching logic. |
+| **Role** | **Model source of truth** | **Billing class** | **Notes** |
+|---|---|---|---|
+| Supervisor | config skill → supervisor default | cheapest prepaid flat-rate | Light work. If the bucket locks, fleet healing pauses but foremen keep running. |
+| Foreman | config skill → foreman default (enforced by scripts/enforce-foreman-models.py) | per-operator (PAYG or prepaid) | One uniform foreman model fleet-wide; workers use separate models. |
+| Worker (heavy) | config skill → heavy-worker buckets | prepaid flat-rate | Burn quota. Foreman switches on bucket lock. |
+| Worker (light) | config skill → light-worker buckets | prepaid flat-rate | Bug fixes. Same bucket-switching logic. |
+
+The ROLE STRUCTURE is permanent; the model FILLING each role is config and
+rotates on operator directive + benchmark movement (Portability Law,
+coding-hermes-skill-authoring). Never re-derive today's assignment from this
+table — read the config skill.
 
 **Critical:**
 - Foremen NEVER use prepaid providers. Locked prepaid = foreman dead until billing cycle resets.
@@ -66,7 +73,7 @@ Fix without asking. Use the `cronjob` tool for state transitions, `hermes cron e
 1. `scripts/enforce-foreman-models.py` — deterministic, no-LLM enforcement of foreman models. Available at both `~/.hermes/scripts/enforce-foreman-models.py` and the skill dir.
 2. `scripts/phase0-autoheal.py` — schema fixes, state recovery, pinned drift, force-fire. **Only in the skill dir** — run as `python3 ~/.hermes/skills/coding-hermes-supervisor/scripts/phase0-autoheal.py` or with the skill-directory-relative path.
 3. **Post-heal verification** — run `scripts/post-heal-verify.py` (added 2026-07-13). **Only in the skill dir** — use the same full path resolution as step 2. Checks for false positives: auto-heal scripts with broad skill-substring checks can incorrectly modify the supervisor itself (provider from `opencode-go` → `deepseek-foreman`) or non-foreman infrastructure crons like `h3-duckbrain-sync`. The verification script checks:
-   - Supervisor (id `55afdcd33d7f`) still has `model: deepseek-v4-flash, provider: opencode-go`
+   - The supervisor cron still has the model/provider the config skill assigns to the supervisor role (compare against config, not against this file)
    - No non-foreman cron (has `coding-hermes-cron` but NOT `coding-hermes-foreman` or `coding-hermes-supervisor`) has model/provider set
    - All foremen have explicit `enabled_toolsets` (not null) with no delegation/cronjob tools
    - **All 6 canonical toolsets are present** (`terminal`, `file`, `web`, `search`, `skills`, `memory`) — not just `search`/`skills`/`memory`. **Proven:** 2026-07-14 — <project>-foreman had `['terminal','file','search','skills','memory']` (missing `web`), the old enforcement+verify pipeline passed it silently because both scripts only checked/search/skills/memory.
@@ -97,7 +104,7 @@ The `enforce-foreman-models.py` script handles model enforcement every 30m. The 
 **Model assignment (all foremen — single model):**
 | Schedule | Model | Provider | Why |
 |----------|-------|----------|-----|
-| Any | deepseek-v4-flash | deepseek-foreman | All foremen use V4 Flash on PAYG tracked key. Workers use separate models. |
+| Any | (config skill: foreman default) | (config skill: foreman provider) | One uniform foreman model fleet-wide. Workers use separate models. |
 
 **Speed tiers (set by Bane, enforced by script):**
 | Tier | Frequency | Projects |
@@ -201,7 +208,9 @@ Foreman exists but `.coding-hermes/tasks.md` is missing → create it with boots
 ## [ ] CI — Check CI pipeline health, fix failing jobs
 ```\n\n#### 0G. Foreman Model Drift (script-handled, verify only)
 
-The `enforce-foreman-models.py` script handles model/provider enforcement. The supervisor should only VERIFY it ran — never touch models itself. See `scripts/enforce-foreman-models.py`. Allows `deepseek-v4-pro` (active) and `deepseek-v4-flash` (idle/budget). Provider must be `deepseek-foreman` (PAYG). **Proven:** 2026-07-14 — `phase0-autoheal.py` 0G check was reverted to match `enforce-foreman-models.py` logic after it kept reverting idle foremen from v4-flash → v4-pro.
+The `enforce-foreman-models.py` script handles model/provider enforcement. The supervisor should only VERIFY it ran — never touch models itself. See `scripts/enforce-foreman-models.py`. Allows exactly the model set the config skill assigns to foremen (one uniform
+default; the script's allowlist mirrors config). Provider must be the
+config-declared foreman provider. **Proven:** 2026-07-14 — `phase0-autoheal.py` 0G check was reverted to match `enforce-foreman-models.py` logic after it kept reverting idle foremen from v4-flash → v4-pro.
 
 **Enforcement-cron health check (run BEFORE scanning drift):**
 The `enforce-foreman-models.py` cron job (`667bc78e9470`) is a `no_agent: true` interval job. If it was carelessly created with `kind: "once"` — or transitions to `completed`/`disabled` — the entire model-enforcement layer goes dark. Check:
@@ -211,8 +220,8 @@ The `enforce-foreman-models.py` cron job (`667bc78e9470`) is a `no_agent: true` 
 
 **Script quality verification (added 2026-07-17):** After confirming the cron is healthy, verify the script content contains the expected enforcement rules. The cron running every 30m does not guarantee the script has all the right logic. Read the script at `~/.hermes/scripts/enforce-foreman-models.py` and scan for:
 - **Rule 0: toolset normalization** — must null→canonical 6, strip delegation/cronjob, add missing tools, remove extras. Look for `CANONICAL_TOOLSETS` and `PROHIBITED` variables and the `if et is None or not isinstance(et, list)` branch.
-- **Rule 1: provider enforcement** — must set `deepseek-foreman` on any foreman with a different provider. Look for `if provider != 'deepseek-foreman'`.
-- **Rule 2: model enforcement** — all foremen use `deepseek-v4-flash` (Bane directive 2026-07-24, no more v4-pro split). Look for `target_model = 'deepseek-v4-flash'` (unconditional, no schedule check).
+- **Rule 1: provider enforcement** — every foreman must carry the config-declared foreman provider. In the script, look for the provider-comparison against the config value.
+- **Rule 2: model enforcement** — all foremen use the ONE config-declared foreman default (operator directive; no active/idle split unless config says so). Look for the unconditional `target_model` assignment.
 - **Foreman detection guard** — must use exact `'coding-hermes-foreman'` check (not a broad substring). Look for `if 'coding-hermes-foreman' not in skills: continue`.
 - **Rule 4: dual-copy match** — enforce script is TWO files (see `references/enforce-script-dual-copy-drift.md`). Diff: `diff ~/.hermes/scripts/enforce-foreman-models.py ~/.hermes/skills/coding-hermes-supervisor/scripts/enforce-foreman-models.py`. If they differ, sync loser to match verified-correct copy. **Proven:** 2026-07-24 — both copies had old v4-pro split; skill text correct but neither script matched it.
 

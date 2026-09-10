@@ -4,7 +4,7 @@ description: >-
   How to operate the coding-hermes weight-budget scheduler. Covers project
   management via HTTP API, monitoring tick outcomes, debugging stuck ticks,
   tuning budget/concurrency/cooldown, and the verify test suite.
-version: 3.16.0
+version: 3.17.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -304,7 +304,8 @@ foreman can override if the model is rate-limited or out of credits. The spawner
 them into the foreman prompt:
 
 ```
-Worker default: use model gpt-5.6-sol with provider openai-codex if available.
+Worker default: whatever model/provider the config skill assigns to the
+heavy-worker bucket (re-read at use time — this file must not name it).
 Feel free to use a different model if this one is unavailable or rate-limited.
 ```
 
@@ -312,7 +313,7 @@ Set via API or SQL:
 ```bash
 curl -X PUT /api/v1/projects/my-project \
   -H 'Content-Type: application/json' \
-  -d '{"WorkerModel":"gpt-5.6-sol","WorkerProvider":"openai-codex"}'
+  -d '{"WorkerModel":"<config heavy-worker model>","WorkerProvider":"<config heavy-worker provider>"}'
 ```
 
 The `workerDefaults()` function in spawn.go handles prompt construction. If both fields

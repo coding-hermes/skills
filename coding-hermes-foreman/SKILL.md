@@ -5,7 +5,7 @@ description: >-
   scans tasks, analyzes impact, loads memory, spawns workers, verifies
   quality, commits, learns, and scans external signals. Loaded by every coding-hermes
   foreman cron job. Follows the fleet architecture.
-version: 2.9.2
+version: 2.9.3
 author: Bane + Hermes
 platforms: []
 metadata:
@@ -25,6 +25,11 @@ metadata:
   support_files:
     - references/{asce,mythos,totalstack,h3,consensus,crier,dexdat-core,canopy,smoke-test-project,uhlp,inference-estimator,duckbrain-recall-failure-modes,recurring-ci-failure-stacked-root-causes,stale-bug-reporting,pi-agent-rebuild,hermes-chat-workdir-gotcha,worker-session-stall-resume-pattern,operational-cli-batch-tasks,cron-mode-command-blocks,zombie-tick-protocol,go-lint-fix-patterns,guard-lint-scope-vs-ci,lint-debt-slice-recipe,gitlab-ci-audit,python-venv-test-verification,foreman-direct-code-exceptions,format-gate-symlink-false-pass,board-counting-commit-hygiene,foreman-project-onboarding,two-silent-workers-foreman-direct,pitfalls-session-learning,discovery-sweep-quality,scheduler-vs-cron-pitfall,cloudflare-tunnel-nextjs,concurrency-dual-source-race,rust-workspace-test-flakiness,testing-with-dummy-projects,typescript-pnpm-foreman-scaffold,go-ci-creation-pattern,gitreins-stale-task-cleanup,gitreins-mcp-task-complete-partial-success,go-engine-auto-persist-pitfall,go-test-timenow-nondeterminism,multi-repo-sdk-init-assessment,parallel-tick-sibling-signals,sibling-tick-board-collision,python-ci-make-targets,go-migration-goose-down-parsing,go-yaml-v3-byte-slices,cloudflared-tunnel-restart,cron-localhost-verification,live-e2e-detects-stub-plumbing,demo-user-protection-pattern,gh-pages-static-site-verification,shell-quoting-hermes-chat-q,misplaced-cross-project-code,parallel-spec-worker-spawning,skillmd-freshness-check,frontend-worker-api-type-mapping,sudo-blocked-cron-workaround,go-sqlite-schema-diagnosis,glm52-type-hallucination,muster-stub-wiring-phase2,empty-board-loop-self-pause,gitreins-poc-foreman-ops,scheduler-api-ground-truth,append-board-event-parquet-script,duplicate-handler-unwired-twin,subdir-agentsmd-context-injection,npm-dep-audit-override-pin,external-commit-mid-tick}.md
     - references/scheduler-api-and-terminal-pitfalls.md
+
+  **Note (Portability Law, coding-hermes-skill-authoring):** project names
+  inside references/ filenames and receipts are EVIDENCE of where a pattern
+  was proven — never a caller allowlist. Scope new work from the board and
+  the live fleet config, not from this list.
     - references/scheduler-e2e-full-battery-recipe.md
     - references/scheduler-idle-light-tick-recipe.md
     - references/spa-fallback-probe-false-positive.md
