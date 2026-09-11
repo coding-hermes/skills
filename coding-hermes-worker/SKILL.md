@@ -1,8 +1,14 @@
+---
+name: coding-hermes-worker
+description: Worker rules for coding-hermes fleet — write code, don't plan. Capability-based model selection.
+version: 1.6.0
+category: implementation
+layer: Worker (Phase 3)
+---
+
 # coding-hermes-worker
 
-**Status:** Active  
-**Category:** implementation  
-**Layer:** Worker (Phase 3)
+**Status:** Active
 
 ---
 
@@ -29,34 +35,111 @@ Before writing ANY code:
 - **Error handling**: match the project's error pattern (custom errors, fmt.Errorf, etc.).
 - **Tests**: use the same test framework as existing tests (pytest, testing, jest, etc.).
 
-### 3. Write Tests
+### 3. Write Tests (Code Tasks Only)
 
-Every change MUST include tests:
+For code tasks, every change MUST include tests:
 - New function → new test.
 - Bug fix → regression test.
 - Refactor → existing tests must still pass.
+- **TS barrel split (split a >500L file into a module dir + 1-line shim):**
+  see `references/typescript-barrel-split.md` — shim rule (never delete the
+  original file), `export type *` for type-only modules, internal-type
+  leakage (keep non-exported interfaces out of the types module or the
+  barrel leaks them public), and export-parity diff before commit. Proven:
+  Mythos QUALITY-LF series (16 splits, glm-5.2 @ zai-glm, all judge PASS).
 
-### 4. Build Before Commit
+**Design-token / theme migration (Tailwind v4 CSS-first):** When migrating an app to a token system, redefine the LEGACY ramps (`--color-gray-*`, `--color-purple-*`) inside `@theme` alongside the new semantic tokens — hundreds of existing `gray-500`/`purple-600` utility usages then land on-theme automatically instead of needing a call-site rewrite of every file. Pitfalls: (a) `dark:` defaults to `prefers-color-scheme`, so a dark-only app must re-bind it with `@custom-variant dark (&:where(.dark, .dark *))` + `<html class="dark">`, otherwise every `dark:*` utility silently no-ops on a light-preference machine — verify by checking the built CSS that `.dark\:bg-x` is emitted AFTER `.bg-white` (later = wins); (b) `text-gray-900` headings are invisible on dark surfaces and grep-able as the first thing to fix; (c) expose CSS vars to TS via a small `theme.ts` (`var(--color-…)` strings for inline styles, raw hex only where a value escapes CSS cascade — React Flow MiniMap fills, SVG attrs, `${hex}22` alpha composition). **Proven:** hermes-canopy UI-01 (2026-08-01) — 500+ legacy utilities remapped via 2 ramp overrides; 15 files, 0 contrast failures.
 
-Before committing, run:
+**Contrast/theme claims must be MEASURED, not eyeballed.** Screenshot + "looks dark to me" (including a vision model's read) misses real AA failures. Script it: walk leaf text elements, resolve the effective background by climbing ancestors until a non-transparent `backgroundColor`, compute the WCAG ratio, and apply the correct threshold (4.5 normal, 3.0 for ≥24px or ≥18.66px bold). Also flag any opaque near-white surface larger than an icon — that's the `bg-white` dark-theme leak. Critically, run the audit against POPULATED state: on hermes-canopy UI-01 the empty pages reported 0 failures while real data exposed 5 (status pills at 3.89:1) and only the seeded graph proved node cards weren't white. Drive selectors to real values (skip placeholder `option value=""`), stub `**/api/**` via `page.route` for list pages, and use the app's own seed hook (`window.__canopySeedDemoTree`) for the canvas.
+
+**Cross-component sync via a DOM event + localStorage → guard the write, or you crash the renderer.** When two React surfaces coordinate through `window.dispatchEvent` + `localStorage` (e.g. a persistent rail and the page it links to sharing a "current record" id), the listener usually responds by re-fetching, and the fetch usually re-stores the same id — an unconditional dispatch feeds straight back into the listener and spins an unbounded loop. Symptom is NOT a stack overflow in the console: headless Chromium dies with `Target crashed` / `Target page, context or browser has been closed` on the very first `locator.count()`, which reads like an environment/OOM problem and sends you chasing `--disable-dev-shm-usage`, memory, and fleet load. Fix: early-return when the stored value is unchanged (`if (readStored() === next) return;`) and depend on PARAM VALUES not the `searchParams` object (its identity changes every render, re-creating any `useCallback` that closes over it). Diagnose by driving the built bundle with CDP `Log.enable` + `page.on('crash')` — a nav that returns 200 but yields an empty `title` and instant crash is a render-loop signature, not resource exhaustion. **Proven:** hermes-canopy UI-02 (2026-08-01).
+
+**Cobra singleton + viper key traps make CLI tests pass without running the command.** (a) `rootCmd.Execute()` twice in one test process: a prior `--help` invocation leaves the target command's pflag `help` value TRUE (pflag values persist between Parse calls on package-level command singletons), so the next `Execute()` on that command prints help and returns NIL — the RunE never runs. Tests asserting only `err == nil` "pass" while the command under test is dead code and its httptest fixtures are never served. Detect: buffer contains help text, `hit` flag on the fake server never set. Fix: call the run function directly (`runWorkspaceCreate(nil, args)`) like the repo's existing direct-call tests — or reset `cmd.Flags().Set("help","false")` before Execute. (b) `viper.Set("controller-url", X)` stores a FLAT key that viper's dotted lookup `GetString("controller.url")` never resolves (searchMap walks nested maps only) — the CLI silently falls through to the config file / env / default, and tests that think they point at an httptest server actually hit the LIVE controller (201 → wrong-contract decode → zero values → "pass"). Use the dotted key `viper.Set("controller.url", X)`; also set the output format explicitly (`viper.Set(StrOutput, StrTable/StrJson)`) with restore, because earlier tests in the package leave `output=json` set. Proven: hivemind HW-GAP-004 (2026-08-22) — the pre-existing create tests never hit their fake server in either sense: the wrong-contract fixture was never served AND the command never ran; the fix's tests call `runWorkspaceCreate` directly and assert populated output.
+
+**Auto-selecting a default on behalf of the user breaks "empty state" E2E tests.** A rail/sidebar that falls back to "just pick the first record so I have something to show" will silently satisfy the sibling page's "Select a tree…" prompt, failing a placeholder assertion that has nothing to do with your component. Distinguish an EXPLICIT choice (deep-link param, or a selection the user previously made) from an IMPLICIT fallback, and persist only the explicit one. Run the existing integration suite (`npx vitest run --config vitest.integration.config.ts`) before committing any shell-level component — it catches cross-page contamination that unit tests and your own component's tests cannot. **Proven:** hermes-canopy UI-02 — 41/42 → 42/42 after scoping persistence to explicit selections.
+
+**Vision-model review of a UI screenshot produces confident false positives — verify each claim before acting.** On UI-02 a vision pass reported "missing active state" (the shot was of a route where nothing *should* be active — a different shot proved highlighting worked), "insufficient backdrop dimming / low contrast" on a dialog (the scripted WCAG audit measured 100 text nodes in that exact state: 0 failures), and "missing search bar" (a later ticket's scope). It also caught one REAL parity gap: list ordering (API returns newest-first, mockup shows busiest-first). Treat vision output as a list of hypotheses to check against measurement and the ticket's scope, never as a defect list to fix directly.
+
+**Go integration tests that create per-test databases:** Every `NewIntegrationPool` call that creates a uniquely-named database MUST register a `t.Cleanup` that drops it. Without cleanup, databases silently accumulate (420+ per full run, 25 GB over a dozen ticks). See `references/go-test-database-cleanup.md` for the pattern and detection commands. **Proven:** hermes-canopy BUG-012 (2026-07-27) — 2,586 leaked databases, 25 GB, PG crashes.
+
+**Go + PG test suites that are slow or "hang":** Before debugging a hang, measure per-test cost — 224 tests × fresh-DB-per-test (CREATE DATABASE + 21 migrations ≈ 10-15s each) is a ~35-minute suite that looks like a hang. Fixes, in order: (1) shared integration pool — one migrated DB per test binary via `sync.Once`, truncate-between-tests preserves the fresh-empty contract (see `references/go-pg-test-infra-pitfalls.md`); (2) single-statement `TRUNCATE a, b, ... CASCADE` — per-table CASCADE is ~0.7s each (FK closure re-scan), one combined statement is ~3ms; (3) cap EVERY recursive CTE at `depth < 10000` — a cycle or broken recursive step spawns hours-long orphaned queries that eat CPU and slow all other tests; recursive self-references can't be aliased in Postgres (`JOIN chain c` → 42P01, use `JOIN chain`). Triage: check `pg_stat_activity` for long-running orphans (`pg_terminate_backend` to kill), `pgrep -af "go test"` for a concurrent scheduler tick before blaming the code, and `pg_isready`/`docker ps` for a crash-recovering PG container — under multi-agent test storms the container can crash mid-DROP-DATABASE and replay WAL for minutes, making EVERY test fail instantly (0.00s) with `FATAL: the database system is starting up (57P03)`. The fix is to wait for recovery, not change code. **Proven:** hermes-canopy TEST-003/TEST-004 (2026-07-31) — 1h21m orphaned recursive query + 300s→1800s suite timeouts fixed; db suite 300s FAIL → 145s PASS.
+
+**Full-stack verification:** When verifying a complete system (backend + frontend + database), empty pages prove nothing. A GET returning {"items":[]} could mean "no data" OR "broken API." You MUST exercise the write path (API POST → DB → API GET → UI render with real data) before declaring the system works. Screenshots of empty states are indistinguishable from screenshots of broken states. Also: (a) E2E suites that only cover empty states miss populated-state crashes — drive tree/record selectors to real data before screenshotting (`.slice()` on a minimal-shape endpoint is the classic crash); (b) if the Hermes browser tool blocks localhost (`allow_private_urls: false`, config is agent-locked), screenshot with the project's own Playwright via `NODE_PATH=<proj>/frontend/node_modules node script.js`; (c) **screenshots ARE part of the deliverable for UI fixes** — capture the fixed page AND a zoomed detail shot, save them under `docs/screenshots/`, and commit them with the fix (Bane expects them; "don't forget the screen shots" is a standing preference on the coding-hermes fleet); **delivering files back to Bane (HTML sitreps, images, docs): put the `MEDIA:<path>` reference on its OWN line, not embedded mid-line inside a table cell or bullet** — the delivery parser only attaches files when the MEDIA: reference stands alone, and the file must exist at that absolute path (verify `ls -la` + size first; if it didn't attach, resend with MEDIA: alone on a line). Bane: "Why can't you send the file?" (2026-08-01 — sitrep HTML sat inside a table cell and was never attached); (d) when a dropdown has a placeholder option ("Choose a tree..."), `selectOption({ index: 0 })` selects the PLACEHOLDER (empty value) — filter options to non-empty values first: `select.locator('option').evaluateAll(opts => opts.map(o => o.value).filter(v => v !== ''))` then `selectOption(values[0])`; (e) **showing the app while a sibling worker is mid-edit** — the dev server hot-reloads their half-written code and the renderer dies (`Target crashed` on the first evaluate; NOT an OOM), and a stale `vite preview` serves a bundle that breaks on deleted assets (JSON where index.html returned) — build the last COMMITTED state (`git archive HEAD frontend` → `npx vite build` → serve with a SPA-fallback static server), read the dev JWT from `vite.config.ts` `DEV_JWT_DEFAULT` (secret `dev-secret-change-me`, NOT `canopy-dev-secret`), rewrite `**/api/**` via `page.route` to the live backend, and seed Yjs-backed canvases with `window.__canopySeedDemoTree()` since fresh contexts have no local replica. See references/full-stack-verification-checklist.md §"Showing the app while a worker is mid-edit" for the full recipe. See references/full-stack-verification-checklist.md for the end-to-end smoke-test pattern, common failure modes (JWT mismatch, BodySizeLimit body consumption, [object Object], invisible headings, go build . vs ./cmd/ pitfall), and 6-step verification checklist. The checklist also covers: building the self-contained base64 HTML sitrep deliverable + headless render validation (0 broken images), reading board status from tasks.md (summary rows go stale — trust the last detail row + `git log` as truth), and the data-provenance check ("real pipeline" vs "real Hermes data", Yjs canvas vs REST pages, stale `node_count`). **Proven:** hermes-canopy (2026-07-29) — API GET returned empty while DB had rows, POST returned 503 with hidden error, and all 5 pages showed indistinguishable empty states. **Proven:** hermes-canopy (2026-08-01) — Nodes page crashed on populated tree select (41/41 E2E green); browser tool blocked localhost, Playwright NODE_PATH captured all pages; placeholder-option index-0 selectOption failed the first regression attempt.
+
+**API contract mismatch → dedicated list endpoint, don't overload traversal:** When a page crashes on data shape (e.g. `.slice()` on undefined), check whether the endpoint it calls was DESIGNED for that purpose. Graph-traversal endpoints (subtree/ancestry) often return deliberately minimal summaries (id/type/depth/dates) to keep canvas payloads small — a detail-list page must NOT consume them. Fix pattern (hermes-canopy BUG-026, 2026-08-01): add a proper list endpoint reusing the existing repo method (GetByTree) + existing detail mapper (nodeToDetail) at the service layer, expose it at the natural REST path (`GET /trees/{tree_id}/nodes`), point the page at it. Three signs it's a contract bug, not a rendering bug: crash happens only with real data (empty state renders fine), E2E only covers empty states, and the failing field (`authorId`) exists on the detail type but is absent from the endpoint's response. Verify with `curl` on the endpoint + `python3 -c "sorted(d['nodes'][0].keys())"` to compare actual vs expected keys.
+
+**Regression tests for a crash fix → three levels, all in one commit:** When the fix is an API contract change, regression coverage must span (hermes-canopy BUG-026): (1) SERVICE unit tests with a purpose-built stub repo that returns FULL nodes — assert every rendered field survives the mapper (authorId, content, contentFormat, nodeType, sequenceNum, metadata, parent linkage) + the empty-tree/nil-tree → empty non-nil slice contract; (2) HANDLER integration tests (SkipIfNoDB + shared pool) that seed via HTTP and assert the exact wire contract: full fields on every node, computed depth/childCount, and `{"nodes": []}` non-nil on empty; (3) FRONTEND E2E that selects a real record and asserts the page body renders (not just "no crash" — assert content appeared and the placeholder is gone). A regression test that only checks "didn't crash" is weak; assert the data the crash was blocking.
+
+**Go build/scheduler pitfalls:** go build . produces a 71KB AR archive (not an ELF binary) when main.go lives under cmd/. Always go build -o binary ./cmd/<name>. The foreman runs via the scheduler daemon (:9090), not cronjobs — paused foreman cronjobs with reason "scheduler migration" are correct. Use the scheduler DB at ~/.hermes/coding-hermes/scheduler.db to manage cooldown. chi route doubling occurs when handler paths include parameters that match mount point parameters. See references/go-build-and-env-pitfalls.md for full patterns and fixes.
+
+**OTel `resource.Merge` ErrSchemaURLConflict (go.opentelemetry.io/otel/sdk v1.44+):** `resource.Merge(resource.Default(), resource.NewWithAttributes("https://opentelemetry.io/schemas/1.26.0", ...))` FAILS at runtime with `conflicting Schema URL: https://opentelemetry.io/schemas/1.41.0 and https://opentelemetry.io/schemas/1.26.0` — the SDK's default detectors report their own semconv version (1.41.0 in v1.44), so any hardcoded older schema URL makes the merge error. That error surfaces through SetupTracing/Init, silently breaking the entire enabled tracing path (every CLI that sets HELIX_TRACE_ENABLED=1 fails at startup). Fix: declare custom attrs schemaless — `resource.NewSchemaless(attrs...)` — and let Merge adopt `resource.Default()`'s schema URL (Merge succeeds when either side's schema is empty; equal non-empty also OK). Same package test pattern: the OTLP gRPC exporter (`otlptracegrpc.New`) is fully lazy (grpc.NewClient doesn't dial until the first RPC), so enabled-path unit tests can use an unreachable endpoint like 127.0.0.1:1 with zero network activity and no goroutine leaks; use sampler "never" to guarantee no recorded spans → no export attempts. `TracerProvider.Shutdown` is idempotent (double-call returns nil) but JOINS span-processor shutdown errors — a custom processor whose Shutdown returns an error triggers `ShutdownTraceProvider`'s wrap branch. Proven: helix COV-002 (2026-08-05) — 58.1% → 96.1% and a genuine production bug found by the tests, not by reading code.
+
+**Frontend API error handling:** When a Go backend returns errors as `{"error": {"code": "...", "message": "..."}}`, the frontend MUST extract `.error.message`, not just `.error`. Passing the raw error object to `new Error()` produces `[object Object]` in the UI. See `references/frontend-api-error-handling.md` for the JS/TS fix, JWT dev secret sync (Vite proxy ↔ backend), and the BodySizeLimit middleware body-consumption bug where `io.ReadAll` drains `r.Body` without replacing it. **Proven:** hermes-canopy (2026-07-26) — all 5 CRUD pages showed `[object Object]`.
+
+**Spec/doc tasks (feat(spec), docs, etc.):** Skip this rule. Specs don't have test suites. Verification is structural (section count, byte minimum, cross-reference completeness).
+
+### 4. Build Before Commit (Code Tasks Only)
+
+For code tasks, before committing, run:
 ```bash
-# Go projects
-go build ./... && go vet ./... && go test ./... -count=1 -short
+# Go projects (NEVER exceed -j4 or -parallel 4)
+go build ./... && go vet ./... && go test ./... -count=1 -short -parallel 4
 
 # Python projects
 python -m pytest tests/ -v
 
 # TypeScript projects
-npm run build && npm test
+npm run build && npm test   # Vite+TS pitfalls (vite-env.d.ts, vitest run mode, guard hang, pre-install lint noise): references/typescript-vite-pitfalls.md
+
+# C/C++ projects (NEVER -j > 4!)
+make -j4 && make test -j4
 ```
 
-If ANY command fails, fix it before committing.
+If ANY command fails, fix it before committing. **Never use -j higher than 4.**
+
+**Spec/doc tasks:** No build step. Verification uses `wc`, `search_files`, `grep` for structural checks (see Rule 7 doc variant).
 
 ### 5. Small Commits
 
 - One commit per task.
 - Commit message: "type: description. Addresses <task-id>."
 - Types: feat, fix, docs, test, refactor, chore.
+- **Path-limited commits when the foreman runs parallel workers in one repo.** If a sibling worker may be committing concurrently, commit ONLY your own files: `git commit -m "type: description. Addresses <task-id>." -- src/your-dir/ <your files>` — NEVER `git add -A`. A bare `git add -A` stages the sibling's in-flight files and they ride into your commit (or you into theirs). The foreman tells you when you're part of a parallel pair — follow it even if it feels redundant. **Proven:** ring-runner RR-ENG-03/04 and RR-ENG-05/06 parallel pairs (2026-08-01) — 4 clean parallel dispatches, zero commit races; one worker even noted "untracked src/input/ (sibling in flight) breaks tsc — I moved it aside for my own build check and restored it".
+- **Browser-game rendering/physics work (ring-runner and similar): load the `browser-2d-game-engine` skill** before touching renderers or physics — it carries the three.js pitfalls (CanvasTexture gamma, GLSL chunk scoping for onBeforeCompile patches, content-anchored parallax, InstancedMesh headroom), the honest ground-contact physics contract (snap distance, probe reach, ring counter/grace), and the pixel-scan verification script. Several "looks wrong" bugs in that codebase were invisible to vision review and only provable by pixel counts + zero-console-errors assertions.
+- **Mid-write sibling files break the shared tree — expected, don't panic.** While a parallel worker is mid-write, its uncommitted files live in the working tree, so `npm test`/`tsc` can fail on ITS half-written code (TS6133 unused import, missing export). The failures vanish when the sibling commits. Before treating a red suite as YOUR regression: `git status --short` — untracked/modified files outside your scope = sibling in flight; verify your own change in isolation (stash/move the sibling's dirs aside, build, restore) rather than "fixing" their files.
+- **⏱️ Pre-commit guard exceeds foreground timeout → commit in BACKGROUND.** Repos with a gitreins guard hook (pre-commit runs secrets/lint/tests, often 5–10+ min) will time out a foreground `git commit` at the default 120s. The kill can leave you mid-hook with a locked/half-staged index. Pattern that works: stage your files, then `terminal(background=true, notify_on_complete=true)` the `git commit -m "…" -- <your paths>` and keep working; confirm the commit landed (`git log --oneline -1`) when notified. If a commit DID time out, treat it as "check git log, then decide" — same rule as the 600s delegate_task timeout.
+- **🔒 Pre-commit hook holds .git/index.lock for its FULL duration — coordinate with sibling workers.** While a sibling's commit is in the pre-commit guard (the ~5 min test run), `git add`/`git commit` from you fails instantly with `fatal: Unable to create '.git/index.lock': File exists` (git does NOT wait). Verify it's a live process (`pstree -p <sibling_pid>` shows git→gitreins→pytest) before waiting — never delete a live lock. Safe strategy: wait for the sibling worker process to EXIT entirely (poll `kill -0`), then re-`git add` (your earlier staging predates your latest edits — status shows `MM`) and commit. `git commit -- <paths>` uses a temp index and leaves YOUR other staged entries intact — siblings' path-limited commits do not unstage your files. Proven: ai_plays_poke GAP-001 (2026-08-06) — GAP-002/3/4 sibling worker held the lock across 3 commits (each ~5 min); waiting ~15 min beat colliding. Runtime bookkeeping files (duration_profiles.json etc.) get re-dirtied by every hook test run even right after `git checkout --` — only matters for `git add -A` hygiene, which path-limited commits avoid.
+- **🪤 Sibling `git reset` wipes your uncommitted work — recover from reflog, not panic.** When a parallel worker does its own git hygiene (e.g. `git reset --hard`/`--mixed` to clean the tree before committing), YOUR uncommitted changes in the shared working tree silently disappear. Symptoms: files you edited show clean in `git status`, `grep` finds none of your markers, and `git reflog -5` shows `reset: moving to HEAD` entries that are NOT yours. Detection: reflog resets + your modified files reverting to clean + a sibling worker alive with staged files. Recovery: re-apply from your context (you have the full content of what you wrote), verify, then commit path-limited in background. Do NOT `git add -A` at this point — the sibling's staged files (e.g. its `internal/…` fix + board `tasks.md`) are in the index and would ride into your commit. `git diff --cached --name-only` first, and commit `-- <your paths>` only. **Proven:** hermes-canopy 2026-08-02 — BUG-031 worker (glm-5.2) reset HEAD while a foreground sidebar-consolidation commit was hung in the guard; both frontend files reverted to clean, reflog showed the sibling's resets, work was re-applied from context and committed path-limited without touching the worker's staged files.
+- **Shared file with a sibling mid-edit → partial-stage only YOUR hunks.** When two tasks legitimately touch the SAME file (e.g. an interface method you add and a sibling's auth change to the same backend file), `git commit -- <paths>` commits the WHOLE working-tree file (their hunk rides along). Instead: `git diff <file> > /tmp/full.diff`, slice out your hunks by `@@` header, rebuild a header-carrying patch (`diff --git` + index line + `---/+++` + your hunks), `git apply --cached <patch>` (verify with `--check` first), then commit with NO pathspec (commits the index = exactly your staged hunks). Verify: `git diff --cached <file>` shows only your lines; `git diff <file>` still shows their hunk for their later commit. Proven: rabbit-hole DF-022 (2026-08-13) — RemoteBackend.Status staged separately from the sibling DF-023 worker's token-auth hunk; both commits landed clean, correct attribution, guard PASS on both.
+- **🪤 Path-limited `git commit -- <paths>` can fail with `invalid object 100644 <hash> for '<file>'` on a NON-pathspec file.** When the index holds a stale blob hash for an untouched file (hash matches nothing in `git rev-list --all --objects`, `git fsck` reports zero missing), the pathspec commit's temp-index tree build dies even though the current index is healthy. Check `git ls-files -s <file>` vs `git rev-parse HEAD:<file>` — if they now agree and `git status` shows the file clean, just retry with a plain `git commit -m "…"` (no pathspec): it commits the index verbatim, so with only your targets staged (verify `git diff --cached --name-only`) the commit is byte-identical to the intended pathspec commit. Verify with `git show --stat HEAD` after. Proven: consensus C-GAP-039 (2026-08-31) — first attempt died on a README.md hash from nowhere; index-only commit landed clean, guard PASS on both attempts.
+- **🪤 Path-limited commit + `git mv` = old-path deletions stay staged/never committed.** When you stage a `git mv` (rename) and then commit with `-- <paths>`, the pathspec must include BOTH the old and new paths. The commit's diff shows a pretty `{old => new}` rename even when only the ADD side was committed — the delete side stays in the index and HEAD keeps the old tree. Detection: after committing, `git ls-tree -r HEAD --name-only | grep -c '^<olddir>/'` (expect 0); the rename display in `git diff --stat` is cosmetic, not proof. Fix: `git reset -q -- <olddir>` to unstage the stale deletions, then a follow-up `git commit -- <olddir>` (or redo with both paths). Proven: consensus C-GAP-017 (2026-08-13) — HEAD kept a duplicate dotless `memory-bank/` tree for a full commit; caught only by an explicit old-path grep.
+- **🪤 Your commit's guard can fail on a SIBLING's mid-edit tree — wait for green, don't "fix" their files.** When several workers run in one repo, `gitreins guard` (pre-commit) runs the FULL suite against the live tree; a sibling's half-written change (e.g. repo now writes a column their test schema lacks) makes `git commit` fail with "Fix the issues above and re-run: gitreins guard" even though YOUR staged diff is fine. Diagnosis: `go test ./... -count=1` and look for failing packages outside your scope (`git status --short` shows the sibling's modified files). Verify your own packages in isolation (`go build ./internal/...` + your package tests — those pass), then poll the failing packages (`go test ./tests/integration/...` in a background retry loop, `notify_on_complete=true`) and commit the moment they go green. Also: `git commit -- <paths>` failing at the guard does NOT consume your staging — your files stay staged, so after the tree heals just re-run the commit (re-`git add` if anything shows `MM`). **Splitting one file across two commits:** if task A and task B touch the same file and you must land them as separate commits, `cp <file> /tmp/<file>_final.go`, revert the file to the task-A state (reverse-patch), commit A, then `cp /tmp/<file>_final.go <file>` and commit B — never try to hand-edit the file back. Keep the working tree in the exact state the in-flight commit's guard will test (no restoring commit-B content while commit-A's guard runs). Proven: helios DOGFOOD-009/010 (2026-08-15) — 3 sibling workers in the same repo, 2 guard failures from sibling mid-edit breakage, both commits landed clean via the wait-for-green pattern; the handler/test split across two commits via /tmp staging.
+- **0-byte worker log ≠ stuck worker.** A `hermes chat -Q` worker redirected to a log file can sit at 0 bytes for 15–25+ minutes while the provider (kimi-for-coding is capacity-constrained) is slow to first response. Before killing: check `ps -o pid,etime,time,stat -p <pid>` (CPU time climbing = alive) and `grep 'API call #N: model=k3' ~/.hermes/logs/agent.log` (recent calls = working). Only kill when BOTH are flat for 20+ min. Proven: ring-runner (2026-08-01) — three Kimi workers sat at 0 bytes for 20–45 min under fleet load, then delivered; killing them early would have lost real work.
+
+## Worktree Mode (parallel ticks)
+
+If your brief says you are in an isolated git worktree (path like
+`/home/kara/worktrees/<project>-<taskid>`, branch `wt/<taskid>`):
+
+- **The worktree path IS your workdir.** Work only there. Never `cd` to the
+  main clone (`/home/kara/<project>`) or a sibling worktree — read-only
+  reference is fine, writes are not.
+- **Commit normally** (path-limited, your files only) **on your `wt/<taskid>`
+  branch. Do NOT push. Do NOT merge.** The foreman merges your branch.
+- **Do NOT run `git stash`, `git reset`, `git clean`, `git checkout <other-branch>`,**
+  or any history surgery. In a worktree these commands have NO sibling to
+  protect (each worktree has its own index + working tree), so there is no
+  excuse — tree hygiene problems are reported to the foreman, not self-fixed.
+- Guard/judge failures on YOUR files: fix and re-commit as usual. Failures
+  clearly caused by another branch's content: report, don't chase.
+- Report your branch name + HEAD hash in the final report so the foreman's
+  merge phase finds your work: `branch wt/<taskid> @ <sha>`.
+
+The old shared-tree survival protocol (path-limited commits, index.lock
+wait-for-sibling, stash-side-sibling-files-aside, hunk surgery via
+`git apply --cached`) still applies ONLY when the foreman explicitly runs a
+shared-tree parallel dispatch (legacy mode) — in worktree mode none of that
+machinery is needed, and using it (especially reset/stash) is a violation.
 
 ### 6. No Side Effects
 
@@ -64,13 +147,24 @@ If ANY command fails, fix it before committing.
 - Don't reformat files you're not changing.
 - Don't add dependencies unless the task requires them.
 - Don't change the build system unless the task requires it.
+- **Respect explicit file boundaries.** When the foreman says "Do NOT modify X" or "only add to Y," obey it literally. No help text, no CLI scaffolding, no preparatory work in forbidden files — even if it seems harmless. Violating this leaves broken partial implementations (e.g., adding `case "schedule":` in main.go without `scheduleCmd` function) that the foreman must revert.
+- **NEVER update board or state files.** Do NOT touch `.coding-hermes/tasks.md`, `.gitreins/tasks.yaml`, `.gitreins/config.yaml`, or any project board/state/config file. These are the foreman's responsibility. Marking your own task complete, spawning the next task, modifying guard config, or adding chore commits that mutate board state is scope creep. The foreman decides what's done and what's next. **Proven:** UHLP MCP-002 (2026-07-20) — worker created correct code but also modified tasks.md marking the task complete and claiming to spawn MCP-003, forcing the foreman to revert two commits. **Proven:** Mythos QUALITY-LARGE-FILES (2026-07-21) — worker toggled `.gitreins/config.yaml` test_command 5+ times during refactoring; foreman had to `git checkout -- .gitreins/config.yaml`.
+- **🪤 FABRICATED TICK ENTRIES — workers write plausible-looking board updates with false data.** When a worker writes a tick entry into `.coding-hermes/tasks.md`, it invents numbers (API call count, line counts, test counts) and writes narrative prose ("5th productive tick after 26-tick idle streak") that sound real but are hallucinated. The foreman must revert these and write the entry from actual tool output. Workers do not have access to the real board history or audit data — anything they write in tasks.md is fabrication. **Detection:** `git diff -- .coding-hermes/tasks.md` shows a tick entry that references itself ("5th productive tick") and has numbers that don't match tool output. **Proven:** Bunker Tick 51 (2026-07-28) — MONITOR-001 worker wrote a fabricated tick #51 entry claiming 48 API calls (was 34), "5th productive tick after 26-tick idle streak" (correct count but worker had no way to know this), and a VERDICT line with ground-truth-sounding numbers. All fabricated. Foreman reverted via `git show HEAD~2:.coding-hermes/tasks.md` and rewrote from real audit data. **Proven:** Bunker Tick 52 (2026-07-28) — MONITOR-002 worker not only implemented the task (commit 9db78a5) but wrote a full tick #52 entry onto the board. Fabricated claims: 29 API calls (was 6), 13 docs (was 10), 18 DuckBrain keys (was 19), "6th productive tick" (self-referential — worker claimed its own tick in the streak), "E2E-001 due (6 productive ticks since last E2E)" (foreman-only assessment, hallucinated). Also updated the Active Tasks matrix and Completed section without foreman approval — two board violations in one tick. Foreman replaced the entire entry with ground truth from audit tool output.
 
 ### 7. Verify Then Report
 
-After committing:
+**For code tasks**, after committing:
 1. Verify build + test + vet pass.
-2. Report what you did: files changed, lines added/removed, tests added.
-3. Exit cleanly.
+2. Verify the code is wired: CLI flags → handlers → routes → main.go → HTTP/gRPC listener. If you built a package that compiles but has no outward connection (no main, no handler, no serve command), report it as UNWIRED — don't claim "done."
+3. Report what you did: files changed, lines added/removed, tests added, wiring status.
+4. Exit cleanly.
+
+**For spec/doc tasks**, after writing:
+1. Verify file size meets minimum (use `wc -c`).
+2. Verify all required sections are present (use `search_files` with `^## ` pattern).
+3. Verify Mermaid/PlantUML diagrams exist if required (search for `^` + "`" + "`" + "`mermaid").
+4. Verify cross-references to prior specs/decisions are present.
+5. Report: file path, byte size, section count, diagram count, prior-spec reference count, commit hash.
 
 ---
 
@@ -98,7 +192,7 @@ Build <task description> for <project>. Workdir: <path>.
 ## Requirements
 - Follow existing code style
 - Add tests
-- Run build + vet + test before committing
+- Run build + vet + test before committing (-j4 max on C/C++)
 - Commit message: "type: description. Addresses <task-id>."
 
 ## Verification
@@ -106,9 +200,26 @@ Build <task description> for <project>. Workdir: <path>.
 2. Vet passes
 3. Tests pass (all existing + new)
 4. Guard passes
+5. Code is wired to CLI/HTTP/gRPC (not just packages that compile)
 ```
 
 ---
+
+## Foreman Dispatch Guidelines (context specificity)
+
+When dispatching a worker via delegate_task, the context MUST be tightly focused on the ONE task being dispatched. Do NOT include:
+- General project state or overview
+- Descriptions of OTHER tasks on the board (even if interesting)
+- Assessment of what's "already built" vs "yet to build" for unrelated systems
+- Multiple task descriptions in a single dispatch
+
+Workers are context-greedy — if you mention that "system X has state structs but no mechanics" in the same dispatch as "wire Y into Z," the worker will gravitate toward the larger, more interesting-sounding task (system X) instead of the specific 30-line wiring task you actually need.
+
+**Correct:** "Task: Wire asteroid colliders from pkg/environment/ into the spatial grid in pkg/engine/game_collisions.go. Read these files: pkg/environment/asteroid.go, pkg/engine/game_collisions.go. Expected scope: ~30 lines."
+
+**Wrong:** "Task: Wire asteroid colliders. By the way, the boarding/shuttle/cloak system has 16K lines of state structs but the board says no mechanics exist — check that too."
+
+**Proven:** Kobayashi-Maru Tick 54 (2026-07-25) — PHYS-collision-location worker was dispatched with context that included a summary of MECH-boarding-shuttle-cloak state. Worker spent 42 API calls and 600s building boarding/shuttle/cloak wiring (new files, game.go changes) instead of the 30-line asteroid fix. Output had to be discarded.
 
 ## Behaviour on Failure
 
@@ -123,24 +234,69 @@ If the task is ambiguous:
 2. Document your assumption in the commit message.
 3. Proceed.
 
+### ⚠️ Zero-Output Worker Failures (Foreman-Direct Fallback — 2026-07-26 hermes-canopy)
+
+**Pattern:** delegate_task workers on some providers (MiniMax-M3, DeepSeek V4 Pro)
+consume 30+ API calls over a full 600s timeout, report "completed," but produce zero
+committed output — no files written, no commands executed, no evidence they ran.
+
+**When the foreman should stop retrying:** After 2 failed delegate_task dispatches
+for the same task (no committed output in either), the foreman writes the code
+directly. Foreman-direct code is faster (2-5 min vs 600s timeout), cheaper (fewer
+API calls), and reliable for mechanical tasks: benchmarks, integration tests,
+coverage tests, wiring, offline mode.
+
+**⚠️ `delegate_task` status "timeout" does NOT mean "no output."** A worker that
+hits 600s may still have committed valid code before the timeout fired. The
+`delegate_task` result reports status "timeout" but the worker may have produced
+real commits. Always check `git log --oneline -3` and `git status` before
+declaring a worker dispatch "failed." The timeout may have been from post-commit
+hooks, build/test steps, or slow API calls — the code itself could be fine.
+Treat "timeout" as "check git log, then decide" — not as "discard and retry."
+**Proven:** Bunker Tick 51 (2026-07-28) — MONITOR-001 worker hit 600s timeout
+(34 API calls, status "timeout") but produced 2 commits (2800466, baf6e8a) with
+311 lines of working code across 9 files. Foreman nearly re-dispatched before
+checking git log. Always verify.
+
+**Proven:** hermes-canopy INT-05 (3 failures), FE-09 (4 failures), TEST-01
+(3 failures), INT-04 (1 failure) — all succeeded when foreman wrote directly.
+
+**What delegate_task IS reliable for:** E2E Playwright runs, multi-step
+investigation, reasoning-heavy analysis. Not for write-code→compile→test loops.
+
 ---
 
 ## Model Selection
 
-The foreman chooses your model based on the language:
-- Go → configured worker-go model
-- Python → configured worker-python model
-- TypeScript → configured worker-ts model
-- Other → configured worker-general model
+The foreman chooses your model based on TASK CAPABILITIES, not language:
 
-You don't choose your model. The foreman does.
+| Task needs | Model | Provider |
+|-----------|-------|----------|
+| Image processing, architecture, long context (200k+) | gpt-5.6-sol | openai-codex |
+| Spec/doc writing | gpt-5.6-terra | openai-codex |
+| Complex Go features, C++ systems, GDScript | MiniMax-M3 | minimax |
+| Go bug fixes, TypeScript fix/refactor (NOT Mythos TS — kimi-k3 hangs) | kimi-k3 | kimi-for-coding |
+| TypeScript on Mythos / large pnpm monorepos | gpt-5.6-sol | openai-codex |
+| C++ bug fix, boilerplate, CI, mechanical refactors | step-3.7-flash | stepfun |
+| Go features (non-complex) | glm-5.2 | zai-glm |
+| Heavy coding (V4 Pro), backup fallback | deepseek-v4-pro | ollama-cloud |
+| Fast mechanical work (V4 Flash) | deepseek-v4-flash | opencode-go |
+| Backup fallback only — C++, GDScript, image tasks | grok-4.5 | xai-oauth |
+
+The foreman loads capabilities from `default:/benchmarks/models/<model>` (DuckBrain, updated daily by AI Benchmark DB Updater) and matches task requirements to model strengths. You don't choose your model. The foreman does.
+
+**Anti-patterns:** grok-4.5 is backup only — MiniMax+Kimi must be exhausted first. gpt-5.6 silently fails on Go tasks — never send Go work to codex. kimi-k3 and MiniMax-M3 both hang on Mythos TypeScript (pnpm monorepo, 3253+ tests) — use gpt-5.6-sol for Mythos TS exclusively. Single worker must not spawn sub-workers or delegate.
+
+**Worker spawn mechanics (foreman-side):** see `references/worker-spawn-via-hermes-chat.md` — exact `hermes chat -Q --provider <p> -m <m> --yolo` commands per model (Terra = openai-codex/gpt-5.6-terra, Kimi K3 = kimi-for-coding/k3, Luna = openai-codex/gpt-5.6-luna), ALWAYS redirect output to a log file to diagnose silent worker death, checkpoint+resume recovery for partial output, smoke-test-before-dispatch, and the Codex-CLI-auth fallback (use the Hermes openai-codex provider instead of fixing `codex exec` auth mid-build).
 
 ---
 
-## Example
+## Examples
+
+### Code Task
 
 **Task:** "Implement urgency calculator from SPEC-S03"
-**Model:** deepseek-chat @ deepseek
+**Model:** deepseek-v4-pro @ ollama-cloud
 **Files:** `internal/scheduler/urgency.go`, `internal/scheduler/urgency_test.go`
 
 Worker:
@@ -148,6 +304,21 @@ Worker:
 2. Reads existing `internal/scheduler/urgency.go`
 3. Implements the `ComputeUrgency` and `ComputeInterval` functions
 4. Writes tests in `urgency_test.go`
-5. Runs `go build ./... && go vet ./... && go test ./... -count=1 -short`
-6. All pass → commits: "feat: implement urgency calculator from SPEC-S03. Addresses SPEC-S03."
-7. Reports: "+101 lines in urgency.go, +85 lines in urgency_test.go, 8 tests"
+5. Runs `go build ./... && go vet ./... && go test ./... -count=1 -short -parallel 4`
+6. Verifies wiring: `main.go` imports the package, CLI flag wired to `ComputeUrgency`
+7. All pass → commits: "feat: implement urgency calculator from SPEC-S03. Addresses SPEC-S03."
+8. Reports: "+101 lines in urgency.go, +85 lines in urgency_test.go, 8 tests, wired via CLI flag --urgency-calc"
+
+### Spec/Doc Task
+
+**Task:** "Write specs/T1.8-multi-transport-architecture.md — Multi-Transport Architecture Design"
+**Model:** deepseek-v4-pro @ custom
+**Context:** Must reference T1.1, T1.6, T1.7. Must include Go interfaces, Mermaid diagrams, transport selection matrix.
+
+Worker:
+1. Reads the prompt file, all three referenced specs, and AGENTS.md.
+2. Identifies conventions from prior specs: header format (status line + date + references), Go code blocks with `go` tag, Mermaid diagrams with dark-theme styling (`style ... fill:#... stroke:#...`), cross-reference format.
+3. Writes the spec covering all 9 required sections with exact Go interfaces, exact opcode structs, transport selection matrix, 2 Mermaid diagrams.
+4. Verifies: `wc -c` → 54,381 bytes (>8KB threshold). `search_files` for `^## \d+\.` → 10 sections (9 req + refs). `search_files` for `^` + "`" + "`" + "`mermaid" → 2 diagrams. `search_files` for `T1\.[167]` → 16 cross-references.
+5. Commits: "feat(spec): T1.8 — Multi-Transport Architecture Design" with co-author.
+6. Reports: "specs/T1.8-multi-transport-architecture.md, 54KB, 1254 lines, 10 sections, 2 Mermaid diagrams, 16 cross-refs to prior specs. Commit 8706036."

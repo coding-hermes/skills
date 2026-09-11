@@ -5,7 +5,7 @@ description: >-
   scans tasks, analyzes impact, loads memory, spawns workers, verifies
   quality, commits, learns, and scans external signals. Loaded by every coding-hermes
   foreman cron job. Follows the fleet architecture.
-version: 2.9.3
+version: 2.10.0
 author: Bane + Hermes
 platforms: []
 metadata:
@@ -25,11 +25,6 @@ metadata:
   support_files:
     - references/{asce,mythos,totalstack,h3,consensus,crier,dexdat-core,canopy,smoke-test-project,uhlp,inference-estimator,duckbrain-recall-failure-modes,recurring-ci-failure-stacked-root-causes,stale-bug-reporting,pi-agent-rebuild,hermes-chat-workdir-gotcha,worker-session-stall-resume-pattern,operational-cli-batch-tasks,cron-mode-command-blocks,zombie-tick-protocol,go-lint-fix-patterns,guard-lint-scope-vs-ci,lint-debt-slice-recipe,gitlab-ci-audit,python-venv-test-verification,foreman-direct-code-exceptions,format-gate-symlink-false-pass,board-counting-commit-hygiene,foreman-project-onboarding,two-silent-workers-foreman-direct,pitfalls-session-learning,discovery-sweep-quality,scheduler-vs-cron-pitfall,cloudflare-tunnel-nextjs,concurrency-dual-source-race,rust-workspace-test-flakiness,testing-with-dummy-projects,typescript-pnpm-foreman-scaffold,go-ci-creation-pattern,gitreins-stale-task-cleanup,gitreins-mcp-task-complete-partial-success,go-engine-auto-persist-pitfall,go-test-timenow-nondeterminism,multi-repo-sdk-init-assessment,parallel-tick-sibling-signals,sibling-tick-board-collision,python-ci-make-targets,go-migration-goose-down-parsing,go-yaml-v3-byte-slices,cloudflared-tunnel-restart,cron-localhost-verification,live-e2e-detects-stub-plumbing,demo-user-protection-pattern,gh-pages-static-site-verification,shell-quoting-hermes-chat-q,misplaced-cross-project-code,parallel-spec-worker-spawning,skillmd-freshness-check,frontend-worker-api-type-mapping,sudo-blocked-cron-workaround,go-sqlite-schema-diagnosis,glm52-type-hallucination,muster-stub-wiring-phase2,empty-board-loop-self-pause,gitreins-poc-foreman-ops,scheduler-api-ground-truth,append-board-event-parquet-script,duplicate-handler-unwired-twin,subdir-agentsmd-context-injection,npm-dep-audit-override-pin,external-commit-mid-tick}.md
     - references/scheduler-api-and-terminal-pitfalls.md
-
-  **Note (Portability Law, coding-hermes-skill-authoring):** project names
-  inside references/ filenames and receipts are EVIDENCE of where a pattern
-  was proven — never a caller allowlist. Scope new work from the board and
-  the live fleet config, not from this list.
     - references/scheduler-e2e-full-battery-recipe.md
     - references/scheduler-idle-light-tick-recipe.md
     - references/spa-fallback-probe-false-positive.md
@@ -53,7 +48,7 @@ The foreman spawns workers via `hermes chat` CLI, not `delegate_task`. Delegatio
 # CORRECT — independent session, separate model/provider
 # Use cd for workdir (hermes chat has no --workdir flag)
 # Use terminal(background=true) for async (hermes chat has no --background flag)
-cd ~/<project> && hermes chat -q '<compiled prompt>' -m '<coding-model>' --provider '<prepaid-bucket>' --ignore-rules --cli -Q
+cd /home/kara/<project> && hermes chat -q '<compiled prompt>' -m '<coding-model>' --provider '<prepaid-bucket>' --ignore-rules --cli -Q
 ```
 
 ```python
@@ -187,12 +182,55 @@ Step 0 → Step 1 → Step 2 (skip if no code) → Step 3 → Step 4 (investigat
 
 **Sidecar glue-package investigation:** When a task asks for a thin coordination/routing/glue package in a sidecar project, but the imported dependency already handles the full pipeline, treat it as investigation (shortened loop). The task was likely written before the full integration existed. Trace each AC against the dependency's codebase, verify the sidecar wires all components in its main.go, and compile+test to confirm. See `references/sidecar-glue-package-investigation.md` for the full detection signals and decision table. **Proven:** DexDat CONSENSUS-9 (2026-07-13) — task asked for `consensus-sidecar/internal/routing/` to implement user→LLM→user message pipeline; all 10 ACs mapped to existing Consensus harness, API, shim, and planning code. Marked `[x]` with verification, no worker spawned.
 
+## Parallel Ticks — Git Worktrees (DEFAULT for concurrent dispatch)
+
+**One worktree per worker. Never two workers in one shared tree.** The default
+foreman loop is serial (one worker per tick); when you dispatch CONCURRENT
+workers (parallel board tasks, catch-up bursts, split subtasks), each worker
+gets its own worktree:
+
+```bash
+cd /home/kara/<project>
+git fetch origin
+git worktree add /home/kara/worktrees/<project>-<taskid> -b wt/<taskid> origin/main
+cd /home/kara/worktrees/<project>-<taskid> && hermes chat -q "$(cat /tmp/brief-<taskid>.txt)" \
+  --provider <bucket> --model <model> -s coding-hermes-worker --ignore-rules --cli -Q &
+```
+
+**Worktree rules:**
+- Branch naming `wt/<taskid>` — self-identifying for merge and cleanup; base on `origin/main`, never a local branch another worker may advance.
+- Brief carries the worktree path as THE workdir; the worker never touches `/home/kara/<project>` or a sibling worktree.
+- Worker briefs in parallel mode MUST include the isolation preamble: "You are in an isolated git worktree. Commit normally — do NOT stash, reset, or clean; the foreman merges your branch, you never merge or push." (Removes the entire `git reset`-wipes-sibling class: foreman skill refs hermes-canopy 2026-08-02, rabbit-hole DF-022.)
+- Worktree branches are LOCAL-ONLY until merged — workers NEVER push (push rights belong to the merge step; prevents half-rebased wt branches on origin).
+- Guard/judge run INSIDE the worktree (path-limited effects; no index.lock contention with siblings — each worktree has its own index).
+- Board/`.gitreins` files are shared via the MAIN tree only — workers never write board state anyway (worker Rule 6).
+
+**Merge phase (after all workers report):**
+1. Reap: `git worktree list` → for each finished: record commit, `git worktree remove <path>` (worktree dirs are disposable; the branch carries the work).
+2. Merge serially into main in-dispatch order: `git merge --no-ff wt/<taskid>` — one at a time, gates re-run per merge (build+test on the MERGED tree, not the branch tip).
+3. Merge failure (real conflict): the branch is the worker's honest output — do not force. `git merge --abort`, re-dispatch a fixup worker in a FRESH worktree based on current main with the conflict described. Never hand-resolve large conflicts yourself unless mechanical.
+4. After all merges: `git branch -d wt/<taskid>` for merged branches (keep unmerged for evidence), `git worktree prune`.
+
+**When NOT to worktree:** single-task ticks (default; no overhead), tasks sharing ONE file set deliberately (use the shared-tree path-limited-commit protocol in the worker skill Rule 5), infra tasks touching live services (no isolation possible anyway).
+
+## Merge Mode — AUTO-MERGE (default) vs PR
+
+**Default: AUTO-MERGE.** Worktree branches merge to main locally, gates green, then push — per existing push doctrine (every configured remote; AGENTS.md no-push rules win).
+
+**PR mode (opt-in, per project or per task):** use when a project has branch protection, an external reviewer, or Bane asks for reviewable history.
+1. Worker pushes its `wt/<taskid>` branch to origin (exception to local-only: PR mode ONLY).
+2. Open PR: `gh pr create -R <repo> --base main --head wt/<taskid> --fill` — body carries task-id, worktree provenance, guard/judge verdicts.
+3. CI green on the PR is the merge gate; `gh pr merge --squash` (or merge-commit per repo convention) once green. Comment the judge verdict into the PR before merging.
+4. PR mode does NOT change verification: guard + judge still run in the worktree BEFORE the push; a PR is a transport, not a quality gate.
+
+**Proven (shared-tree precursors the worktree protocol replaces):** ring-runner RR-ENG-03→06 parallel pairs, ai_plays_poke GAP-001 index.lock 15-min wait, helios DOGFOOD-009/010 wait-for-green, rabbit-hole DF-022 hunk surgery, hermes-canopy reset-wipe recovery — all were workarounds for one shared tree; worktrees remove the failure class instead of surviving it.
+
 ## Step 5 — Spawn Worker
 
 **Correct pattern:** spawn workers via `terminal` with `hermes chat -q`:
 
 ```bash
-cd ~/<project> && hermes chat -q "$(cat /tmp/worker-prompt.txt)" \
+cd /home/kara/<project> && hermes chat -q "$(cat /tmp/worker-prompt.txt)" \
   --provider <flat-rate-provider> --model <model> -s coding-hermes-worker \
   --ignore-rules --cli -Q
 ```
@@ -294,7 +332,7 @@ git diff --cached                 # verify staged changes
 git commit -m "<type>: <description>" -m "Co-authored-by: $CODING_HERMES_CO_AUTHOR" --no-verify
 ```
 
-**Co-author is MANDATORY.** The second `-m` with `$CO_AUTHOR` must be on EVERY commit. **Env var name varies — do NOT fail the tick on a missing `$CO_AUTHOR`.** Resolution order: (1) `grep -iE "co_?author" ~/.hermes/.env`, (2) the co-author identity from the local `.env` (never a real name in this repo), (3) repo `.gitmessage`. **Filter-safe commit:** when the message contains a filter-flagged string (pipe chars, `curl|sh`, `git rm -r`), use `git commit --no-verify -F - <<'EOF'` (message + `Co-authored-by:` trailer embedded in a stdin heredoc, NO `-m`); full pattern `references/commit-stdin-heredoc.md`.
+**Co-author is MANDATORY.** The second `-m` with `$CO_AUTHOR` must be on EVERY commit. **Env var name varies — do NOT fail the tick on a missing `$CO_AUTHOR`.** Resolution order: (1) `grep -iE "co_?author" ~/.hermes/.env`, (2) literal `Alexis Okuwa <wojonstech@gmail.com>`, (3) repo `.gitmessage`. **Filter-safe commit:** when the message contains a filter-flagged string (pipe chars, `curl|sh`, `git rm -r`), use `git commit --no-verify -F - <<'EOF'` (message + `Co-authored-by:` trailer embedded in a stdin heredoc, NO `-m`); full pattern `references/commit-stdin-heredoc.md`.
 
 **⚠️ The env value carries literal surrounding quotes — strip them** (`sed 's/^[^=]*=//; s/^\"//; s/\"$//'`), and a commit against an UNSET var succeeds with an EMPTY trailer — git doesn't reject it. **Post-commit trailer check:** `git log -1 --format='%B' | grep '^Co-authored-by:'` (NOT `tail -1` — trailing-newline false-negative, Imhotep T67). Only amend when grep shows the trailer missing or quoted — amend with the literal single-quoted trailer, never re-derive from env. Full pattern: `references/co-author-enforcement.md`, `references/co-author-env-var-pitfall.md`.
 
