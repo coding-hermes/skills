@@ -211,6 +211,27 @@ cd /home/kara/worktrees/<project>-<taskid> && hermes chat -q "$(cat /tmp/brief-<
 3. Merge failure (real conflict): the branch is the worker's honest output — do not force. `git merge --abort`, re-dispatch a fixup worker in a FRESH worktree based on current main with the conflict described. Never hand-resolve large conflicts yourself unless mechanical.
 4. After all merges: `git branch -d wt/<taskid>` for merged branches (keep unmerged for evidence), `git worktree prune`.
 
+**Wave composition (eligibility):** a wave is ≥2 workers dispatched in ONE tick.
+Tasks are wave-eligible only if mutually independent: no depends_on edges between
+them AND disjoint file sets (overlapping hilo blast radius = not eligible). Cap a
+wave at 3 workers (each multiplies guard+judge cost; the 2h tick timeout bounds
+wave wall-clock — one long worker starves the others' merges). Mark every picked
+task `in_progress` BEFORE dispatching its worker (a crashed tick must leave
+recoverable state, not silent loss). ONE wave per tick — never a second wave while
+one runs. Workers get sibling awareness in their briefs (who else is running), but
+zero coordination: disjoint scopes, own worktrees.
+
+**Foreman merge checklist (the foreman's OWN verification — the worker's judge
+covers the branch, the foreman covers the merge):** per merged branch:
+(1) merge clean, or conflicts went to a fixup worker in a fresh worktree (never
+hand-resolved beyond the mechanical); (2) full gates re-ran on the MERGED tree,
+not the branch tip; (3) worktree removed + branch merged or explicitly preserved
+as evidence; (4) board truth: every wave task landed (complete, or failed WITH a
+reason), events carry branch @ sha; (5) no worker pushed anywhere (worktree
+branches are local-only in auto-merge mode — push is foreman-only, post-merge);
+(6) DuckBrain/off-by-one writes reflect the whole wave, not one worker. The tick
+report includes a wave table: task → branch @ sha → judge verdict → merge result.
+
 **When NOT to worktree:** single-task ticks (default; no overhead), tasks sharing ONE file set deliberately (use the shared-tree path-limited-commit protocol in the worker skill Rule 5), infra tasks touching live services (no isolation possible anyway).
 
 ## Merge Mode — AUTO-MERGE (default) vs PR
