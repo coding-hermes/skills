@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-multi-agent-panel-review
-description: Decide or verify with a panel of 3-5 diverse full Hermes sessions — claim-checklist judge rounds plus a single strong-model deep-review. Use before approving money gates, specs, redesigns, or any evidence-heavy deliverable.
-version: 1.0.0
+description: Decide or verify with a panel of 3-5 diverse full Hermes sessions — every judge verifies every claim against a shared claim-checklist, then one strong-model deep-review. Use before approving money gates, specs, redesigns, or any evidence-heavy deliverable.
+version: 2.0.0
 author: totalwindupflightsystems
 license: MIT
 metadata:
@@ -9,11 +9,13 @@ metadata:
     tags: [verification, judges, panels, multi-agent, decision-review]
 ---
 
-# Multi-Agent Panel Review — full Hermes sessions as judges
+# Multi-Agent Panel Review — process-first judge panels
 
 One reviewer has one blind spot. Dispatch 3-5 **diverse** models as independent
-full Hermes sessions (own process, full tools, own clock), each with a
-CLAIM CHECKLIST — never an open critique. Every judge returns
+full Hermes sessions (own process, full tools, own clock). **Every judge
+verifies EVERY claim** — the shared CLAIM CHECKLIST is the unit of work, never
+a per-judge slice. Diversity supplies different *error-class emphasis*, not a
+division of labor. Every judge returns
 `[VERIFIED|CONTRADICTED|UNRESOLVED]` per claim with file/line evidence. The
 coordinator then re-verifies every CONTRADICTED lead against raw data before
 merging. This is review-and-decide for: money gates, specs, architecture
@@ -25,30 +27,74 @@ deliberation MCP), or worker coding dispatch (that is a worker, not a judge).
 ## The two modes
 
 **Parallel judge round (3-5 models).** One shared claim-checklist brief, one
-session per model, outputs to separate files. Diversity is the point —
-different model families catch different error classes (arithmetic, roster,
-official-docs, structural).
+session per model, outputs to separate files. Every judge works the full
+checklist. Convergence between different model families is the signal —
+different families catch different error classes (arithmetic, roster,
+official-docs, structural) because of *emphasis*, never because a claim was
+assigned to them.
 
-**Deep-review (1 strongest model).** When the stakes are "what is STILL wrong
-/ did this repeat past failures", one super-smart model with a repeat-offense
-section finds deeper issues than any parallel round — especially the coordinator's
-own recent "fix" reintroducing the banned failure class.
+**Deep-review (1 strongest available model).** When the stakes are "what is
+STILL wrong / did this repeat past failures", one strong model with a
+repeat-offense section finds deeper issues than any parallel round —
+especially the coordinator's own recent "fix" reintroducing the banned
+failure class.
 
-## Model selection (verify lanes first, never from memory)
+## Model selection — a PROCESS, not a roster
 
-Check the model routing registry for live lanes before dispatch; subs before
-PAYG. A proven diverse set:
+Do not copy model names from any example, including this skill's history.
+Diversity is the requirement; specific lanes are disposable instances:
 
-| Role | Model @ provider (example lanes) |
-|---|---|
-| Deep-review | strongest available reasoning lane (e.g. gpt-6-astra @ openai-codex) |
-| Facts/numbers | k3 @ kimi-for-coding |
-| Arithmetic/fit | glm-5.3 @ zai-glm |
-| Docs contradictions | deepseek-v4-pro @ deepseek |
-| Fifth reviewer | qwen3.8-max @ opencode-go (spare: grok-4.5 @ grok-build) |
+1. **Verify lanes live, never from memory.** Query the model routing registry
+   for lanes that exist and authenticate RIGHT NOW. A stale example lane that
+   401s converts the round into relaunch noise.
+2. **Pick for family diversity, not scoreboards.** 3-5 lanes from >=3 distinct
+   model families. The same family twice adds less than a new family once.
+3. **One clearly-strongest lane is the deep-review seat** — identified by
+   checking the registry, not by habit. If no lane stands out, run the
+   parallel round only.
+4. **Substitution law.** A lane that flakes mid-round is replaced by another
+   lane of a DIFFERENT family — never by "whatever is fastest".
+5. **Roles are lenses, not assignments.** "Facts/numbers" or "docs
+   contradictions" describe what a given family tends to catch first; every
+   judge still receives and works the ENTIRE checklist.
 
-All five lanes must exist in the registry before launch. If a lane flakes
-mid-round, substitute the spare rather than re-running the same family.
+## Transports — two ways to run a judge session
+
+Pick per run; both carry the identical brief and return identical verdict
+files. A panel may mix transports.
+
+**A. CLI (`hermes chat`) — interactive-adjacent, simple, per-process.**
+
+```bash
+hermes chat -q "$(cat /tmp/panel-brief.txt)" -m <model> --provider <p> \
+  --ignore-rules -Q > /tmp/review-j1.txt 2>&1
+```
+
+Good for: small panels, when you want each judge in its own OS process with
+its own workspace. Long briefs go in a file referenced by path; huge inline
+`-q` strings trip outer command gates and the launch silently never happens.
+
+**B. HTTP gateway (`POST /v1/responses`) — the unattended/batch path.**
+
+The same gateway the scheduler uses for fleet ticks. One long-lived gateway,
+N concurrent judge requests, no per-judge process management:
+
+```bash
+curl -sS -X POST "$GATEWAY_URL/v1/responses" \
+  -H "x-api-key: $GATEWAY_KEY" -H "Content-Type: application/json" \
+  -d "$(jq -n --rawfile b /tmp/panel-brief.txt \
+        '{model: $model, input: $b}')"
+```
+
+Auth is the `x-api-key` header (Bearer gets 401). Good for: batch panels,
+containerized judges, anything the scheduler would run unattended — the
+transport the fleet already trusts for its own ticks. Verify the gateway
+resolves the model lane BEFORE fanning out (one probe request per lane; a
+stale key kills whole fan-outs — see pitfalls).
+
+Either transport: run judges in parallel (10-25 min), write to separate
+output files, and never share state between judges — independence IS the
+method. If a judge cannot complete: an unfinished review is a failed review.
 
 ## Brief anatomy (claim checklist, not vibes)
 
@@ -68,24 +114,6 @@ mid-round, substitute the spare rather than re-running the same family.
    #1 panel killer.
 6. **Pre-run every command the brief prescribes** — judges execute verbatim;
    one broken expected value converts the round into false-CONTRADICTED noise.
-
-## Dispatch pattern
-
-```bash
-# Write ONE brief per mode; reference it by file, never inline
-hermes chat -q "$(cat /tmp/panel-deep-brief.txt)" -m <strong-model> --provider <p> --ignore-rules -Q > /tmp/review-deep.txt 2>&1
-hermes chat -q "$(cat /tmp/panel-brief.txt)" -m <judge-1> --provider <p1> --ignore-rules -Q > /tmp/review-j1.txt 2>&1
-# ... one per judge; all with background + completion notify
-```
-
-- Long briefs go in a file referenced by path; huge inline `-q` strings trip
-  outer command gates and the launch silently never happens.
-- Run all judges in parallel (background); they take 10-25 min.
-- On completion, check each output **ends with the detector line**; a session
-  id with no verdict above it = relaunch with the budget rule.
-- Collect or kill orphans: interrupted rounds leave background judges burning
-  tokens — `pgrep -f "hermes chat"`, harvest finished outputs, kill stragglers,
-  and state which verdicts never returned.
 
 ## Merge discipline (coordinator's job)
 
@@ -119,7 +147,8 @@ parser that fails loudly on missing detector lines.
   every downstream count lies (100% green is meaningless). Fix representation
   before patching symptoms.
 - **Stale credentials kill whole fan-outs** — verify the provider key resolves
-  in the execution env for ALL lanes before launching five sessions.
+  in the execution env for ALL lanes before launching five sessions (CLI:
+  provider env; gateway: the key actually answers one probe call).
 - **Judge reviews the wrong version** — point the brief at an explicit file
   path; a judge dispatched at vN reports on vN.
 - **Tautological tests** — a regression test that cannot fail is a lie.
@@ -127,3 +156,7 @@ parser that fails loudly on missing detector lines.
   capacity or success-rate claim.
 - **Hardcoded numbers in generators** — a number that cannot be recomputed from
   the data layer is a bug, not a finding. Judges should audit the generator.
+- **Example-lane rot** — any model/provider pair written in a brief, runbook,
+  or skill is an INSTANCE, not doctrine. Before dispatch, re-derive the lane
+  set from the live registry; if the registry disagrees with the example, the
+  registry wins and the example is already wrong.
