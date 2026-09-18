@@ -4,7 +4,7 @@ description: >-
   How to operate the coding-hermes weight-budget scheduler. Covers project
   management via HTTP API, monitoring tick outcomes, debugging stuck ticks,
   tuning budget/concurrency/cooldown, and the verify test suite.
-version: 3.17.0
+version: 3.18.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -39,6 +39,31 @@ metadata:
 > until `duckbrain-http.service` (systemd user unit, port 3000) exists.
 > Also: `schedulerd` now persists logs to `~/.hermes/coding-hermes/scheduler.log`
 > (`-log-file` flag, default on) — always grep it first when debugging.
+
+> **Fleet shape — caps and admission (Bane 2026-09-17):** the operator's model
+> is three dials, not defaults. **Global** `--max-concurrent 10` (daemon flag in
+> the systemd USER unit `~/.config/systemd/user/coding-hermes-scheduler.service`
+> — the system-scope unit under `/etc/systemd/system/` is a dormant relic and
+> editing it changes nothing). **Foremen** namespace `coding-hermes`
+> `max_concurrent = 8` — their guaranteed room. **Each satellite namespace**
+> (`qa`, `pm`, `dogfood`, `duckbrain-sync`, `releases`) `max_concurrent = 1`, so
+> a satellite family can hold at most one global slot. Admission mode is
+> `tasks` ONLY for `coding-hermes` (fast while the board has real work, timer
+> once only perpetual rows remain) and `cooldown` for every satellite (their
+> work is cadence-driven). `tasks` requires board OWNERSHIP (SCHED-GAP-141,
+> `projects.board_ownership`, migration v32) — a lane reading its primary's
+> board through a symlinked `board/` directory does not qualify. Verify the
+> whole shape with `python3 ops/check-fleet-invariants.py` (read-only, exit 1
+> on violation) before and after any change; the cooldown/pin half is
+> `python3 ~/.hermes/scripts/fleet-cooldown-policy.py --verify`.
+>
+> **Spawn paths that bypass the packer:** the orphan re-nudge
+> (`resumeOrphans`) and the API spawn endpoint do not go through the packer, so
+> a namespace cap must be enforced on those paths too — SCHED-GAP-142 pinned the
+> nudge path after a restart re-nudged 3 `<project>-sync` orphans against a cap
+> of 1 (TestGAP142_StartupNudgeRespectsNamespaceCap). Trust per-namespace
+> `running + queued` counts, never `running` alone: a queued row already owns a
+> future slot.
 
 The scheduler daemon (`schedulerd`) replaces static foreman cron jobs with a dynamic weight-budget knapsack packer. Projects run under a shared compute budget, prioritized by urgency, with per-project delivery via Hermes' gateway.
 
@@ -410,7 +435,7 @@ curl -X PUT /api/v1/projects/my-project \
 curl -X DELETE /api/v1/projects/my-project
 ```
 
-**API field names are case-sensitive.** The API returns camelCase (`CooldownS`, `RepoURL`, `NamespaceID`) and expects the same casing on PUT. Snake_case variants (`cooldown_s`, `repo_url`, `namespace_id`) are silently ignored — the PUT returns success with the old value unchanged. Always match the casing shown in GET responses. **Proven:** ASCE zombie tick #204 — `{"cooldown_s": 43200}` returned CooldownS=900 (unchanged); `{"CooldownS": 43200}` in full-object PUT worked.
+**API field names: snake_case is the contract, and ALWAYS read back after a PUT.** The API decodes both cases today (snake_case matches the DB/JSON tags: `cooldown_s`, `cooldown_floor_s`, `admission_mode`, `max_concurrent`, `board_ownership`), but a key the decoder does not recognise is a **silent no-op**: the PUT returns 200 with the old value unchanged. Never trust the 200 — re-GET the field and compare. **Proven:** a snake_case `{"cooldown_s": 43200}` PUT once returned CooldownS unchanged (900) while a full-object PUT with camelCase took (ASCE zombie tick #204); the fix either way is the same read-back check, not a casing guess.
 
 **⚠️ GET `/api/v1/projects/<name>` wraps the project under a `.project` key with a sibling `latest_tick`.** A top-level jq path (`jq -r '.CooldownS'` or `'{CooldownS, Enabled}'`) returns ALL NULLS — the payload is `{"latest_tick": {...}, "project": {...}}`. Always parse `.project.<Field>`:
 ```bash
