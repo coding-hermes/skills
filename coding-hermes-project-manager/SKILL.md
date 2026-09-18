@@ -10,7 +10,7 @@ description: >-
   items, verifies the fixes with real commands, updates statuses, and escalates
   stale items. Owns the fleet board as its project list, reports to the user as
   its stakeholder, and leaves a decision trail in DuckBrain.
-version: 1.0.0
+version: 1.1.0
 category: software-development
 ---
 
@@ -90,11 +90,39 @@ picked up is worse than no task — it's theater. Gate every candidate:
 | G4 **Scheduler sees it** | Board file is at the path the foreman reads (`.coding-hermes/tasks.md` or `.coding-hermes/board/tasks.jsonl`), committed or writable | Write + commit |
 | G5 **Foreman woken** | After writing, if CooldownS ≥ 14400 → `PUT {"CooldownS":900,"DecayRate":1.0}` | Do it (never for disabled) |
 | G6 **No zombie block** | Project has no `status='running'` tick with `session_id IS NULL` (zombie rows block picks) — check `~/.hermes/coding-hermes/scheduler.db` | Clear row, `POST /api/v1/evaluate` |
-| G7 **Dedup** | No existing open task with the same problem (check board + ledger) | Merge or skip |
+| G7 **Dedup** | No existing open task with the same problem — fingerprint by CONTENT, never by id (see "G7 in practice" below) | Merge or skip |
 
 Only tasks that pass ALL gates get written. For each gated-in task, record in
 the ledger: the gate results (esp. G5/G6 actions taken) so the cycle report
 can show "added X tasks, woke Y foremen, cleared Z zombies".
+
+### G7 in practice — dedupe by CONTENT, never by id
+
+On QA and dogfood boards the row id is a **rotating cycle slot, not a finding
+identity** (measured 2026-09-17). One board carried 85 rows named
+`QA-CONSENSUS-1` holding **64 distinct titles**; another carried 11 rows named
+`DF-CRIER-1` with 11 distinct titles; `QA-HERMES-DAGGER-1` ×7 = 6 distinct
+titles. So an id match proves nothing, and an id mismatch hides real duplicates
+(one recurring verify-key bug was filed under 15 different ids). Fingerprint the
+finding, not the name: normalise title+detail (lowercase; strip punctuation,
+dates, numbers, commit shas, volatile counts) and key on that.
+
+- Same fingerprint, several open rows → keep the OLDEST as canonical, mark the
+  rest `status='duplicate'` with `superseded_by=<canonical id>` and one line of
+  why. Never delete a row; never rewrite a closed one.
+- Same id, different content → the id was reused. Give each distinct finding its
+  own stable id (`<PREFIX>-<PROJECT>-<next free>`) and record the rename in
+  `foreman_note`.
+- Repair while you are in there: ids that are only digits, priorities outside
+  P0-P4, and double-encoded rows (a priority value like
+  `P1","source":"qa-dagger` is a corrupt line — re-encode the whole row as valid
+  JSON, keeping the original text in `foreman_note`).
+- Write atomically: temp file in the same directory → re-parse it line by line →
+  rename over the original. On a parse failure restore the old file and report
+  the failure instead of committing.
+- The PM lane in the scheduler is the only writer of a board during its tick;
+  hunters read. Two writers on one board is the corruption this gate exists to
+  prevent.
 
 ## Step 4 — Write Gated Tasks + Wake Foremen
 
