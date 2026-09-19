@@ -59,7 +59,7 @@ curl -s -X POST http://localhost:9090/api/v1/projects -H "Content-Type: applicat
 ```
 
 Then:
-- `~/.hermes/venvs/board/bin/python3 ~/.hermes/scripts/fleet-cooldown-policy.py --apply`
+- `~/.hermes/venvs/board/bin/python3 ~/.hermes/scripts/fleet-cooldown-policy.py --apply (RETIRED 2026-09-19 — use fleet-sync.py --write, DB is the source of truth; see coding-hermes-scheduler/references/fleet-config-db-source-of-truth.md)`
   regenerates fleet.toml overrides. It only REDUCES cooldown toward target
   (900 when board has ≥1 real pending task, else 7200) — a project created at
   900 stays 900 even with 0 pending ("leave (below target)").

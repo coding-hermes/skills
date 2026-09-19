@@ -16,6 +16,18 @@ metadata:
       - coding-hermes-foreman
 ---
 
+> **⚠️ POLICY UPDATE (2026-09-19, Bane):** the cooldown-correction flow in this
+> skill's older sections is RETIRED. The scheduler DB is the single source of
+> truth; `~/.hermes/fleet.toml` is a one-way MIRROR written by
+> `scripts/fleet-sync.py --write` (in this skill's scripts/ dir). Change pacing
+> with one API PUT — never by hand-editing fleet.toml, never via
+> `fleet-cooldown-policy.py --apply` (now exits 2; its REDUCE/RAISE/PROMOTE/
+> REVERT rules fought operator PUTs and reverted pins on restart). Read
+> `references/fleet-config-db-source-of-truth.md` for the full policy + migration.
+> Sections below that reference the old --apply flow are kept for the audit
+> trail; where they conflict with this banner, the banner wins.
+
+
 # Coding Hermes Scheduler — Operations & API
 
 > **Starvation / ghost-project diagnosis:** see
@@ -55,7 +67,7 @@ metadata:
 > board through a symlinked `board/` directory does not qualify. Verify the
 > whole shape with `python3 ops/check-fleet-invariants.py` (read-only, exit 1
 > on violation) before and after any change; the cooldown/pin half is
-> `python3 ~/.hermes/scripts/fleet-cooldown-policy.py --verify`.
+> `python3 ~/.hermes/scripts/fleet-cooldown-policy.py --verify` (report-only; --apply retired — mirror via fleet-sync.py).
 >
 > **Spawn paths that bypass the packer:** the orphan re-nudge
 > (`resumeOrphans`) and the API spawn endpoint do not go through the packer, so
@@ -1361,8 +1373,7 @@ or from `hermes send --list telegram` — do NOT guess the thread ID.
    print(n)
    EOF
    ```
-4. **Ground truth** — run `python3 ~/.hermes/scripts/fleet-cooldown-policy.py` (dry-run,
-   NO `--apply`). It prints `PROJECT PENDING COOLDOWN TARGET ACTION` — the REDUCE line
+4. **Ground truth** — run `python3 ~/.hermes/scripts/fleet-sync.py` (dry-run mirror diff — the DB is the source of truth; --apply is retired). It prints `PROJECT PENDING COOLDOWN TARGET ACTION` — the REDUCE line
    is the policy's own verdict.
 
 **Cooldown matrix (Bane 2026-07-31):** 1+ real pending → **900s** (15m fast mode);

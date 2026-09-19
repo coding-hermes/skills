@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 """Fleet cooldown policy — matches supervisor skill + Bane directives.
 
-Cooldown matrix (Bane 2026-08-07 — THREE speeds):
-  - 900s  (15m)  — PRIORITY. If a project is at 900s, LEAVE IT THERE.
-                   Nothing in this script lowers or raises 900.
-  - 7200s (2h)   — DEFAULT baseline for the fleet.
-  - 43200s (12h) — COMPLETED (no real work; NEVER-DONE perpetual tasks
-                   are fine at this tier).
+Cooldown matrix (Bane 2026-09-09 — 6h baseline, NO sub-6h pins):
+  - 3600s (1h)  — FAST. Operator-designated only; the fleet-wide re-pin
+                   moved every project to 21600 (Bane: "we are just
+                   lighting money on fire this way" at 900/3600).
+  - 21600s (6h) — DEFAULT baseline for the fleet.
+  - 43200s (12h) — COMPLETED (no real work) / elevated anti-flood pins.
 
-Correction rules (Bane 2026-08-07):
-  1. Any project BELOW 900s (e.g. 600) → RAISED back to 900s.
-  2. Project at 900s → untouched, always.
-  3. Project above 7200s WITH real work (pending board items or open
-     stand-in gaps) → moved back to 7200s (2h) — not 900s.
-  4. Project at 7200s with no work at all → promoted to 43200s (12h,
-     completed tier). Promotions are the only other allowed increase.
+Correction rules (Bane 2026-09-09, supersede 2026-08-07):
+  1. Any live cooldown BELOW the fast tier (3600) → wake residue, NOT
+     intent: REVERT to the fleet.toml pin (now always >= 21600), or the
+     fast tier when no pin exists. The old "leave 900 alone" hard-skip
+     fossilized stand-in wake-PUTs as operator intent — removed.
+  2. Project at 3600 with pin == 3600 → operator fast tier, untouched.
+  3. Project above 21600 WITH real work → REDUCE to 21600 (6h default).
+  4. Project below 21600 with pin != own pin → RAISE to 21600 (default).
+  Promotions to 43200 on empty boards are the only other allowed increase.
+  Every policy PUT also re-snapshots cooldown_floor_s = cooldown_s (the
+  adaptive progress path resets cooldown to the floor; a stale sub-6h
+  floor re-poisons the pin on the project's next committing tick —
+  proven 2026-09-09: h3 ran 900s against a 43200 pin for 2 days).
 
 Usage: python3 fleet-cooldown-policy.py [--apply]
 """
-import importlib.util
 import json
 import os
 import re
@@ -26,20 +31,53 @@ import subprocess
 import sys
 import urllib.request
 
-# ── Self-bootstrap: re-exec with the durable board venv (has duckdb) ──
-BOOTSTRAP_PY = os.path.expanduser('~/.hermes/venvs/board/bin/python3')
-if importlib.util.find_spec('duckdb') is None and os.path.exists(BOOTSTRAP_PY):
-    os.execv(BOOTSTRAP_PY, [BOOTSTRAP_PY] + sys.argv)
-
 API = 'http://127.0.0.1:9090'
-TARGET_ACTIVE = 900       # PRIORITY — Bane-designated fast projects (15m)
-TARGET_IDLE = 7200        # DEFAULT — fleet baseline (2h)
+TARGET_ACTIVE = 3600       # FAST — Bane-designated fast projects (1h; was 15m/900)
+TARGET_IDLE = 21600        # DEFAULT — fleet baseline (6h; was 2h/7200 — Bane 08-15: "default 4 or 6 hours")
 TARGET_COMPLETED = 43200  # COMPLETED — no work, verified done (12h)
 TARGET_CI = 1800          # CI failing + CI tasks on board
 
 # PRIORITY tier (900s) is set manually (API PUT) — this script never
 # touches projects already at 900. It only enforces the floor (below-900
 # → 900), the 2h default, and the completed tier.
+
+# ── Elevated operator pins (SCHED-GAP-012, 2026-08-10) ────────────────
+# Projects whose fleet.toml pin deliberately sits ABOVE the 7200 default.
+# The policy must NEVER write below the canonical pin: the REDUCE rule and
+# the fleet.toml regen both clobbered these (h3: 34 consecutive clobbers,
+# h3 board #255→#287, last 2026-08-10 17:49Z; warpfs: restored 06:33 →
+# clobbered by ~08:00 same day). Hard-skip, same semantics as the 900 tier.
+ELEVATED_PINS = {
+    'h3': 43200,      # Bane 2026-08-27: h3 family ticks too fast (5 rows × 6h = 11 ticks/24h) — 12h anti-flood pin
+    'h3-sdk-go-foreman': 43200,
+    'h3-sdk-python-foreman': 43200,
+    'h3-sdk-typescript-foreman': 43200,
+    'h3-shim-foreman': 43200,
+    'warpfs': 21600,  # Bane 2026-08-19: ALL projects to 6h window for now
+}
+
+# OPERATOR_7200 — Bane-designated 2h FAST projects (killer projects under active
+# development). The RAISE rule must never lift these to the 6h default, and the
+# fleet.toml regen always writes the canonical 7200 (Bane 2026-08-23).
+#
+# ── Adaptive-cooldown arming (SCHED-GAP-1; goal Bane 2026-09-04, shipped
+# 2026-09-09) ──
+# The speed-control money lever: foreman-lane projects arm
+# adaptive_cooldown — the scheduler doubles cooldown per consecutive
+# no-progress tick up to the ceiling, and any committed tick or new board
+# row resets it to the floor (= the cooldown pin). The ceiling MUST be
+# emitted explicitly: the loader defaults an absent cooldown_ceiling_s to
+# 604800s (7 days), not 8x. Arming lives HERE because (a) the loader
+# re-pins adaptive_cooldown=false for projects without the key at every
+# restart, and (b) hand-edits to fleet.toml are clobbered by the next
+# --apply. Sync/qa/pm/dogfood lanes stay OFF until the upstream-quiet
+# signal ships — arming them now would only mask upstream outages.
+ADAPTIVE_LANES = {"coding-hermes"}
+ADAPTIVE_CEILING_MULTIPLIER = 8
+OPERATOR_7200 = {
+    'hermes-dagger': 7200,   # killer project — active development
+    'hermes-canopy': 7200,   # killer project — active development
+}
 
 LEDGER_PATH = os.path.expanduser('~/.hermes/stand-in/ledger.json')
 
@@ -62,73 +100,67 @@ def open_ledger_gaps(name):
 
 # Board source: tasks.md (legacy) or board/tasks.parquet (migrated)
 def parse_pending_from_md(md_path):
-    """Count real pending tasks in a tasks.md board (section-aware)."""
+    """Count real pending tasks in a tasks.md board (section-aware).
+
+    NOTE (2026-09-03): the old shared parser import
+    (migrate-board-to-duckdb.py) is RETIRED — it calls _sys.exit(3) at
+    import time, which SystemExit bypasses the except Exception guard and
+    killed the whole fleet policy run mid-loop. Checkbox fallback below is
+    the only md parser.
+    """
     import re
     n = 0
     try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            'migrate', os.path.expanduser('~/.hermes/scripts/migrate-board-to-duckdb.py'))
-        m = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(m)
-        _, _, tasks = m.parse_tasks_md(md_path)
-        if tasks:
-            real = [t for t in tasks
-                    if t['status'] in ('pending', 'in_progress', 'blocked', 'open', 'todo')
-                    and t['id'] != 'NEVER-DONE']
-            n = len(real)
-    except Exception:
-        pass
-    # Fallback: count open checkbox headers directly. The shared parser
-    # silently DROPS format-drifted sections (Kobayashi-Maru's
-    # "## [ ] KB-GAP-003 — title" blocks parsed as 1 of 3 tasks → 0 pending
-    # → wrongly pinned at 43200 with 2 real gaps open).
-    try:
         with open(md_path) as f:
             c = f.read()
-        boxes = len(re.findall(r'^## \[ \]|^- \[ \]', c, re.M))
-        never = (len(re.findall(r'^## \[ \].*NEVER-DONE', c, re.M))
+        # Count open checkbox headers/list items, minus NEVER-DONE rows.
+        # The retired shared parser silently DROPPED format-drifted
+        # sections (Kobayashi-Maru "## [ ] KB-GAP-003 — title" blocks
+        # parsed as 1 of 3 tasks → 0 pending → wrongly pinned at 43200
+        # with 2 real gaps open) — checkbox counting avoids that.
+        boxes = len(re.findall(r'^##+ \[ \]|^- \[ \]', c, re.M))
+        never = (len(re.findall(r'^##+ \[ \].*NEVER-DONE', c, re.M))
                  + len(re.findall(r'^- \[ \].*NEVER-DONE', c, re.M)))
-        boxes = max(0, boxes - never)
+        n = max(0, boxes - never)
     except Exception:
-        boxes = 0
-    return max(n, boxes)
+        n = 0
+    return n
 
-def parse_pending_from_parquet(parquet_path):
-    """Count real pending tasks from migrated board (tasks.parquet)."""
+def parse_pending_from_jsonl(jsonl_path):
+    """Count real pending tasks from the canonical tasks.jsonl store."""
+    n = 0
     try:
-        import duckdb
-        con = duckdb.connect()
-        n = con.execute(
-            f"SELECT count(*) FROM read_parquet('{parquet_path}') "
-            "WHERE status IN ('pending','in_progress','blocked') "
-            "AND id != 'NEVER-DONE'").fetchone()[0]
-        con.close()
+        with open(jsonl_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                if str(row.get('status', '')).lower() in (
+                        'pending', 'in_progress', 'blocked', 'open', 'todo'):
+                    n += 1
         return n
     except Exception:
         return None
 
 def board_pending(workdir):
-    """Return real-pending count for a project workdir, or None if unreadable."""
+    """Return real-pending count for a project workdir, or None if unreadable.
+
+    2026-09-03: tasks.jsonl is the canonical store (board.db/parquet caches
+    retired fleet-wide, JSONL-only doctrine). Legacy tasks.md mirror is the
+    only fallback.
+    """
     cd = os.path.join(workdir, '.coding-hermes')
     if not os.path.isdir(cd):
         return None
-    # Migrated board first (authoritative)
-    pq = os.path.join(cd, 'board', 'tasks.parquet')
-    if os.path.exists(pq):
-        n = parse_pending_from_parquet(pq)
+    jl = os.path.join(cd, 'board', 'tasks.jsonl')
+    if os.path.exists(jl):
+        n = parse_pending_from_jsonl(jl)
         if n is not None:
             return n
-    # DuckDB/SQLite board (board.db or board.duckdb) BEFORE the legacy
-    # tasks.md mirror — when both exist the db is the live store and the
-    # mirror is stale (deepseek-dashboard had 1 real pending that the
-    # mirror hid, keeping it wrongly pinned at 43200).
-    for dbname in ('board.db', 'board.duckdb'):
-        dbp = os.path.join(cd, 'board', dbname)
-        if os.path.exists(dbp):
-            n = parse_pending_from_sqlite(dbp)
-            if n is not None:
-                return n
     md = os.path.join(cd, 'tasks.md')
     if os.path.exists(md):
         n = parse_pending_from_md(md)
@@ -136,63 +168,21 @@ def board_pending(workdir):
             return n
     return None
 
-def parse_pending_from_sqlite(db_path):
-    """Count real pending tasks from a board.db/board.duckdb store (DuckDB format)."""
-    try:
-        import duckdb
-        con = duckdb.connect()
-        con.execute(f"ATTACH '{db_path}' AS bdb (READ_ONLY)")
-        try:
-            tables = [t[0] for t in con.execute(
-                "SELECT table_name FROM information_schema.tables "
-                "WHERE table_catalog='bdb'").fetchall()]
-            t = 'tasks' if 'tasks' in tables else (tables[0] if tables else None)
-            if not t:
-                con.close()
-                return None
-            try:
-                # Direct count — DuckDB PRAGMA table_info doesn't accept
-                # catalog-qualified names ('bdb.tasks' → BinderException),
-                # which previously made this return None and fall through
-                # to the stale tasks.md mirror.
-                n = con.execute(
-                    f"SELECT count(*) FROM bdb.{t} WHERE status IN "
-                    "('pending','in_progress','blocked','open','todo')").fetchone()[0]
-                con.close()
-                return n
-            except Exception:
-                # no status column — fall back to the JSONL mirror if present
-                jsonl = os.path.join(os.path.dirname(db_path), 'tasks.jsonl')
-                if os.path.isfile(jsonl):
-                    import json as _json
-                    n = 0
-                    with open(jsonl) as f:
-                        for line in f:
-                            line = line.strip()
-                            if not line:
-                                continue
-                            try:
-                                row = _json.loads(line)
-                            except Exception:
-                                continue
-                            if str(row.get('status', '')).lower() in (
-                                    'pending', 'in_progress', 'blocked', 'open', 'todo'):
-                                n += 1
-                    con.close()
-                    return n
-                con.close()
-                return None
-        except Exception:
-            con.close()
-            return None
-    except Exception:
-        return None
-
 def api_get(path):
     with urllib.request.urlopen(API + path, timeout=10) as r:
         return json.loads(r.read())
 
 def api_put(path, body):
+    # Every cooldown PUT re-snapshots the adaptive floor to the new pin.
+    # The adaptive progress path resets cooldown_s to cooldown_floor_s on
+    # any committing tick, and the loader only re-snapshots the floor on a
+    # false→true adaptive transition — so a stale floor below the new pin
+    # silently re-poisons the pin on the project's next tick (proven
+    # 2026-09-09: h3 enforced 900s against a 43200 pin for 2 days via a
+    # fossilized floor; helios/mafia carried the same 900 floors).
+    if 'cooldown_s' in body:
+        body = dict(body)
+        body.setdefault('cooldown_floor_s', body['cooldown_s'])
     req = urllib.request.Request(
         API + path, data=json.dumps(body).encode(),
         headers={'Content-Type': 'application/json'}, method='PUT')
@@ -201,6 +191,13 @@ def api_put(path, body):
 
 def main():
     apply = '--apply' in sys.argv
+    if apply:
+        # RETIRED 2026-09-19 (Bane): the correction rules fought every operator
+        # PUT and the regen kept rewriting fleet.toml underneath the running
+        # system (900s pin fossil, wave-key drop). The DB is the single source
+        # of truth now; ~/.hermes/scripts/fleet-sync.py is the one-way mirror.
+        print("fleet-cooldown-policy.py --apply is RETIRED — use fleet-sync.py --write (DB is the source of truth; this script no longer mutates state).", file=sys.stderr)
+        sys.exit(2)
     fleet_pins = read_fleet_pins()
     projects = api_get('/api/v1/projects').get('projects', [])
 
@@ -215,6 +212,35 @@ def main():
         if workdir.startswith('local:'):
             workdir = workdir[6:]
         cooldown = p.get('cooldown_s', p.get('cooldown_s', 0))
+        pin = fleet_pins.get(name)
+        # BELOW-FAST LIVE VALUE = wake residue, NOT operator intent
+        # (Bane 2026-09-09: fleet re-pinned to 6h — "we are just lighting
+        # money on fire this way" at 900/3600 pins). The old 900 hard-skip
+        # fossilized stand-in wake-PUTs as "operator intent". Now: any live
+        # cooldown BELOW the fast tier (3600) falls through to the REVERT
+        # rules below (pin wins, else fast tier). Only a pin that IS the
+        # fast tier itself (or one of the two Bane 7200 killer projects) is
+        # honored. (floor re-snapshot rides along via api_put below.)
+        if pin == TARGET_ACTIVE or name in OPERATOR_7200 or fleet_pins.get(name) == 7200:
+            print(f"{name:32s} {'-':8s} {cooldown:10d} {cooldown:8d} ok (operator fast pin — hard-skipped)")
+            continue
+        # ELEVATED-PIN GUARD (SCHED-GAP-012): a fleet.toml pin above the
+        # 7200 default is operator intent (h3=21600 anti-flood, warpfs=43200
+        # completed). Skip ALL evaluation — no REDUCE, no wake-revert, no
+        # promotion race. The canonical pin is written to fleet.toml by
+        # write_fleet_pins below, so restarts re-pin to it.
+        elevated = ELEVATED_PINS.get(name)
+        if elevated is None and pin is not None and pin not in (TARGET_ACTIVE, TARGET_IDLE, TARGET_COMPLETED, 7200):
+            # Any fleet.toml pin outside the canonical policy set (900/21600/
+            # 43200/7200) is operator intent (e.g. weekly 604800 cadence for
+            # muster/temple-runner/release-engineer). Policy never writes those
+            # values, so a non-canonical pin must be honored — never REDUCE/
+            # PROMOTE/RAISE against it. (2026-09-04 supervisor: REDUCE false-
+            # fired on 604800-pinned rows.)
+            elevated = pin
+        if elevated is not None:
+            print(f"{name:32s} {'-':8s} {cooldown:10d} {elevated:8d} ok (operator elevated pin {elevated} — hard-skipped)")
+            continue
         pending = board_pending(workdir)
 
         if pending is None:
@@ -231,45 +257,80 @@ def main():
         target = cooldown  # default: no change
 
         if cooldown < TARGET_ACTIVE:
-            target = TARGET_ACTIVE
-            action = f"RAISE {cooldown}→900 (below minimum floor)"
+            # Bane 2026-09-09: NO sub-6h pins fleet-wide — "we are just
+            # lighting money on fire this way". A below-fast live cooldown
+            # is wake residue, not intent: revert to the operator pin
+            # (fleet.toml, which is >= TARGET_ACTIVE post-2026-09-09), or
+            # the fast tier only when no pin exists.
+            if pin is not None and pin >= TARGET_ACTIVE:
+                target = pin
+                action = f"REVERT {cooldown}→{pin} (below-fast residue; operator pin={pin})"
+            else:
+                target = TARGET_ACTIVE
+                action = f"RAISE {cooldown}→{TARGET_ACTIVE} (below minimum floor)"
             if apply:
                 api_put(f"/api/v1/projects/{name}", {"cooldown_s": target})
                 action += " ✓"
             actions.append((name, cooldown, target, pending))
         elif cooldown == TARGET_ACTIVE:
-            # 900 = priority tier. Two origins: (a) operator pin in fleet.toml
-            # → untouched; (b) stand-in WAKE (PUT 900 on a project whose pin
-            # says otherwise — standin-pick.py:131 "wake the foreman") → the
-            # wake must be TEMPORARY: revert to 7200 once no work remains,
-            # otherwise projects silently run hot forever after being poked.
+            # 3600 = fast tier. Two origins: (a) operator pin in fleet.toml
+            # → untouched; (b) stand-in WAKE (PUT 3600 on a project whose pin
+            # says otherwise — standin-pick.py "wake the foreman") → the
+            # wake must be TEMPORARY: revert to the default once no work
+            # remains, otherwise projects silently run hot forever.
             pin = fleet_pins.get(name)
             if pin == TARGET_ACTIVE:
-                action = "ok (operator priority tier — untouched)"
+                action = "ok (operator fast tier — untouched)"
+            elif pin == TARGET_IDLE:
+                # Operator pin is 21600 (6h default tier) — the wake must NOT
+                # override it (hermes-canopy, INFRA-001 tick 286). Revert
+                # regardless of pending work — operator pin wins.
+                target = TARGET_IDLE
+                action = f"REVERT wake 3600→21600 (operator pin=21600; {pending} pending)"
+                if apply:
+                    api_put(f"/api/v1/projects/{name}", {"cooldown_s": target})
+                    action += " ✓"
+                actions.append((name, cooldown, target, pending))
             elif work_exists:
                 action = "ok (stand-in wake active — work exists)"
             else:
                 target = TARGET_IDLE
-                action = f"REVERT wake 900→7200 (no work; pin={pin})"
+                action = f"REVERT wake 3600→21600 (no work; pin={pin})"
                 if apply:
                     api_put(f"/api/v1/projects/{name}", {"cooldown_s": target})
                     action += " ✓"
                 actions.append((name, cooldown, target, pending))
         elif work_exists and cooldown > TARGET_IDLE:
             target = TARGET_IDLE
-            action = f"REDUCE {cooldown}→7200 (work exists: {pending} pending, {gaps} gaps)"
+            action = f"REDUCE {cooldown}→{TARGET_IDLE} (work exists: {pending} pending, {gaps} gaps)"
             if apply:
                 api_put(f"/api/v1/projects/{name}", {"cooldown_s": target})
                 action += " ✓"
             actions.append((name, cooldown, target, pending))
-        elif not work_exists and cooldown < TARGET_COMPLETED and fleet_pins.get(name) != TARGET_IDLE:
+        elif work_exists and cooldown < TARGET_IDLE:
+            # Bane 08-15: default = 6h. Projects running faster than the
+            # default (e.g. legacy 7200/2h) get raised to the default when
+            # they have work — the fast tier is 3600 and operator-pinned only.
+            # Operator 7200 pins (OPERATOR_7200) are admin intent and are
+            # NEVER raised (Bane 2026-08-23: hermes-dagger + hermes-canopy).
+            if name in OPERATOR_7200 or fleet_pins.get(name) == 7200:
+                action = "ok (operator 7200/2h pin — untouched)"
+            else:
+                target = TARGET_IDLE
+                action = f"RAISE {cooldown}→{TARGET_IDLE} (work exists; default is now 6h)"
+                if apply:
+                    api_put(f"/api/v1/projects/{name}", {"cooldown_s": target})
+                    action += " ✓"
+                actions.append((name, cooldown, target, pending))
+        elif not work_exists and cooldown < TARGET_COMPLETED and fleet_pins.get(name) != TARGET_IDLE and name not in OPERATOR_7200 and fleet_pins.get(name) != 7200:
             # Rule 4: promote idle 7200s to 43200 — BUT only when the 2h tier
             # was policy-set, not operator-set. An explicit fleet.toml pin of
             # 7200 is admin intent ("keep this at 2h") and must not be
             # promoted away (Bane 2026-08-07: bunker/chimera-v2/duckbrain/
-            # h3-sdk-* are operator 2h projects). Policy-promoted projects get
-            # their pin regenerated to 43200, so pin==7200 uniquely marks
-            # operator intent.
+            # h3-sdk-* are operator 2h projects; Bane 2026-08-23:
+            # hermes-dagger + hermes-canopy in OPERATOR_7200). Policy-promoted
+            # projects get their pin regenerated to 43200, so pin==7200
+            # uniquely marks operator intent.
             target = TARGET_COMPLETED
             action = f"PROMOTE {cooldown}→43200 (completed: 0 pending, 0 open gaps)"
             if apply:
@@ -290,11 +351,14 @@ def main():
         # pins for h3/muster/uhlp/dexdat-memory were written stale and
         # would have reverted the reductions on daemon restart.)
         projects = api_get('/api/v1/projects').get('projects', [])
+        # Namespace config must survive the regen too (Bane 2026-08-27:
+        # default_prompt / model_chain / max_concurrent are data in the DB).
+        namespaces = api_get('/api/v1/namespaces').get('namespaces', [])
         # Regenerate fleet.toml pins from the corrected state so daemon
         # restarts re-pin to the policy decision, not a stale snapshot.
         # (Daemon must run with -config pointing at this file.)
-        n = write_fleet_pins(projects)
-        print(f"fleet.toml: regenerated {n} project pins (durable across restarts)")
+        n = write_fleet_pins(projects, namespaces)
+        print(f"fleet.toml: regenerated {n} project pins + {len(namespaces)} namespaces (durable across restarts)")
 
 
 def read_fleet_pins(path=None):
@@ -313,30 +377,91 @@ def read_fleet_pins(path=None):
             pins[n.group(1)] = int(c.group(1)) if c else None
     return pins
 
-def write_fleet_pins(projects):
-    """Write [[projects]] pins for all enabled projects from API state."""
+def write_fleet_pins(projects, namespaces=None):
+    """Write [[projects]] pins for all enabled projects from API state.
+
+    When namespaces is provided (list of namespace dicts from
+    /api/v1/namespaces), [[namespaces]] blocks are emitted first so the
+    namespace-level config (default_prompt, model_chain, max_concurrent —
+    Bane 2026-08-27) survives policy regens. The regen must never drop
+    namespace config the operator set in the DB.
+    """
     import urllib.parse
     enabled = [p for p in projects if p.get('enabled', p.get('enabled'))]
     out = [
         "# Fleet configuration — cooldown overrides",
         "# These entries ensure cooldowns survive scheduler restarts.",
         "# Auto-generated by fleet-cooldown-policy.py --apply — do not edit by hand.",
-        "# Policy: 900s fast (1+ real pending) / 7200s default (0 pending).",
+        "# Policy: 3600s fast (1h) / 21600s default (6h) / 43200s idle (12h).",
+        "",
+        "# ── Scheduler (root config) ────────────────────────────────────────",
+        "# DeepSeek peak-pricing windows (UTC): cooldown ×2 inside 01:00-04:00",
+        "# and 06:00-10:00 (2× price hours). Merged in 49d4478, activated 08-10.",
+        "[scheduler]",
+        "blackout_windows = [",
+        '  { start = "01:00", end = "04:00", multiplier = 2.0 },',
+        '  { start = "06:00", end = "10:00", multiplier = 2.0 },',
+        "]",
         "",
     ]
+    if namespaces:
+        out.append("# ── Namespaces ───────────────────────────────────────────────")
+        out.append("# Namespace-level config (prompts, chains, caps) is data in the")
+        out.append("# scheduler DB; the regen mirrors it so restarts re-pin it.")
+        for ns in sorted(namespaces, key=lambda x: x.get('id', '')):
+            out.append("[[namespaces]]")
+            out.append(f'id = "{ns.get("id", "")}"')
+            out.append(f'weight = {ns.get("weight", 10)}')
+            out.append(f'reserved = {ns.get("reserved", 1)}')
+            out.append(f'hard_cap = {ns.get("hard_cap", 100)}')
+            out.append(f'max_concurrent = {ns.get("max_concurrent", 0)}')
+            out.append(f'enabled = {"true" if ns.get("enabled", True) else "false"}')
+            desc = ns.get("description") or ""
+            if desc and '"' not in desc:
+                out.append(f'description = "{desc}"')
+            dp = ns.get("default_prompt") or ""
+            if dp and "'''" not in dp:
+                out.append("default_prompt = '''" + dp + "'''")
+            mc = ns.get("model_chain") or ""
+            if mc and '"' in mc:
+                out.append(f'model_chain = {mc}')
+            out.append("")
     for p in sorted(enabled, key=lambda x: x.get('name', x.get('name', ''))):
+        pname = p.get('name', p.get('Name', '?'))
         out.append("[[projects]]")
-        out.append(f'name = "{p.get("name", p.get("Name", "?"))}"')
+        out.append(f'name = "{pname}"')
         out.append(f'repo_url = "{p.get("repo_url", p.get("RepoURL", "")) or "local:" + p.get("workdir", p.get("Workdir", ""))}"')
         out.append(f'workdir = "{p.get("workdir", p.get("Workdir", ""))}"')
         out.append(f'weight = {p.get("weight", p.get("Weight", 10))}')
         out.append(f'priority = {p.get("priority", p.get("Priority", 5))}')
-        out.append(f'cooldown_s = {p.get("cooldown_s", p.get("CooldownS", 7200))}')
-        out.append(f'model = "{p.get("model", p.get("Model", "")) or "deepseek-v4-flash"}"')
-        out.append(f'provider = "{p.get("provider", p.get("Provider", "")) or "deepseek-foreman"}"')
+        # ELEVATED-PIN OVERRIDE (SCHED-GAP-012): write the canonical pin for
+        # whitelisted projects even if the live API was already clobbered —
+        # the regen must never fossilize a below-pin value into fleet.toml.
+        cooldown = ELEVATED_PINS.get(pname, OPERATOR_7200.get(pname, p.get("cooldown_s", p.get("CooldownS", 7200))))
+        out.append(f'cooldown_s = {cooldown}')
+        # DYNAMIC-ONLY (Bane 2026-08-28): NEVER emit a model/provider default.
+        # The task-router resolves the model at spawn time; a present static
+        # value SHADOWS the router chain tier and pins every spawn to one
+        # hardcoded lane. Emit the pin ONLY when the project actually has one.
+        m = p.get("model", p.get("Model", "")) or ""
+        prov = p.get("provider", p.get("Provider", "")) or ""
+        if m:
+            out.append(f'model = "{m}"')
+        if prov:
+            out.append(f'provider = "{prov}"')
         ns = p.get('namespace_id', p.get('NamespaceID'))
         if ns:
             out.append(f'namespace_id = "{ns}"')
+        # SCHED-GAP-1 arming: foreman lane only, explicit 8x ceiling.
+        # cooldown_floor_s is emitted EXPLICITLY = the pin: the loader
+        # defaults an absent floor to the pin-at-enable-time, so regens
+        # without the key could drift the floor away from the pin (the
+        # 2026-09-09 h3 fossil: floor=900 vs pin=43200 → 2 days of 15-min
+        # ticks). Floor == pin here keeps restart re-pins converged.
+        if ns in ADAPTIVE_LANES:
+            out.append('adaptive_cooldown = true')
+            out.append(f'cooldown_floor_s = {cooldown}')
+            out.append(f'cooldown_ceiling_s = {cooldown * ADAPTIVE_CEILING_MULTIPLIER}')
         if p.get('deliver', p.get('Deliver')):
             out.append(f'deliver = "{p.get("deliver", p.get("Deliver", ""))}"')
         out.append(f'enabled = {"true" if p.get("enabled", p.get("Enabled")) else "false"}')
