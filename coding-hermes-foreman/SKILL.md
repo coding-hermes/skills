@@ -5,7 +5,7 @@ description: >-
   scans tasks, analyzes impact, loads memory, spawns workers, verifies
   quality, commits, learns, and scans external signals. Loaded by every coding-hermes
   foreman cron job. Follows the fleet architecture.
-version: 2.10.0
+version: 2.10.1
 author: Bane + Hermes
 platforms: []
 metadata:
@@ -190,12 +190,25 @@ workers (parallel board tasks, catch-up bursts, split subtasks), each worker
 gets its own worktree:
 
 ```bash
-cd /home/kara/<project>
-git fetch origin
-git worktree add /home/kara/worktrees/<project>-<taskid> -b wt/<taskid> origin/main
-cd /home/kara/worktrees/<project>-<taskid> && hermes chat -q "$(cat /tmp/brief-<taskid>.txt)" \
+cd ~/<project> && git fetch origin
+# helper owns naming/branch/base/slug + prints BASE_SHA (record it — see 2a)
+WT=$(~/.hermes/scripts/worktree.sh new <project> <taskid>)
+cd $WT && hermes chat -q "$(cat /tmp/brief-<taskid>.txt)" \
   --provider <bucket> --model <model> -s coding-hermes-worker --ignore-rules --cli -Q &
 ```
+
+**Helper (`scripts/worktree.sh`, install to `~/.hermes/scripts/`) — use it instead of hand-rolled `git worktree add`:** `new <project> <taskid>` (creates `~/worktrees/<project>-<taskid>` on `wt/<taskid>`, prints `WORKTREE`/`BRANCH`/`BASE_SHA`), `list`, `flags <project> <taskid>` (emits boardctl flags), `reap <project>` (removes merged+clean worktrees, deletes merged branches, **never touches a worktree with uncommitted files**), `prune`, `doctor` (fleet leak report).
+
+**Board wiring (`boardctl` >= write-row-worktree-fields):** a row records WHERE the work happened and WHICH sessions worked it — write them at dispatch and at closeout:
+
+```bash
+boardctl -C ~/<project> update <taskid> --status in_progress \
+  $(~/.hermes/scripts/worktree.sh flags <project> <taskid>) --session <foreman-session-id>
+```
+
+Absent flags write NO key (never an empty string/array); `--session` is repeatable and order-preserving.
+
+**Wave manifest (required for crash recovery):** write `.coding-hermes/waves/<scheduler-tick-id>.json` in the MAIN tree before dispatching a wave — the scheduler reads exactly that path for recovery (`internal/scheduler/wave_manifest.go`). Without it an overrun tick's wave work is orphaned, not recovered.
 
 **Worktree rules:**
 - Branch naming `wt/<taskid>` — self-identifying for merge and cleanup; base on `origin/main`, never a local branch another worker may advance.
@@ -209,7 +222,7 @@ cd /home/kara/worktrees/<project>-<taskid> && hermes chat -q "$(cat /tmp/brief-<
 1. Reap: `git worktree list` → for each finished: record commit, `git worktree remove <path>` (worktree dirs are disposable; the branch carries the work).
 2. Merge serially into main in-dispatch order: `git merge --no-ff wt/<taskid>` — one at a time, gates re-run per merge (build+test on the MERGED tree, not the branch tip).
 3. Merge failure (real conflict): the branch is the worker's honest output — do not force. `git merge --abort`, re-dispatch a fixup worker in a FRESH worktree based on current main with the conflict described. Never hand-resolve large conflicts yourself unless mechanical.
-4. After all merges: `git branch -d wt/<taskid>` for merged branches (keep unmerged for evidence), `git worktree prune`.
+4. After all merges: `git branch -d wt/<taskid>` for merged branches (keep unmerged for evidence), `git worktree prune`. One step: `~/.hermes/scripts/worktree.sh reap <project>` (merged+clean only) then `prune <project>`; `doctor` reports fleet-wide leaks (refs to deleted dirs).
 
 **Wave composition (eligibility):** a wave is ≥2 workers dispatched in ONE tick.
 Tasks are wave-eligible only if mutually independent: no depends_on edges between
