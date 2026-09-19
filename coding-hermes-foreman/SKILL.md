@@ -227,7 +227,8 @@ Absent flags write NO key (never an empty string/array); `--session` is repeatab
 **Wave composition (eligibility):** a wave is ≥2 workers dispatched in ONE tick.
 Tasks are wave-eligible only if mutually independent: no depends_on edges between
 them AND disjoint file sets (overlapping hilo blast radius = not eligible). Cap a
-wave at 3 workers (each multiplies guard+judge cost; the 2h tick timeout bounds
+wave at the namespace wave_workers_cap (12 on coding-hermes; the scheduler injects the live
+WAVE_BUDGET number at spawn and sheds to serial when a wave is already in flight) (each multiplies guard+judge cost; the 2h tick timeout bounds
 wave wall-clock — one long worker starves the others' merges). Mark every picked
 task `in_progress` BEFORE dispatching its worker (a crashed tick must leave
 recoverable state, not silent loss). ONE wave per tick — never a second wave while
