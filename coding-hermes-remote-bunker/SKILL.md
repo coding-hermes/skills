@@ -171,6 +171,66 @@ before committing anything else.
 real scaffold → commit → remote build → clean-status cycle, including what each
 step proves.
 
+## The Target Shape: a persistent, provisioned remote dev box
+
+The loop above is the mechanism. The shape it is meant to reach is worth stating,
+because it decides how you provision and how you size things:
+
+> **The far side is the dev box, not a staging area.** Things are installed,
+> cloned and managed *there*. You mount it and drive it.
+
+If you have ever watched LAMP/PHP development over SFTP — log into the server,
+open a file from *its* filesystem in your editor, save, reload the page, see the
+change instantly — this is that same feel with a different transport: a mount
+instead of an SFTP client, and a socket-served tool surface for the edits that
+deserve strict guarantees. The server is the environment; your machine is the
+window into it.
+
+What that implies, in order of importance:
+
+1. **Provision the box, not the task.** A dev box is *set up once and kept*:
+   toolchains, services, a cloned tree, credentials the box itself needs. That is
+   the opposite of a throwaway per-task environment, and it is why the toolchain
+   question is the gate — an unprovisioned box has no compiler and can build
+   nothing, however good the mount is.
+2. **Keep it alive deliberately.** Agents have a lifetime and expire by default,
+   so a dev box must be spawned with a long one and kept extended. Confirm the
+   lifetime you want rather than discovering it at expiry: spawn with an explicit
+   TTL, and extend it while the work is live. An existing longer expiry is never
+   shortened, so extending is safe.
+3. **One box per project.** The thing you mount and the identity you mount it as
+   are per-project. Sharing one dev box across projects is how you get a tree
+   that belongs to nobody and a credential that belongs to everybody.
+4. **Ask the box before you trust it — every session.** This is the "doctor"
+   habit, and it is the same instinct as checking `php -v` and the vhost before
+   you start: interrogate the environment and get named answers.
+
+```
+bunker agent-tools <agent-id>          # what the editing verbs need: present / MISSING, named
+bunker exec <agent-id> -- sh -c 'for t in go python3 gcc make node cargo; do
+  printf "%-8s %s\n" "$t" "$(command -v $t || echo ABSENT)"; done'
+```
+
+A missing tool must come back **named**, and ideally as data rather than an
+abort — a probe that tells you what is absent is worth more than a failure you
+have to decode. Treat "the environment is not what I assumed" as a first-class
+finding, not an inconvenience: it is the difference between a build failing in
+one command and a build failing forty.
+
+### Why this scales to many projects on one small machine
+
+Because the local cost per project is a **mount** and your own agent loop — not a
+compiler, not a test runner, not an index. The heavy work executes on the far
+side, so the number of projects you can drive at once is bounded by **memory and
+attention** on your side and by **capacity** on the box, not by build and test
+load on your laptop. That is the whole argument for the shape: it moves the
+compute without moving the code, and it keeps the identity where the credentials
+already are.
+
+The caveat to hold onto: this is a *transport and a placement* decision, not an
+isolation one. Everything running as the agent user — including the untrusted
+project code the box executes — can reach everything that user can reach.
+
 ## Operating a Mount
 
 ```
@@ -248,6 +308,9 @@ location.
 - `references/local-git-remote-compute.md` — the recommended loop measured end to
   end: local git through the mount, remote build, and the `.gitignore` rule that
   keeps remote artifacts out of your history.
+- `references/dev-box-provisioning.md` — the checklist for standing up a project
+  dev box: lifetime first, the doctor step, provisioning, clone-and-mount, a loop
+  check before real code, and what to record.
 - `references/troubleshooting.md` — the failures seen in practice (permission
   denied after a copy, empty mount, stale mountpoint, credential confusion) and
   what each one actually means.
