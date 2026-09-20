@@ -94,6 +94,83 @@ That asymmetry is the whole reason to reach for a mount first.
    visible; a permission denial deep inside a script is not).
 4. When both work, prefer the one with the smaller blast radius.
 
+## The Recommended Loop: code native on the remote, compute on the remote, git on your side
+
+The rule above composes into one workflow that gives the best of both sides. The
+agent owns the code natively; you own the identity; the agent owns the compute.
+
+```
+scaffold/edit  ->  through the mount (files ARE the agent's, natively)
+git add/commit ->  locally, through the mount (your credentials, your config)
+build/run/test ->  on the agent, via `bunker exec` (its CPU, not yours)
+change again   ->  through the mount
+```
+
+Why this is the shape to reach for:
+
+- **Code is 100% native to the agent.** Nothing is copied in, so nothing drifts.
+  The agent modifies the tree it actually runs.
+- **Your commit path never changes.** `git` runs on your side, so your identity,
+  your hooks and your forge auth apply — see the Credential Rule. There is no
+  second credential path to keep in sync.
+- **Build/run/test cost you no local compute.** The heavy work happens on the
+  agent, so a laptop can drive many projects at once, limited by its *memory*
+  for the mounts and its own Hermes loop, not by compile and test load.
+- **Nothing is transferred back and forth.** No syncing a tree to the remote to
+  build it, and no pulling artifacts back. The mount already shows you the
+  result.
+
+**The load-bearing precondition: a correct `.gitignore`.** Build outputs land in
+the tree you also commit from, so anything not ignored shows up as a change you
+might commit by accident — binaries, object files, caches, and test output:
+
+```gitignore
+/bin/
+*.o
+*.test
+__pycache__/
+node_modules/
+```
+
+This is not tidiness; it is what makes "build remotely" safe. An artifact that is
+not ignored turns into a 40 MB binary in your history, and every future clone pays
+for it. Prefer build output in an ignored directory (`bin/`, `dist/`) rather than
+next to the sources.
+
+**The precondition nobody expects: the agent needs the TOOLCHAIN.** Offloading the
+compute requires the compiler to exist on the far side. A mount gives you a native
+tree and your own credentials; it does not give you a toolchain, and a fresh agent
+may have almost nothing installed. Check before you commit a project to this loop:
+
+```
+bunker exec <agent-id> -- sh -c 'for t in go python3 gcc make node cargo; do
+  printf "%-8s %s\n" "$t" "$(command -v $t || echo ABSENT)"; done'
+```
+
+If the agent cannot build the project, "the remote does the building" is not yet
+true for that project however well the transport works — provision what is missing
+through the agent's tool-provisioning path, or keep that project's build local.
+And prove the loop with the toolchain the project actually uses, not the one you
+happen to have.
+
+Prove the loop is real rather than assumed, in one pass:
+
+```
+bunker mount <agent-id> ~/remote-tree
+cd ~/remote-tree/<repo> && git status          # clean before you start
+<edit files>
+git commit -am "…"                             # local commit, your identity
+bunker exec <agent-id> -- sh -c 'cd <repo> && <build> && <test>'
+git status                                     # MUST still be clean
+```
+
+If that last `git status` is not clean, your `.gitignore` is incomplete — fix it
+before committing anything else.
+
+**Worked example:** `references/local-git-remote-compute.md` walks this through a
+real scaffold → commit → remote build → clean-status cycle, including what each
+step proves.
+
 ## Operating a Mount
 
 ```
@@ -168,6 +245,9 @@ location.
 
 - `references/access-modes.md` — the side-by-side comparison, worked through a
   concrete "clone, edit, push" task.
+- `references/local-git-remote-compute.md` — the recommended loop measured end to
+  end: local git through the mount, remote build, and the `.gitignore` rule that
+  keeps remote artifacts out of your history.
 - `references/troubleshooting.md` — the failures seen in practice (permission
   denied after a copy, empty mount, stale mountpoint, credential confusion) and
   what each one actually means.
