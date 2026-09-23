@@ -106,6 +106,28 @@ build/run/test ->  on the agent, via `bunker exec` (its CPU, not yours)
 change again   ->  through the mount
 ```
 
+### Split the git commands: read on the agent, write through the mount
+
+The line above is right about **commits**, and wrong if you read it as "run all git
+locally". A whole-tree `git status` over a FUSE mount stats every file over the
+network, and under any concurrent load it does not merely get slow — it **blocks in
+`D` state** (uninterruptible I/O wait), where it cannot be interrupted and will hang
+whatever called it. That has been hit in practice, twice, including by the runner
+driving the test.
+
+| Git operation | Where it belongs | Why |
+|---|---|---|
+| `status`, `log`, `diff` — read-only | **On the agent**, via `bunker exec` | No credentials needed, and on the agent it is a local read instead of a network walk |
+| `commit`, `push` — credential-bearing | **Through the mount**, on your side | Only your side holds the identity |
+
+```
+bunker exec <agent-id> -- sh -c 'cd $HOME/<repo> && git status --short && git log --oneline | head -5'
+```
+
+If a tool of yours insists on `git status` over the mount, bound it
+(`timeout 20 git status`) so a stall fails instead of hanging — and prefer
+`git diff --stat HEAD` when all you need is the changed-file list.
+
 Why this is the shape to reach for:
 
 - **Code is 100% native to the agent.** Nothing is copied in, so nothing drifts.
