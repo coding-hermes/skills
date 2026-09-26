@@ -1,12 +1,12 @@
 ---
 name: coding-hermes-retrospective-selfimprovement
-description: "Use when a request spans many steps or the owner says plan it / subgoals / verify / don't just do it — the full chain: problem → quorum → goal → subgoals → per-subgoal verify → quorum verify."
-version: 2.0.0
+description: "Use when the owner says the agent is being stupid about work, is flailing/guessing, or says plan it / subgoals / verify — the full chain: problem → quorum → goal → subgoals → per-subgoal verify → quorum verify."
+version: 3.0.0
 author: totalwindupflightsystems
 license: MIT
 metadata:
   hermes:
-    tags: [planning, self-improvement, retrospective, verification, quorum, evidence, chain, 改善]
+    tags: [planning, self-improvement, retrospective, verification, quorum, evidence, chain, intervention, 改善]
     related_skills:
       - coding-hermes-quorum
       - coding-hermes-spec-lifecycle
@@ -19,6 +19,33 @@ metadata:
 **改善 (kaizen)** is not "improvement" as a mood. 改 is the character in 改革 (reform); 善 is
 goodness, and in the compound it comes *after* the 改 — you do not get the good part without the
 looking-back part. The chain is the skill.
+
+## WHAT THIS IS FOR — the owner's circuit breaker
+
+This skill exists to be **invoked on an agent that is being stupid about work**. The owner calls
+it by name when the agent is guessing, thrashing, doing the task without understanding it,
+manufacturing plausible answers, or marking things done that only exist as code. It is not a
+planning preference; it is a **process the agent is required to run instead of whatever it was
+about to do**.
+
+The premise: most bad work is not a capability failure, it is a *process* failure — the agent
+skipped the reading, skipped the premise check, or graded itself. The chain removes the option to
+skip.
+
+> **When this is invoked, the agent stops improvising and runs the chain.** No new work from
+> memory. No new plan from a summary. The first move is always the same: go read the actual
+> artifacts.
+
+### The agent's obligation when this fires
+
+1. **Stop.** Do not finish the half-formed thing you were doing from memory. Do not defend it.
+2. **Name the failure mode you were in**, in one line and without euphemism — guessing,
+   not-read-the-artifact, thrashing, built-read-as-done, answering-from-summary, or flailing
+   without a goal. Naming it is what makes the process real instead of theatrical.
+3. **Run the chain from Stage 1**, in order, with the gates. If you cannot fill a stage, that is
+   a finding — say which piece is missing rather than filling the gap with a plausible invention.
+4. **Report stage by stage**, and include the section the chain forces: *what did not move*.
+5. **Do not declare done.** The chain decides that, through the falsifier and Quorum #2.
 
 ## THE CHAIN
 
@@ -66,39 +93,41 @@ looking-back part. The chain is the skill.
    never merely when the work is shipped.
 ```
 
-**Two quorums, and they are not the same review.** #1 runs *before* the plan exists — it is
-there to stop you building on a wrong premise, and it is the cheap one. #2 runs *after* the
-result exists — it is the commit layer. A single family's verdict is a lead, not a ruling, at
-either one.
+**Two quorums, and they are not the same review.** #1 runs *before* the plan exists — it stops you
+building on a wrong premise, and it is the cheap one. #2 runs *after* the result exists — it is
+the commit layer. A single family's verdict is a lead, not a ruling, at either one.
 
 ## When this fires
 
-- The owner asks for something with more than one moving part ("wire X to Y and get the metrics
-  lined up"), or says **plan it / outline it / make subgoals / verify it / don't just do the task**.
+- **The owner calls it on the agent** — "you're being stupid about this", "run the chain", "stop
+  guessing", "plan it / outline it / make subgoals / verify it / don't just do the task", or the
+  skill named directly. This is the primary trigger.
+- The request has more than one moving part and no plan yet ("wire X to Y and get the metrics
+  lined up").
 - The owner says the plan must **reflect again** when it is done, or asks for a **quorum** on a
   plan or a result.
-- You catch yourself about to answer from memory instead of from the artifact. That is the
-  moment this skill exists for.
+- **Self-trigger:** you catch yourself about to answer from memory instead of the artifact, or
+  you cannot say where your last three facts came from. That is the moment this exists for.
 
 Not for a single-step lookup or a one-line question. Ceremony is not improvement.
 
 ## 改善第零条 — the iron law of every stage: facts before claims
 
 **Talking from the ass** is the failure class this whole chain exists to kill: asserting a cause,
-a count, or a status from memory, from a prior summary, or from how the system "obviously"
-works, without reading the thing itself.
+a count, or a status from memory, from a prior summary, or from how the system "obviously" works,
+without reading the thing itself.
 
 1. **Read the artifact, not the summary of it.** A compaction summary, a memory entry, and a
    previous session's report are *claims about* the artifact — never the artifact.
 2. **Name the evidence class** of every claim: measured (a command you ran, with output) /
-   documented (path + line) / inferred (say so) / unmeasured (say so). Never let two wear the
-   same costume.
-3. **The live artifact wins.** When memory disagrees with the running system, the system is
-   right and the memory is stale. Say which one you trusted.
+   documented (path + line) / inferred (say so) / unmeasured (say so). Never let two wear the same
+   costume.
+3. **The live artifact wins.** When memory disagrees with the running system, the system is right
+   and the memory is stale. Say which one you trusted.
 4. **Test the hunch before acting on it.** A hypothesis is not a finding; find the measurement
    that would kill it and run that one first.
-5. **A prior conclusion is a lead, not a fact.** Re-derive it or label it inherited. Work has
-   been marked complete with its effect absent.
+5. **A prior conclusion is a lead, not a fact.** Re-derive it or label it inherited. Work has been
+   marked complete with its effect absent.
 
 Gate at every stage: **can every factual sentence be traced to a path, a command, or a
 measurement?** If not, it is a draft of a wish.
@@ -110,7 +139,7 @@ the board rows that describe the work (their reasoning field usually names the i
 and the evidence that would prove it); the repo docs that define the contract. Then convene
 `coding-hermes-quorum` and let independent families attack those raw details.
 
-The owner's own rule: **use the quorum first to build the raw details, then the goal with the
+The owner's rule: **use the quorum first to build the raw details, then the goal with the
 subgoals.** A quorum before the plan costs one round; a plan built on a wrong premise costs a
 week.
 
@@ -119,8 +148,8 @@ Produce: facts with evidence classes · the explicit unknowns · the questions t
 ## Stage 2 — GOAL
 
 One sentence. Plus the **falsifier**: the measurement that shows the goal is not met. A goal
-without a falsifier cannot be finished, only abandoned. Write what "done" looks like from
-outside — a number that changes, a question someone can answer — never "the feature exists".
+without a falsifier cannot be finished, only abandoned. Write what "done" looks like from outside
+— a number that changes, a question someone can answer — never "the feature exists".
 
 ## Stage 3 — SUBGOALS
 
@@ -156,13 +185,12 @@ nothing observable changes, the check is wrong — replace it with the outcome.
 ## Stage 6 — QUORUM #2 (verify the result)
 
 Brief the families on the delivered artifact and the re-evaluation, never on your intentions.
-Every judge works the whole claim checklist. Consensus between independent families is the
-signal; one family is a lead. Re-verify every CONTRADICTED item against raw data yourself before
-accepting it — the coordinator is the commit layer. Each acceptance criterion must be as strong
-under review as the subgoals were.
+Every judge works the whole claim checklist. Consensus between independent families is the signal;
+one family is a lead. Re-verify every CONTRADICTED item against raw data yourself before accepting
+it — the coordinator is the commit layer.
 
-The highest-value output of the round is a CONTRADICTED against your own draft. That is the
-round working.
+The highest-value output of the round is a CONTRADICTED against your own draft. That is the round
+working.
 
 ## Stage 7 — GROW or STOP
 
@@ -176,20 +204,20 @@ only re-read your own plan.
   from arithmetic on paper; one log query returned the gate had fired **zero** times and the real
   constraint was elsewhere. Find the measurement that names the cause.
 - **Code landed ≠ effect landed.** Mechanism built, deployed, marked complete — while a default
-  left the effect unreachable. Reopen the row, keep the code, say why "complete" never showed up
-  as working.
-- **Stale counts dressed as findings.** A "never ran, oldest weeks ago" census was wrong: the
-  lanes were days old and one had already run three times. Re-query; counts decay.
+  left the effect unreachable. Reopen the row, keep the code, say why "complete" never showed up as
+  working.
+- **Stale counts dressed as findings.** A "never ran, oldest weeks ago" census was wrong: the lanes
+  were days old and one had already run three times. Re-query; counts decay.
 - **Legacy population read as current behaviour.** "Empty on all rows" described the historical
   set, not the current write path, which was already fixed. Ask *which population* first.
-- **The plan built on a summary.** Compaction summaries drop the exact number you need. Go back
-  to the store; never rebuild a plan on a paraphrase.
+- **The plan built on a summary.** Compaction summaries drop the exact number you need. Go back to
+  the store; never rebuild a plan on a paraphrase.
 - **Pre-run facts get audited.** Reviewers will check your numbers, and one will be wrong
   sometimes — that is the method working. Pre-run every command so they verify instead of debug.
 - **The switch that is a bet.** Do not flip a production default to prove a mechanism; run it in
   shadow (compute and record the new answer, serve the old one), then flip with the revert proven.
-- **The tree that stops growing on a lie.** Nothing to add after Stage 5 usually means you
-  re-read your plan instead of measuring the effect.
+- **The tree that stops growing on a lie.** Nothing to add after Stage 5 usually means you re-read
+  your plan instead of measuring the effect.
 
 ## Report shape
 
