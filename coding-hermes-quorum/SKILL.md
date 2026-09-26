@@ -293,6 +293,28 @@ parser that fails loudly on missing detector lines.
   commands yourself first and embed outputs as ground-truth "pre-run facts"
   the seats may trust).
 
+## Field-tested additions (2026-09-19 portfolio round, 5 seats / 4 families / all landed)
+
+- **Agentic seats need a 50-minute curl budget, not 25.** Judge seats doing real verification
+  (multi-file reads, recomputation) through concurrent lanes routinely exceed 25 min; the first
+  wave died at `-m 1500` with 0 bytes (curl 28), and ALL four empty outputs were JSON-parse
+  crashes, not lane failures. Retry form: body to `-o <file>`, size-check >200 bytes, extract
+  text from the JSON in Python, retry-once, `-m 3000`. Run the extraction as a separate step so
+  a parse crash never destroys a completed response.
+- **HTTP seats are a poll, not an orchestra.** A gateway `POST /v1/responses` seat cannot be
+  steered, re-briefed, or killed mid-run — it is fire-and-forget. Fine for judges (their only
+  deliverable is the verdict file); wrong for any work needing tools or correction. Orchestration
+  (Bane directive 2026-09-19) uses spawned `hermes chat` sessions — see bankai
+  §Orchestration doctrine.
+
+## Field-tested additions (2026-09-16 scheduler-value round, 5 seats / 0 deaths / ~15 min))
+
+- **Gateway auth drift is the #1 fan-out killer — probe with the auth the fleet itself uses.** Gateway 0.21.1+ validates `Authorization: Bearer` ONLY; the legacy `x-api-key` header is silently ignored (401 gateway_auth_failed with a CORRECT key). Read the key from the gateway's own secret env at runtime; never echo it. The one-probe-per-lane step caught this before launch — without it, all five seats would have died in sync on 401s.
+- **Gateway-spawned seats have NO cwd context.** Briefs must embed absolute paths and complete runnable commands (read-only cheatsheet). All 5 seats landed first-launch when the brief carried full commands; every seat also re-derived numbers instead of trusting the brief — which is how 2 of the coordinator's own pre-run facts died (see next).
+- **State the timestamp format of every store in the brief.** One store used ISO strings, another epoch floats — the coordinator's first 7d window query returned 0 rows. Also: a "gap" between two stores may be a comparator error (different token classes, different window predicates) — phrase such claims as questions, and expect seats to flip them (this round: a claimed 4.7x token gap was proven an artifact, exactly, to the token).
+- **Pre-run facts are contracts that judges will audit — let them.** The brief's factual errors were caught by seats and corrected in merge (that IS the round working: CONTRADICTED-against-the-coordinator is the highest-value output class). Coordinator must re-verify every CONTRADICTED lead against raw stores before committing the merge.
+- **Verdict dispositions should map to a falsifier both sides accept** (e.g. "flips to NET VALUABLE when lane-true pricing + a metered-cash alarm run clean for 30 days") — it converts a 4-1 split into a decision with a tripwire instead of a stale argument.
+
 ## Doctrine — the Quorum Does Not Suspend the Rules
 
 - **chat = PAYG, work = subs** — judge seats are work: ride the subs
