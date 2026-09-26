@@ -22,6 +22,7 @@ This repository contains the skill files that power the Coding Hermes autonomous
 | [`coding-hermes-jsonl-board-append`](coding-hermes-jsonl-board-append/SKILL.md) | Board | JSONL board append + cache rebuild tooling |
 | [`fleet-daily-report`](fleet-daily-report/SKILL.md) | Reporting | Daily hybrid report — narrative + per-project deep data |
 | [`fleet-retrospective`](fleet-retrospective/SKILL.md) | Reporting | 90-day / year-in-review retrospective — data to HTML, gaps to board |
+| [`coding-hermes-retrospective-selfimprovement`](coding-hermes-retrospective-selfimprovement/SKILL.md) | Improvement | 改善 Kaizen — facts-first goal → subgoals → execute → re-evaluate → quorum; never plan from memory |
 | [`coding-hermes-bankai`](coding-hermes-bankai/SKILL.md) | Mode | 卍解 full-auto release — drive the fleet to finish ALL tasks, one worktree per task, merged at the end |
 | [`coding-hermes-plus-ultra`](coding-hermes-plus-ultra/SKILL.md) | Mode | 越 bankai + the Beyond Pass — finish every task, then leave the system better than it was |
 | [`coding-hermes-tools-usage`](coding-hermes-tools-usage/SKILL.md) | Reference | Decision table: which code-modification primitive (`toolsd`) fits the task — chosen by merit, never mandated |
