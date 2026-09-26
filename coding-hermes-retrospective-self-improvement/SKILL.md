@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-retrospective-self-improvement
 description: "Use when the owner says the agent is being stupid about work, is flailing/guessing, or says plan it / subgoals / verify — the full chain: problem → quorum → goal → subgoals → per-subgoal verify → quorum verify."
-version: 3.0.0
+version: 3.1.0
 author: totalwindupflightsystems
 license: MIT
 metadata:
@@ -88,9 +88,20 @@ skip.
   └─────────────────┘
         │
         ▼
-   GROW or STOP — what the evaluation and the review exposed becomes the next
-   round's subgoals (back to SUBGOALS). Stop when the FALSIFIER is settled,
-   never merely when the work is shipped.
+        │
+        ├── FAIL ──▶ back to SUBGOALS: add subgoals that FIND the problem and
+        │            RESOLVE it, then RE-APPEND the verification subgoal at the
+        │            end. The verification subgoal is never consumed by running
+        │            it — it is re-added after every failure until something
+        │            passes.
+        │
+        └── PASS ──▶ DONE — and only when the FALSIFIER is settled.
+
+  QUORUM #2 failing is the SAME SHAPE one level up: it relaunches the same goal
+  (or derives a new one), the tree gains subgoals with a verification subgoal at
+  the end, and when that tree believes it passes it comes BACK TO THE QUORUM.
+  The two loops are one loop at two altitudes, and a verified pass is the only
+  exit.
 ```
 
 **Two quorums, and they are not the same review.** #1 runs *before* the plan exists — it stops you
@@ -192,6 +203,10 @@ nothing observable changes, the check is wrong — replace it with the outcome.
 3. Verify each claim in your own plan against the artifact that should now carry it.
 4. **Account for what did not move** — an honest "this did not improve" is a finding.
 5. Derive the next subgoals from what the evaluation exposes, including negative results.
+6. **On failure the tree re-opens — the verification subgoal is never consumed.** Add subgoals
+   that FIND the cause and RESOLVE it, then **re-append this same verification subgoal at the
+   end** and run the tree again. Repeat until it passes. Running the check is not discharging
+   it; a failed check is an input, not an exit.
 
 ## Stage 6 — QUORUM #2 (verify the result)
 
@@ -203,11 +218,28 @@ it — the coordinator is the commit layer.
 The highest-value output of the round is a CONTRADICTED against your own draft. That is the round
 working.
 
-## Stage 7 — GROW or STOP
+**When the quorum fails, the whole chain re-enters one level up.** A failed quorum launches the
+same goal — or derives a new one from the verdicts — re-runs Stage 3 to add subgoals including a
+verification subgoal at the end, and when that tree believes it passes, it comes **back to the
+quorum**. Nothing is declared done on the strength of the agent's own judgement; a verified pass
+is the only exit.
 
-New subgoals land before you report done. The tree stops growing for exactly one honest reason:
-the falsifier is settled. If Stage 5 found nothing to add, ask whether you measured the effect or
-only re-read your own plan.
+**This can take an extremely long time to get going, and that is the design, not a bug.** The loop
+converges by adding work each pass, never by lowering the bar. Expect many iterations; keep each
+iteration legible (what failed, what was added, what changed) so a long run can be watched instead
+of restarted; and never shorten it by calling a stage passed that has not passed.
+
+## Stage 7 — the fixpoint law (grow, or pass)
+
+The tree grows on every failure and stops for exactly one reason: **something passed.** Two failure
+returns feed it — a failed *verification subgoal* (back to Stage 3) and a failed *verification
+quorum* (back to Stage 2 to relaunch or re-derive the goal, then Stage 3). Neither is terminal:
+both add subgoals that find and resolve the problem, and both re-append the verification stage at
+the end.
+
+If Stage 5 found nothing to add, that is usually a sign you re-read your own plan instead of
+measuring the effect — not a sign you are done. Stop when the falsifier is settled, never because
+the tree ran out of patience.
 
 ## Pitfalls (each cost real work)
 
@@ -229,6 +261,12 @@ only re-read your own plan.
   shadow (compute and record the new answer, serve the old one), then flip with the revert proven.
 - **The tree that stops growing on a lie.** Nothing to add after Stage 5 usually means you re-read
   your plan instead of measuring the effect.
+- **Verification consumed instead of re-appended.** A verification stage run once and then dropped
+  turns a fixpoint into a single sample: the failure comes back as "we tried that" instead of as
+  the next round's subgoals. If the check failed, the SAME check goes back on the end of the tree.
+- **Shortening the loop to make it finish.** The convergence pressure on a long run is to declare a
+  stage passed so the loop can end. That is the one move that makes the whole chain pointless — it
+  produces a green result with an unsettled falsifier.
 
 - **A capability marked complete because the CODE exists.** (Measured: a "COST-PER-TASK ENGINE"
   and a "STATS ENGINE V2" each sat `complete` on the board while the ordering they exist to drive
@@ -262,3 +300,11 @@ only re-read your own plan.
 - **The loop does not end at "shipped".** It ends when the falsifier is settled.
 - **Improvement requires the looking-back half.** Without Stage 5 and Stage 6 this is just task
   execution wearing a plan's clothes.
+- **Failure is an input, never an exit.** A failed verification subgoal and a failed verification
+  quorum are both handled the same way at their own altitude: add subgoals that find and fix the
+  problem, re-append the verification stage, run again. The chain ends on a pass — not on
+  exhaustion, not on a timeout, not on "we've done a lot of iterations".
+- **Long convergence is expected, so make it legible instead of shorter.** Each pass adds work
+  rather than lowering the bar, which is why this can take an extremely long time to get going.
+  Report what failed, what was added, and what changed each iteration — a loop that can be watched
+  is worth more than one that finishes fast and lies.
