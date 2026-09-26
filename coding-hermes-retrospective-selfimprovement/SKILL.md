@@ -1,12 +1,12 @@
 ---
 name: coding-hermes-retrospective-selfimprovement
-description: "Use when a request spans many steps or the owner says plan it / subgoals / verify / don't just do it — facts-first goal→subgoal→verify loop with quorum."
-version: 1.0.0
+description: "Use when a request spans many steps or the owner says plan it / subgoals / verify / don't just do it — the full chain: problem → quorum → goal → subgoals → per-subgoal verify → quorum verify."
+version: 2.0.0
 author: totalwindupflightsystems
 license: MIT
 metadata:
   hermes:
-    tags: [planning, self-improvement, retrospective, verification, quorum, evidence, 改善]
+    tags: [planning, self-improvement, retrospective, verification, quorum, evidence, chain, 改善]
     related_skills:
       - coding-hermes-quorum
       - coding-hermes-spec-lifecycle
@@ -14,126 +14,115 @@ metadata:
       - fleet-retrospective
 ---
 
-# 改善 KAIZEN — Retrospective Self-Improvement
+# 改善 KAIZEN — the Chain
 
-**改善 (kaizen)** is not "improvement" as a mood; it is *change made good by looking back first*.
-改 is the character in 改革 (reform) and 改善 itself; 善 is goodness, and it appears in the
-compound 改善 only after the 改 — you do not get the good part without the looking-back part.
-The loop is the skill. Anyone can announce a plan; the discipline is that **every pass ends by
-looking at what actually happened and re-deciding**.
+**改善 (kaizen)** is not "improvement" as a mood. 改 is the character in 改革 (reform); 善 is
+goodness, and in the compound it comes *after* the 改 — you do not get the good part without the
+looking-back part. The chain is the skill.
 
-> **One line:** plan from measured facts, execute in verified subgoals, then re-evaluate the
-> whole thing against its own falsifier before declaring it done.
+## THE CHAIN
+
+```
+  user / problem / task
+        │
+        ▼
+  ┌─────────────────┐
+  │ QUORUM  #1      │  build the RAW DETAILS before any plan exists.
+  │ (independent    │  Attack the premise, not the wording. Output: facts with
+  │  families)      │  evidence classes + the explicit unknowns.
+  └─────────────────┘
+        │
+        ▼
+     GOAL  +  FALSIFIER        one sentence each: what "done" means, and the
+        │                      measurement that would show it is NOT met.
+        ▼
+   SUBGOALS  (each: done-when · evidence · depends-on · falsifier)
+        │
+        ▼   ┌──────────────────────────────────────────────┐
+        ├──▶│ SUBGOAL VERIFY  (per subgoal, immediately)   │  the EFFECT, not
+        │   │  measure the outcome the subgoal predicted   │  the code. Not
+        │   └──────────────────────────────────────────────┘  "the field was
+        │                        │                             added".
+        │                        ▼
+        │                  ↻ next subgoal (smallest-first; commit proven work at once)
+        │
+        ▼
+  ┌─────────────────┐
+  │ RE-EVALUATE     │  the LAST subgoal is always this: re-run every original
+  │ (the last        │  measurement, before vs after, and account for what did
+  │  subgoal)        │  NOT move.
+  └─────────────────┘
+        │
+        ▼
+  ┌─────────────────┐
+  │ QUORUM  #2      │  verify the RESULT and the re-evaluation — not the intent.
+  │ (independent    │  Convergence is the signal; the coordinator re-verifies
+  │  families)      │  every CONTRADICTED item against raw data (commit layer).
+  └─────────────────┘
+        │
+        ▼
+   GROW or STOP — what the evaluation and the review exposed becomes the next
+   round's subgoals (back to SUBGOALS). Stop when the FALSIFIER is settled,
+   never merely when the work is shipped.
+```
+
+**Two quorums, and they are not the same review.** #1 runs *before* the plan exists — it is
+there to stop you building on a wrong premise, and it is the cheap one. #2 runs *after* the
+result exists — it is the commit layer. A single family's verdict is a lead, not a ruling, at
+either one.
 
 ## When this fires
 
-- The owner asks for something with more than one moving part ("wire X to Y and get the
-  metrics lined up"), or says **plan it / outline it / make subgoals / verify it / don't just
-  do the task**.
-- The owner says the plan must **reflect again** when it is done, or asks for a **quorum** on
-  a plan or a delivered result.
+- The owner asks for something with more than one moving part ("wire X to Y and get the metrics
+  lined up"), or says **plan it / outline it / make subgoals / verify it / don't just do the task**.
+- The owner says the plan must **reflect again** when it is done, or asks for a **quorum** on a
+  plan or a result.
 - You catch yourself about to answer from memory instead of from the artifact. That is the
   moment this skill exists for.
 
-Do **not** use this for a single-step lookup, a one-line question, or a task whose whole
-answer is one tool call. Ceremony is not improvement.
+Not for a single-step lookup or a one-line question. Ceremony is not improvement.
 
-## 改善第零条 — The Iron Law: facts before claims
+## 改善第零条 — the iron law of every stage: facts before claims
 
-**Talking from the ass** is the failure class this skill is built to kill: asserting a cause,
+**Talking from the ass** is the failure class this whole chain exists to kill: asserting a cause,
 a count, or a status from memory, from a prior summary, or from how the system "obviously"
-works, without reading the thing itself. It has produced wrong diagnoses, reopened rows, and
-weeks of misdirected work.
+works, without reading the thing itself.
 
-The law, in order:
+1. **Read the artifact, not the summary of it.** A compaction summary, a memory entry, and a
+   previous session's report are *claims about* the artifact — never the artifact.
+2. **Name the evidence class** of every claim: measured (a command you ran, with output) /
+   documented (path + line) / inferred (say so) / unmeasured (say so). Never let two wear the
+   same costume.
+3. **The live artifact wins.** When memory disagrees with the running system, the system is
+   right and the memory is stale. Say which one you trusted.
+4. **Test the hunch before acting on it.** A hypothesis is not a finding; find the measurement
+   that would kill it and run that one first.
+5. **A prior conclusion is a lead, not a fact.** Re-derive it or label it inherited. Work has
+   been marked complete with its effect absent.
 
-1. **Read the artifact, not the summary of it.** The file, the live DB row, the daemon log,
-   the board row, the process list. A compaction summary, a memory entry, and a previous
-   session's report are all *claims about* the artifact — never the artifact.
-2. **Name the evidence class of every claim.** Measured (a command you ran, with output) /
-   documented (a file path + line) / inferred (stated as inferred) / unmeasured (say so
-   plainly). Never let two of these wear the same costume.
-3. **The live artifact wins.** When memory or a brief disagrees with the live system, the
-   live system is right and the memory is stale. Say which one you trusted and why.
-4. **Test the hunch before you act on it.** A hypothesis is not a finding. Find the
-   measurement that would kill it and run that one first — a cheap decisive query beats a
-   plausible story (see Pitfalls: *the theory that died in the log*).
-5. **A prior pass's conclusion is a lead, not a fact.** Re-derive it, or label it as
-   inherited. Rows have been marked complete when their *effect* was absent.
+Gate at every stage: **can every factual sentence be traced to a path, a command, or a
+measurement?** If not, it is a draft of a wish.
 
-Gate before writing any plan: **can every factual sentence in it be traced to a path, a
-command, or a measurement?** If not, the plan is not ready — it is a draft of a wish.
+## Stage 1 — QUORUM #1 (raw details, before the plan)
 
-## The loop — 0 → 5, and then back to 4
+Gather from the sources that already hold the material: live stores (DB, logs, registry, config);
+the board rows that describe the work (their reasoning field usually names the intended *effect*
+and the evidence that would prove it); the repo docs that define the contract. Then convene
+`coding-hermes-quorum` and let independent families attack those raw details.
 
-### Phase 0 — Harvest raw details FIRST (before the plan)
+The owner's own rule: **use the quorum first to build the raw details, then the goal with the
+subgoals.** A quorum before the plan costs one round; a plan built on a wrong premise costs a
+week.
 
-Do not write the plan from your own head. Gather the raw material from the sources that
-already hold it:
+Produce: facts with evidence classes · the explicit unknowns · the questions the plan must answer.
 
-- the live stores (DB, logs, registry, config), read directly;
-- the board rows that describe the work (their *reasoning* field usually names the intended
-  effect and the evidence that would prove it);
-- the repo docs that define the contract;
-- **and the independent reviewers — convene `coding-hermes-quorum` (or a deliberation) with
-  the raw details and let them attack them.** This is the owner's rule in his own words:
-  *use the quorum first to build the raw details, then the goal with the subgoals*. A quorum
-  run at Phase 0 is cheaper than a quorum run on a plan built on a wrong premise.
+## Stage 2 — GOAL
 
-Output of Phase 0: a pile of facts with evidence classes, and a list of what is *unknown*.
+One sentence. Plus the **falsifier**: the measurement that shows the goal is not met. A goal
+without a falsifier cannot be finished, only abandoned. Write what "done" looks like from
+outside — a number that changes, a question someone can answer — never "the feature exists".
 
-### Phase 1 — The goal
-
-One sentence. Plus its **falsifier**: the measurement that would show the goal is NOT met.
-A goal without a falsifier cannot be finished, only abandoned.
-
-### Phase 2 — The subgoal tree
-
-Each subgoal carries three things:
-
-- **Done-when** — a checkable condition, not a feeling. ("`router_spawn.py` sorts by predicted
-  cost per task by default, demonstrated by a spawn whose chosen lane changes.")
-- **Evidence** — what will be produced and where it will live.
-- **Depends-on** — which subgoal must land first.
-
-Order by *cheapest decisive step first*. Prefer the subgoal that could kill the plan early.
-
-### Phase 3 — Execute, smallest first, each verified
-
-Land one subgoal, verify it against its own done-when, then move. Commit proven work
-immediately — a verified subgoal that is not committed can be wiped by the next deploy.
-Never batch three unverified changes and then test the pile.
-
-### Phase 4 — THE LAST SUBGOAL IS ALWAYS A RE-EVALUATION
-
-The terminal subgoal is never "finish the feature". It is:
-
-> **Re-evaluate everything against the goal and its falsifier, verify what you claim, and
-> then write the next subgoals.**
-
-This is the spine of the skill. At Phase 4:
-
-1. Re-measure the original problem — the same query as Phase 0, run again, now.
-2. Compare: did the *effect* appear, or only the *code*? (Code landing is not the effect
-   landing. A row that shipped the mechanism and left the default untouched is not done.)
-3. Verify each claim in your own plan against the artifact that should now carry it.
-4. Account for what did NOT move, and say so plainly. An honest "this did not improve"
-   is a finding; a quietly dropped subgoal is a lie by omission.
-5. **Grow the tree**: the gaps found here become the next round's subgoals — then return to
-   Phase 2 with them. Stop only when the falsifier is settled, not when you are tired.
-
-### Phase 5 — Quorum review of the result
-
-Convene `coding-hermes-quorum` on the delivered artifact and the re-evaluation, not on your
-intentions. Independent families, one shared claim checklist, every judge works every claim.
-Convergence between families is the signal; a single family's verdict is a lead. Re-verify
-every CONTRADICTED item against raw data yourself before accepting it — the coordinator is
-the commit layer.
-
-The quorum is **not** a rubber stamp at the end. Its highest-value output is a
-CONTRADICTED against your own draft — that is the round working.
-
-## Subgoal anatomy (copy this shape)
+## Stage 3 — SUBGOALS
 
 ```
 SG-n  <imperative title>
@@ -143,47 +132,83 @@ SG-n  <imperative title>
   falsifier:  <what would show this subgoal is unnecessary or wrong>
 ```
 
-## Pitfalls (each one cost real work)
+Smallest decisive step first — prefer the subgoal that could kill the plan early. Watch for the
+hidden edge: a subgoal that *precedes* another in the list but is actually a *precondition* of it.
 
-- **The theory that died in the log.** A whole causal case was built for a resource-allocation
-  bug from arithmetic on paper. One log query returned `budget=0` and `load_gate=0` — the gate
-  never fired — and the real constraint was elsewhere. *Find the measurement that names the
-  cause; do not infer the cause from the mechanism.*
-- **Code landed ≠ effect landed.** The mechanism was built, deployed, and marked complete while
-  the default ordering still made the effect unreachable. Reopen the row, keep the code, and
-  say why complete never showed up as working.
-- **Stale counts dressed as findings.** "100 lanes have never run, oldest from weeks ago" was
-  wrong: the lanes were days old and one had already run three times. Re-query; counts decay.
-- **Legacy population read as current behaviour.** "The column is empty on all rows" described
-  the historical set, not the current write path, which was already fixed. Ask *which
-  population* before calling something broken.
-- **The plan built on a summary.** Compaction summaries drop the exact number you need. Go
-  back to the store; never rebuild a plan on a paraphrase.
-- **Coordinator pre-run facts get audited.** Independent reviewers will check your numbers and
-  one of them will be wrong sometimes — that is the method working, not failing. Pre-run every
-  command you put in a plan so the reviewers verify rather than debug.
-- **Green but did nothing.** A subgoal can pass its own check while changing nothing
-  observable. Pair every done-when with an effect check in Phase 4.
-- **The tree that stops growing on a lie.** If Phase 4 finds nothing to add, ask whether you
-  measured the *effect* or only re-read your own plan.
+## Stage 4 — SUBGOAL VERIFY (every subgoal, immediately)
+
+Land one, verify it against its own done-when, commit proven work at once, then move. Never batch
+three unverified changes and test the pile.
+
+The dominant failure is **built read as done**: measure the *effect*, not the artifact's
+existence. A field that was added is not a value that arrives; a mechanism that shipped is not an
+outcome that appeared; a config flag is not a behaviour. Where a subgoal's check can pass while
+nothing observable changes, the check is wrong — replace it with the outcome.
+
+## Stage 5 — RE-EVALUATE (always the last subgoal)
+
+1. Re-run the *same* measurement as Stage 1, now.
+2. Compare: did the **effect** appear or only the **code**?
+3. Verify each claim in your own plan against the artifact that should now carry it.
+4. **Account for what did not move** — an honest "this did not improve" is a finding.
+5. Derive the next subgoals from what the evaluation exposes, including negative results.
+
+## Stage 6 — QUORUM #2 (verify the result)
+
+Brief the families on the delivered artifact and the re-evaluation, never on your intentions.
+Every judge works the whole claim checklist. Consensus between independent families is the
+signal; one family is a lead. Re-verify every CONTRADICTED item against raw data yourself before
+accepting it — the coordinator is the commit layer. Each acceptance criterion must be as strong
+under review as the subgoals were.
+
+The highest-value output of the round is a CONTRADICTED against your own draft. That is the
+round working.
+
+## Stage 7 — GROW or STOP
+
+New subgoals land before you report done. The tree stops growing for exactly one honest reason:
+the falsifier is settled. If Stage 5 found nothing to add, ask whether you measured the effect or
+only re-read your own plan.
+
+## Pitfalls (each cost real work)
+
+- **The theory that died in the log.** A full causal case was built for a resource-allocation bug
+  from arithmetic on paper; one log query returned the gate had fired **zero** times and the real
+  constraint was elsewhere. Find the measurement that names the cause.
+- **Code landed ≠ effect landed.** Mechanism built, deployed, marked complete — while a default
+  left the effect unreachable. Reopen the row, keep the code, say why "complete" never showed up
+  as working.
+- **Stale counts dressed as findings.** A "never ran, oldest weeks ago" census was wrong: the
+  lanes were days old and one had already run three times. Re-query; counts decay.
+- **Legacy population read as current behaviour.** "Empty on all rows" described the historical
+  set, not the current write path, which was already fixed. Ask *which population* first.
+- **The plan built on a summary.** Compaction summaries drop the exact number you need. Go back
+  to the store; never rebuild a plan on a paraphrase.
+- **Pre-run facts get audited.** Reviewers will check your numbers, and one will be wrong
+  sometimes — that is the method working. Pre-run every command so they verify instead of debug.
+- **The switch that is a bet.** Do not flip a production default to prove a mechanism; run it in
+  shadow (compute and record the new answer, serve the old one), then flip with the revert proven.
+- **The tree that stops growing on a lie.** Nothing to add after Stage 5 usually means you
+  re-read your plan instead of measuring the effect.
 
 ## Report shape
 
-1. **The goal**, and its falsifier.
+1. **The chain** — where it stands, stage by stage.
 2. **Facts** — each with its evidence class and source path.
-3. **Subgoals** — the tree, with status per subgoal.
-4. **The re-evaluation** — the same measurement as Phase 0, run again, before/after.
-5. **What did not move**, and why (never omit this section).
-6. **The next subgoals** the re-evaluation produced.
-7. **Quorum verdicts** and what was accepted, amended, or rejected — with the reason.
+3. **Goal and falsifier.**
+4. **Subgoals** — the tree with per-subgoal status and its verification result.
+5. **The re-evaluation** — Stage 1's measurement re-run, before vs after.
+6. **What did not move**, and why (never omit this section).
+7. **The next subgoals** the re-evaluation produced.
+8. **Quorum verdicts** at both stages — accepted / amended / rejected, each with its reason.
 
 ## Doctrine
 
 - **Read before you reason.** The artifact is the authority; every other source is a claim.
-- **A plan is a set of predictions.** Each subgoal predicts an observable effect; Phase 4 is
-  where predictions get graded.
-- **Never talk from the ass.** If it was not read or measured, it is not a fact — it is a
-  question, and it belongs in Phase 0.
+- **Two quorums, two jobs.** #1 protects the premise; #2 verifies the result.
+- **A plan is a set of predictions.** Each subgoal predicts an observable effect; Stage 5 grades
+  them.
+- **Never talk from the ass.** If it was not read or measured, it is a question, not a fact.
 - **The loop does not end at "shipped".** It ends when the falsifier is settled.
-- **Improvement requires the looking-back half.** Without Phase 4 this is just task execution
-  wearing a plan's clothes.
+- **Improvement requires the looking-back half.** Without Stage 5 and Stage 6 this is just task
+  execution wearing a plan's clothes.
