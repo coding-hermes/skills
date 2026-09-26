@@ -19,6 +19,7 @@ This repository contains the skill files that power the Coding Hermes autonomous
 | [`coding-hermes-scheduler`](coding-hermes-scheduler/SKILL.md) | Broker | Operating the fleet scheduler daemon — API, config, ops |
 | [`coding-hermes-broker`](coding-hermes-broker/SKILL.md) | Broker | Scheduling algorithm — weight-budget, urgency, packing |
 | [`coding-hermes-worker`](coding-hermes-worker/SKILL.md) | Worker | Code implementation — writes code, runs tests, commits |
+| [`coding-hermes-perf`](coding-hermes-perf/SKILL.md) | Foreman | 計測 Per-project perf hunt — measure, profile where the numbers point, change ONE thing, re-measure; PERF-* rows on the owning board |
 | [`coding-hermes-jsonl-board-append`](coding-hermes-jsonl-board-append/SKILL.md) | Board | JSONL board append + cache rebuild tooling |
 | [`fleet-daily-report`](fleet-daily-report/SKILL.md) | Reporting | Daily hybrid report — narrative + per-project deep data |
 | [`fleet-retrospective`](fleet-retrospective/SKILL.md) | Reporting | 90-day / year-in-review retrospective — data to HTML, gaps to board |
