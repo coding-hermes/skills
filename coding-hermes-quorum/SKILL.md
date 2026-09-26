@@ -119,6 +119,25 @@ Diversity is the requirement; specific lanes are disposable instances:
    contradictions" describe what a given family tends to catch first; every
    judge still receives and works the ENTIRE checklist.
 
+## Current-instance note (2026-09-26) — gpt-6-sol is OUT, use it
+
+An INSTANCE with a date, not doctrine (the law above still rules: re-derive the lane set from
+the live registry before every round, because an example lane rots).
+
+- **Deep-review seat = `openai-codex/gpt-6-sol`.** It SUPERSEDES `gpt-5.6-sol` — same family,
+  half the price ($2/$10 per M vs $4/$20) and current generation. Both probed live on
+  2026-09-26 and both answered, so this is a choice, not a fallback: seat the 6 unless the
+  registry says otherwise.
+- Registry check for that day: `openai-codex` carries `gpt-6-sol` ($2/$10), `gpt-6-astra`
+  ($10/$50 — the priciest of the family), `gpt-6-luna` ($0.1/$1.2 — the cheap one) and
+  `gpt-5.6-sol` ($4/$20). `commandcode` also carries `gpt-6-sol` ($2/$10), `gpt-6-astra` and
+  `gpt-6-luna`; `opencode-go`/-2 carry `gpt-6-luna`.
+- **These are ONE family for diversity purposes.** Seating gpt-6-sol AND gpt-6-luna is not two
+  families — it is one family wearing two prices. Diversity still means ≥3 DISTINCT families
+  across the round (e.g. GLM, Qwen, Cohere, Kimi, OpenAI), never several SKUs of one vendor.
+- Substitution law applies inside the family too: if the OpenAI seat flakes, a substitution must
+  come from a DIFFERENT family, not from another GPT id.
+
 ## Transports — two ways to run a judge session
 
 Pick per run; both carry the identical brief and return identical verdict
