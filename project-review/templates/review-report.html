@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!-- PROJECT --> — Hands-On Review</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--line:#2d3646;--txt:#e6edf3;--mut:#9aa7b8;--grn:#3fb950;--amb:#d29922;--red:#f85149;--blu:#58a6ff;--pur:#bc8cff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}
+.hero{background:linear-gradient(135deg,#12233a,#1a1033);border:1px solid var(--line);border-radius:14px;padding:36px 32px;margin-bottom:24px}
+.hero h1{margin:0 0 6px;font-size:30px}
+.sub{color:var(--mut);font-size:17px;margin:0 0 16px}
+.badges{display:flex;flex-wrap:wrap;gap:8px}.badge{font-size:13px;padding:3px 12px;border-radius:20px;border:1px solid var(--line);background:#0d1526;color:var(--blu)}
+.badge.g{color:var(--grn)}.badge.a{color:var(--amb)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center}
+.stat b{display:block;font-size:26px;color:var(--blu)}.stat span{font-size:13px;color:var(--mut)}
+h2{margin:38px 0 8px;font-size:22px;border-bottom:1px solid var(--line);padding-bottom:8px}
+h3{margin:24px 0 6px;font-size:17px;color:var(--blu)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:14px 0}
+pre{background:#0a0e14;border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.pass{color:var(--grn);font-weight:700}.fail{color:var(--red);font-weight:700}.warn{color:var(--amb);font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:12px 0}
+th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+th{background:var(--panel2);color:var(--blu)}tr:nth-child(even) td{background:#11161f}
+td.y{color:var(--grn)}td.n{color:var(--mut)}td.p{color:var(--amb)}
+ul.tight li{margin-bottom:6px}
+.good{border-left:4px solid var(--grn)}.bad{border-left:4px solid var(--red)}.idea{border-left:4px solid var(--pur)}
+.foot{color:var(--mut);font-size:13px;margin-top:40px;border-top:1px solid var(--line);padding-top:16px}
+a{color:var(--blu)}
+@media(max-width:600px){.hero h1{font-size:24px}}
+</style>
+</head>
+<body><div class="wrap">
+
+<div class="cover-note">
+<!-- FORWARD-READY ONLY (omit for private logs): TO/FROM/RE routing block
+     addressed to the builder + one-line verdict up front -->
+</div>
+
+<div class="hero">
+<h1><!-- PROJECT NAME + TAGLINE --></h1>
+<p class="sub"><!-- one sentence: what was done, not a docs re-read --></p>
+<div class="badges">
+<span class="badge"><!-- repo link --></span>
+<span class="badge g">✔ built &amp; tested live <!-- DATE --></span>
+<span class="badge"><!-- stack · license --></span>
+<span class="badge a"><!-- maturity note --></span>
+</div>
+<div class="grid">
+<div class="stat"><b><!-- N --></b><span><!-- label --></span></div>
+<div class="stat"><b><!-- N --></b><span><!-- label --></span></div>
+<div class="stat"><b><!-- N --></b><span><!-- label --></span></div>
+<div class="stat"><b><!-- N --></b><span><!-- label --></span></div>
+</div>
+</div>
+
+<h2>1 · What it is</h2>
+<div class="card"><!-- description + key facts --></div>
+
+<h2>2 · What I actually ran (live output)</h2>
+<div class="card">
+<!-- one h3+pre per step: build, boot, happy path, negative test, latency -->
+<!-- close with a line naming what was NOT exercised -->
+</div>
+
+<h2>3 · How it compares</h2>
+<div class="card" style="overflow-x:auto">
+<!-- table: project vs 3-5 incumbents, then one-line take -->
+</div>
+
+<h2>How agents hook in</h2>
+<div class="card"><!-- doors: MCP tools by name, HTTP/WS, skill files/SDKs; A2A/ACP/AgentCard presence AND absence (grepped); discovery; when each lane --></div>
+
+<h2>Push vs poll</h2>
+<div class="card"><!-- per-lane table: what pushes, what only answers polls (cite params/comments); the sleeper-wakeup gap --></div>
+
+<h2>From two agents to a thousand</h2>
+<div class="card"><!-- load probe numbers (port+backend) · rate/lease/batch/TTL defaults · what breaks · ownership semantics + edge gaps --></div>
+
+<h2>Incident observability</h2>
+<div class="card"><!-- audit/metrics/receipts inventory vs a named incident kill chain: attributed, blocked, detected, missed --></div>
+
+<h2>What I'd add or change</h2>
+<div class="card"><!-- ranked improvements, each tracing to a finding or named precedent + prior-art list --></div>
+
+<h2>Good things</h2>
+<div class="card good"><ul class="tight"><!-- verified strengths only --></ul></div>
+
+<h2>5 · Bad things / rough edges ⚠️</h2>
+<div class="card bad"><ul class="tight"><!-- edges actually hit + documented caveats --></ul></div>
+
+<h2>6 · Where / how it could actually be used 🚀</h2>
+<div class="card idea"><!-- ranked fits + what to verify before adopting --></div>
+
+<h2>7 · Verdict</h2>
+<div class="card"><!-- try-now vs watch, and the bar for betting on it --></div>
+
+<div class="foot">Tested <!-- DATE --> · commit <code><!-- SHA --></code> · <!-- TOOLCHAIN --> · scratch port <!-- PORT -->.</div>
+
+</div></body></html>
