@@ -1,6 +1,6 @@
 ---
 name: github-app-auth
-description: Use when a fleet host or worker needs GitHub auth. Mint short-lived, repo-scoped App tokens instead of pasting PATs.
+description: Use when a host needs GitHub auth. Mint scoped App tokens.
 version: 1.0.0
 author: Hermes Agent
 metadata:
