@@ -1,15 +1,16 @@
 ---
 name: coding-hermes-docs
-description: Use when auditing a project for documentation gaps, or when a weekly documentation-health lane runs. Files each gap as an actionable row for the owning foreman and its worker; never writes the docs itself.
-version: 1.0.0
+description: Use when auditing a project for documentation gaps, or when a weekly documentation-health lane runs — including the fleet's own skills directory. Files each gap as an actionable row for the owning foreman and its worker; never writes the docs itself.
+version: 1.1.0
 metadata:
   hermes:
-    tags: [coding-hermes, docs, audit, weekly, foreman, worker]
+    tags: [coding-hermes, docs, audit, weekly, foreman, worker, skills-directory, scrub, public-repo]
     related_skills:
       - coding-hermes-readme
       - coding-hermes-foreman
       - coding-hermes-prd-to-contracts
       - coding-hermes-jsonl-board-append
+      - coding-hermes-skill-publishing
 ---
 
 # coding-hermes-docs — documentation gap audit
@@ -59,6 +60,38 @@ audit).
    documentation, and incident post-mortems whose action item was "document this" — turn
    each into a row instead of letting it stay a promise.
 
+## The skills directory — the fleet's own surface
+
+The skills library (`~/coding-hermes-skills`, published as `coding-hermes/skills`; live
+install at `~/.hermes/skills`) is a shipped product of this fleet, and it is **the context
+surface every agent reads before it acts**. Audit it like any other public interface, with
+four checks the per-project lanes cannot make:
+
+1. **Context for the agent that loads it.** A skill must say, in its own frontmatter,
+   **when to load it** — a self-contained trigger in the first ~57 characters of
+   `description` — **what it owns**, and, where a sibling could be mistaken for it, **what
+   it explicitly does not own**. A skill with no trigger is a skill no agent ever loads, and
+   it quietly becomes dead weight.
+2. **Lane ↔ skill wiring.** Every lane prompt that names a skill must name one that exists,
+   checked in both directions: a lane naming a missing skill (the `coding-hermes-perf`
+   shape — 44 perf lanes referenced a skill nobody had written), and a skill that no lane,
+   cron or process ever references.
+3. **The index.** `README.md` rows whose path or name no longer exists, and skills present
+   on disk with no row a reader could find.
+4. **Scrub, whenever the repo is public.** No absolute home paths (write `~`), no real
+   personal names, no private project names (write `<project>`), no tokens or keys, no
+   co-author addresses.
+
+**A leak report must never repeat the leak.** Report a scrub hit as **pattern + file:line +
+count**, and never copy the private value into a row, a summary, or any file that lands in
+the public repo — a report that quotes the leaked name is a second leak. Verify before you
+file: substring scans produce false positives (a scan for a personal name matched the phrase
+*Co-Author*), so read the line before you claim it.
+
+The scrub check is not cosmetic. A single home path or private project name in a public
+skill teaches every reader of that repo the fleet's internals, and it survives in git
+history long after the line is fixed.
+
 ## What you file
 
 One row per gap, on the **owning project's board**, sized so the foreman can hand it
@@ -105,3 +138,6 @@ trigger" is a row a worker can finish without asking a question.
 - **The example whose output stopped matching** two versions ago; nothing executes it, so nothing catches it.
 - **The audience that has no home at all** — an integrator reading developer prose, guessing at error semantics.
 - **The gap that is only ever a promise**: an incident action item, a deferred row, or a comment asking someone to document it later.
+- **The skill no lane can load** — a lane prompt names a skill that was never written, so the lane runs with no method and improvises instead.
+- **The skill with no trigger** — no "use when", so no agent ever loads it: it exists and is never read.
+- **The private value in a public skill** — a home path, a real name or a private project name shipped in a public repo, and the scrub report that repeats it instead of citing the pattern.
