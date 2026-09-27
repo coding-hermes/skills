@@ -1,5 +1,5 @@
 ---
-name: project-review
+name: carterlasalle-project-review
 description: 'Use when asked to explore, test, and report on a project — hands-on clone/build/run/compare review, delivered as one self-contained HTML verdict.'
 version: 1.0.0
 author: carterlasalle
