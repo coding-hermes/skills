@@ -381,3 +381,51 @@ location.
 - `references/troubleshooting.md` — the failures seen in practice (permission
   denied after a copy, empty mount, stale mountpoint, credential confusion) and
   what each one actually means.
+
+## Bringing a fresh remote agent up — `scripts/provision-remote-agent.sh`
+
+One command takes a bare box to a working agent, in the order the dependencies actually require:
+
+```
+scripts/provision-remote-agent.sh --agent <name> --host <box-ip> --port 8642 \
+--repo <owner>/<repo> --duckbrain-url http://<host>:3000/mcp
+scripts/provision-remote-agent.sh --agent <name> --host <box-ip> --check-only   # re-read the box
+```
+
+What it sets up, and why in that order:
+
+1. **`gh` in the agent's home** — the home is a bind mount, so a binary installed there survives every
+exec. Nothing persists in the container's own filesystem.
+2. **git identity** written to the agent's home `.gitconfig`.
+3. **The agent clones its own repo** — not root. The credential is minted for that repository and
+installed 0600 in the agent's home; then `gh auth setup-git` makes plain `git fetch`/`git push`
+work. Without that one call, `git push` fails with `could not read Username for 'https://github.com'`
+while `gh` itself works fine — the confusing half-broken state.
+4. **A voice on the bus** — `crier-mcp` plus the agent's own PKCS#8 ed25519 key plus the config entry.
+Remote mode speaks HTTP to the shared bus: no database exposure, no shared credential.
+5. **A gateway unit on the HOST**, one per agent, one port per agent (8642+). Do not go looking for a
+gateway inside the container: measured on a live agent there are **no listening sockets, no hermes
+process and no gateway state files** in there, and provisioning logs `gateway setup skipped (no
+terminal)`. The container publishes no host port. Any design that says "forward to the agent's
+gateway" must name the host unit, not the container address.
+6. **DuckBrain over the tailnet** — one shared store, never a per-box copy; a per-box copy forks
+memory and there is then no single writer.
+
+### Two traps that cost real time
+
+- **The username is not the agent name.** The Unix user and the home are `bunker-<agent>`; the agent
+*id* is the bare name. Ownership given the bare name fails with `invalid user`, and switching user
+fails with `user does not exist or the user entry does not contain all the required fields`. Case
+matters too — an id that differs only in case can leave a stray root-owned home beside the real one,
+and installing into the wrong one silently gives that agent nothing.
+- **Never append a second `mcp_servers:` block.** When an agent's config already has one (DuckBrain,
+another MCP server), appending a whole new block is invalid YAML; the installer that "skips
+because one exists" leaves the agent holding a binary it cannot use, and every file-existence check
+still passes. Insert the new server *under* the existing key, then read the file back.
+
+### Verify by re-reading, not by the log
+
+`--check-only` reports, per agent, whether the binary, the repo, the bus tool, the key, the gateway
+unit and the memory entry are actually present — read from the box each time. A provisioning script
+that reports its own intent is not evidence; the state of the box is.
+
