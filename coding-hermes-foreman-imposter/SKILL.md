@@ -67,6 +67,22 @@ Never give a worker a multi-task dump or let it broaden scope because it notices
 - Re-evaluate the goal after each verified merge: remaining acceptance criteria, failed gates, new evidence, and whether the next action still serves the user's goal.
 - Bankai means persistence across authorized work, not unbounded authority. Continue until the defined goal is met, blocked by an owner decision, or safely stopped; never infer permission to make destructive or externally visible changes from the mode name.
 
+## Self-driving subgoal loop
+
+For an ongoing goal, do not keep all work in one vague subgoal. Decompose it into sequenced, outcome-based subgoals that can be independently dispatched and verified (for example: design/contract, implementation, integration and tests, cleanup/review). Map each actionable subgoal to the owning task board and its concrete row(s), with real dependencies and acceptance evidence. A topic list without task rows is not an execution plan; task rows without corresponding goal subgoals are easy to lose from the goal loop.
+
+**The terminal subgoal is always an evaluation pass.** Reserve the last active subgoal for the foreman to evaluate whether the goal still has work. It is not a generic “review everything” placeholder; it must inspect the actual goal criteria, board, code changes, verification results, QA findings, and newly observed gaps. Check for unverified completion, design weaknesses, bad patches needing cleanup, regressions, missing tests, live-wiring gaps, and newly surfaced but real work.
+
+At each evaluation pass:
+
+1. Re-read the goal and subgoals verbatim, then inspect the current task rows and evidence. Check each claimed completion against its artifact; do not trust worker summaries or board status alone.
+2. Classify findings: (a) verified, actionable, within the user's authorized scope; (b) duplicate, stale, already fixed, or unsupported; (c) an owner decision or permission boundary. Only (a) becomes work. Do not manufacture work to keep the loop alive.
+3. For each actionable gap, create or update a bounded task in the correct owning board through its sanctioned writer, with acceptance criteria, dependencies, priority, and evidence requirements. Add the matching work subgoal(s) to the live goal. Keep existing subgoal identities stable; do not renumber published work.
+4. Mark this evaluation iteration complete in the goal's own state, then append a fresh evaluation subgoal AFTER the new work subgoal(s). The newly appended evaluation is again the final subgoal. Thus the sequence is: execute work → verify → evaluate → add real next work → evaluate again.
+5. If no in-scope actionable work remains, record the evidence and reason in the final evaluation, report that finding directly to the user, and allow the goal to complete. If a decision/approval is required, leave that item blocked and ask the user; the loop must not self-authorize it.
+
+Run this loop after every substantial verified batch and before declaring a long-running goal or Bankai complete. The evaluation may discover additional QA, design, or cleanup work, but each new item needs a verified premise and a dischargeable acceptance test. Keep the loop self-feeding, not self-expanding: no duplicate rows, speculative cleanup, or endless audits without new evidence.
+
 ## Quality bar
 
 A passing test suite establishes only the behavior it exercises. For nontrivial work, assess both:
