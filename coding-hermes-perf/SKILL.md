@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-perf
 description: "Use when profiling or speeding up any project — measure first, profile where the numbers point, change ONE thing, re-measure; PERF-* rows on the owning board."
-version: 1.0.0
+version: 1.1.0
 author: totalwindupflightsystems
 license: MIT
 metadata:
@@ -123,6 +123,41 @@ is deployed (see the observability stack), it becomes the lane's first stop:
   without frame pointers comes out thin**. When a Python profile looks hollow, that is why, and
   the fix is `py-spy` (which reads the interpreter's own stack) feeding the same store. Report a
   thin profile as thin; do not present it as the truth.
+
+## Emitted metrics — a low-priority observability backlog
+
+The perf lane also checks whether the target emits enough runtime/performance data to diagnose its important behavior. **Measure emission, not declarations:** a dependency, config value, README claim, or `Metrics` type does not prove metrics reach an endpoint or collector. The lane audits and files tasks; the owning foreman implements them.
+
+### Audit the real surface
+
+1. Classify what actually runs: long-lived API/service, worker/queue, batch/CLI, library/SDK, benchmark, or test-only harness. Inspect the target's current runtime and code; do not infer production usage from the repo name.
+2. Look for existing metric definitions, registration, exporter wiring, configuration, and consumer/scrape target. Distinguish **runtime emission verified**, **instrumentation exists but emission/scrape unverified**, **source scan found no signal**, and **no runnable product surface**. A package dependency or a metrics-looking symbol alone is not coverage.
+3. Where safe and available, exercise one representative operation and verify a real sample at the emitter boundary (Prometheus/OpenMetrics scrape, StatsD test receiver, or OpenTelemetry in-memory/exporter readback). Do not spawn a paid production workload or change service configuration just to prove an endpoint.
+4. Identify the operator question the metric would answer. Prioritize a blind spot that impedes diagnosing latency, errors, queueing, resource saturation, or task outcomes; skip metrics with no actionable consumer.
+
+### Select the right signals and transport
+
+- **Long-lived service/API:** request/job totals, error/outcome counts, latency histograms, in-flight work, queue depth, and important downstream waits (database, provider, cache, network).
+- **Workers / orchestration / schedulers:** work admitted/deferred, queue age, run/step duration and result, retries, timeouts, cancellation, and worker utilization.
+- **Data/search/index pipelines:** records and bytes processed, ingest/index/search latency, failures by bounded stage, cache/pool utilization, and freshness lag.
+- **Agent/model workloads:** calls and duration by bounded provider/model class, success/timeout/rate-limit outcomes, tokens/cost only when available from the existing source of truth, and end-to-end task outcome. Never label metrics with prompts or user/task identifiers.
+- **Batch job / CLI:** prefer an optional structured run summary or a caller-supplied metrics hook: duration, items/bytes, success/failure/retry counts, and peak resources when useful. Do not require a daemon or network sink for a one-shot process.
+- **Library / SDK:** offer optional hooks or use a telemetry API already present; do not force every consumer to install a global exporter.
+
+Prefer the target's existing stack. Use Prometheus/OpenMetrics for a scrapeable service where that fits deployment; use OpenTelemetry where already used or exporter portability is useful; use StatsD only when a real receiver/consumer exists. Do not add multiple exporters or a new dependency by default. Metrics require units, documented semantics, and low-cardinality labels (route template, operation, bounded result class). Never label raw user/request IDs, arbitrary URLs, prompt text, exception messages, or unbounded resource names.
+
+### File small P3/P4 tasks; never gate feature work
+
+If a verified instrumentation gap is valuable, file **at most one new metrics task per lane tick** on the target's own board and leave implementation to the foreman. Rank by impact, not by the number of possible metrics:
+
+- **P3** only when a missing signal on a live service, worker, scheduler, critical data path, or core product materially impairs reliability/performance diagnosis.
+- **P4** for optional detail on a CLI, library, batch tool, benchmark, secondary metric, or dashboard/profile view.
+
+Metrics-only tasks are additive backlog. They MUST NOT block, gate, delay, or lower the priority of feature, bug-fix, release, or security work. Do not fail a build/release or demand that a feature wait for observability. Missing telemetry alone is never a P1/P2 performance incident; keep actual measured regressions separate and prioritize those by their real impact.
+
+A task must name the operator question, metric(s) and type/unit, emission point, transport, bounded label set, and acceptance evidence. Require a focused test that verifies registration and a non-empty emitted sample (without relying on a live external collector), plus a safe runtime/scrape probe where the service is available. State any deployment/dashboard follow-up separately rather than expanding the code task without limit. Dedupe the board first; do not create one row per metric or file speculative "instrument everything" work.
+
+If coverage is adequate, no actionable operator question exists, or no target runtime is available to inspect, report `NOTHING-TO-DO` or `BLOCKED` with the evidence/reason; never fabricate a gap. A source-level scan is a discovery aid, not proof of a missing or working exporter.
 
 ## The closing rule
 
