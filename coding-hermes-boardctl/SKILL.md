@@ -1,10 +1,10 @@
 ---
-name: boardctl
+name: coding-hermes-boardctl
 description: >-
   Use when reading, writing, or validating coding-hermes JSONL foreman
   boards — boardctl CLI (list/show/create/update/event/header/validate/stats).
   The JSONL files ARE the board; board.db/parquet retired 2026-09-03.
-version: 1.1.0
+version: 1.2.0
 author: Bane + Hermes
 metadata:
   hermes:
