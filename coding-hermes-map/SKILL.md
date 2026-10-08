@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-map
 description: Skill map for all coding-hermes skills. Shows what each skill does, when to use it, and why. Included in every coding-hermes skill so agents always know the full toolbox.
-version: 1.1.0
+version: 1.2.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -17,6 +17,7 @@ Every coding-hermes skill includes this map. Load any one skill, get the full pi
 graph TD
     subgraph "Orchestrator"
         CF[coding-hermes-foreman<br/>Full SDLC delivery loop<br/>When: every foreman tick<br/>Why: orchestrates all steps]
+        FI[coding-hermes-foreman-imposter<br/>Current conversation owns planning and coordination<br/>When: direct foreman mode is requested<br/>Why: no coordinator handoff]
     end
 
     subgraph "Phase 0 — Prepare"
@@ -51,6 +52,8 @@ graph TD
     end
 
     CF --> SH
+    FI --> WK
+    FI --> GD
     CF --> BD
     CF --> DS
     CF --> WM
@@ -74,6 +77,7 @@ graph TD
 | Skill | Load when... | Skip when... | Status |
 |-------|-------------|-------------|--------|
 | `coding-hermes-foreman` | Every foreman tick | — (always loaded) | PLANNED — not yet built; use `coding-hermes-cron` + this map instead |
+| `coding-hermes-foreman-imposter` | The user wants this conversation to own a multi-step coding goal and coordinate implementation workers | A scheduled foreman already owns the task, the user only needs one bounded change, or no coordination is needed | EXISTS — optional direct-contact mode; implementation workers only |
 | `coding-hermes-self-heal` | Start of every tick | — (always needed) | PLANNED — not yet built; run git status/log + hilo stats manually |
 | `coding-hermes-board` | After self-heal, need task selection | — (always needed) | PLANNED — not yet built; read `.coding-hermes/tasks.md` directly |
 | `coding-hermes-discovery` | Board is empty, need to find work | Board has actionable tasks | PLANNED — not yet built |
@@ -103,6 +107,7 @@ graph TD
 | Benchmarks | Your fast budget model (>your-provider) | worker-model, worker |
 | Architecture design | Your best reasoning model (>your-provider) / Your architecture model (>your-provider) | worker-model, worker |
 | Multi-step release / cross-system change | Project-appropriate | coding-hermes-trailblazer + the relevant implementation, QA, and release skills |
+| Direct-contact goal / worker wave | Project-appropriate | coding-hermes-foreman-imposter + this map; load worker and verification skills as needed |
 
 ## Skill Size Budget
 
