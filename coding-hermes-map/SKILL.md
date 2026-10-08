@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-map
 description: Skill map for all coding-hermes skills. Shows what each skill does, when to use it, and why. Included in every coding-hermes skill so agents always know the full toolbox.
-version: 1.0.0
+version: 1.1.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -34,6 +34,10 @@ graph TD
         WK[coding-hermes-worker<br/>Spawn independent worker session<br/>When: task needs code changes<br/>Why: isolates work from foreman]
     end
 
+    subgraph "Ahead-of-change verification — optional"
+        TB[coding-hermes-trailblazer<br/>Probe adjacent systems and release assumptions<br/>When: risky cross-system or multi-step changes<br/>Why: find preventable failures early]
+    end
+
     subgraph "Phase 3 — Verify"
         GD[coding-hermes-guard<br/>GitReins: secrets, build, lint, tests<br/>When: before every commit<br/>Why: blocks broken code]
         GR[gitreins<br/>Guard automation via MCP<br/>When: guard step triggers<br/>Why: enforces quality gates]
@@ -55,6 +59,8 @@ graph TD
     BD --> DS
     BD --> AU
     WM --> WK
+    CF -. consequential change .-> TB
+    TB --> GD
     WK --> GD
     DS --> HI
     CF --> CR
@@ -74,6 +80,7 @@ graph TD
 | `coding-hermes-audit` | Discovery finds nothing, last-resort scan | Discovery found tasks | PLANNED — embedded in NEVER-DONE tasks.md entry |
 | `coding-hermes-worker-model` | Choosing a model for a new task | Mechanical/foreman-direct tasks | EXISTS |
 | `coding-hermes-worker` | Need to spawn independent work session | Task is foreman-direct (specs, docs, mechanical) | EXISTS |
+| `coding-hermes-trailblazer` | A release, migration, rollout, or change crosses system boundaries; probe likely downstream reactions early | Routine isolated changes; general backlog discovery; difficult-question research | EXISTS — optional sidecar; does not replace QA/release gates |
 | `coding-hermes-guard` | Before every commit | — (always needed) | PLANNED — use GitReins MCP `guard_run` directly |
 | `coding-hermes-cron` | Running as a cron/scheduler job | Interactive session | EXISTS — **also serves as foreman workflow reference when foreman skill is absent** |
 | `hilo-usage` | Need dependency impact analysis | Simple tasks, single-file changes | EXISTS |
@@ -95,6 +102,7 @@ graph TD
 | Dependencies | Your fast budget model (>your-provider) | foreman-direct |
 | Benchmarks | Your fast budget model (>your-provider) | worker-model, worker |
 | Architecture design | Your best reasoning model (>your-provider) / Your architecture model (>your-provider) | worker-model, worker |
+| Multi-step release / cross-system change | Project-appropriate | coding-hermes-trailblazer + the relevant implementation, QA, and release skills |
 
 ## Skill Size Budget
 
