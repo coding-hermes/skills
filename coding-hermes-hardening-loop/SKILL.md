@@ -122,7 +122,7 @@ every new gap as a new row → repeat.
 - **A dead seat is not a finding.** A judge that exits non-zero with a stub, or
   thinks for an hour and returns nothing, produced no evidence; replace it with a
   *different* family rather than counting it. Report the substitution.
-- **Keep a deployable artifact current.** Redeloy after each wave that changes
+- **Keep a deployable artifact current.** Redeploy after each wave that changes
   behaviour a human will test, re-seed its demo data, and restart any demo helper
   process you rely on — then verify with a real round trip, because "the container
   is up" is not "the flow works".
