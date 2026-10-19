@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-hardening-loop
 description: "Use when hardening an existing system end-to-end in a self-sustaining loop — one row per worker, coordinator-verified proof, deploy as the test, quorum between waves."
-version: 1.0.0
+version: 1.1.0
 author: totalwindupflightsystems
 license: MIT
 metadata:
@@ -48,6 +48,51 @@ State the whole contract in that one row: top open row → one worker → isolat
 worktree → coordinator verifies by exercise → merge only on reproduced evidence →
 deploy and re-run the real flows → adversarial review of the landed diff → file
 every new gap as a new row → repeat.
+
+## Goals, subgoals, and the feeder — one request, many ticks
+
+A single user request must produce **many completed ticks**, not one polished partial. The
+mechanism is three layers that all have to be real, or the work stops when attention does:
+
+1. **The goal** — one statement of the end state plus its gates, in the user's terms:
+   *what a stranger will be able to do when this is done, and how we will know.* Write it
+   down where it survives a context loss (the goal surface, and mirrored as the loop's
+   contract row). Include the non-goals and the owner decisions it does not cover, so the
+   loop cannot drift into them.
+2. **The subgoals** — sequenced, outcome-based, each one **independently dispatchable and
+   independently verifiable**. A subgoal is sized to one worker turn and one coordinator
+   verification: "the panel states its posture, proven on a live build", not "improve the
+   UI". Map every actionable subgoal to the owning board row(s); a subgoal without a row is
+   lost from the loop, and a row without a subgoal is invisible to the goal.
+3. **The feeder** — the mechanism that turns *finished work* into *next work* without the
+   user asking again. In practice:
+
+   - **Completion is the trigger.** Each background worker exits with a notification; that
+     batch is your cue to verify → merge → close → dispatch the next row. Never end a turn
+     at "dispatched" unless a process is in flight whose completion will wake you.
+   - **The board is the durable queue.** Rows, not your memory, hold what is left. Any turn
+     can be resumed by reading the top open rows and the loop contract row.
+   - **A heartbeat for quiet stretches.** When nothing is in flight and nothing is blocked,
+     a cron tick (or the foreman's own schedule) keeps the loop turning; when something *is*
+     in flight, the completion notification is the heartbeat and an extra tick is noise.
+   - **One dispatch per lane, check before you add.** Read what is already running before
+     starting another worker, so a resumed session cannot double-dispatch the same row.
+   - **The terminal subgoal is always an evaluation pass** — re-read the goal, inspect the
+     evidence, and append new bounded subgoals *only* where a verified premise justifies
+     them, then re-append the evaluation. The loop feeds itself from evidence, never from
+     the wish to stay busy.
+
+**Partial work is a named state, not an acceptable stop.** Before ending a turn, answer one
+question: *is there an executable subgoal and nothing in flight?* If yes, that is not a
+stopping point — dispatch it. If you are blocked, name the blocking row and the decision it
+needs, then move to the next executable subgoal rather than idling behind it. The loop stops
+only when (a) the acceptance flows pass on the deployed artifact and the open-row census is
+zero, (b) it is waiting on an owner decision that is explicitly recorded, or (c) the user
+stops it. Everything else is "in progress" and must have a live feeder behind it.
+
+**Report per batch, not per tick.** One consolidated message when a completion batch lands:
+what is now true and measured, what is in flight, what is blocked and on whom. Never let the
+feeder's own noise become the report.
 
 ## One iteration, in order
 
