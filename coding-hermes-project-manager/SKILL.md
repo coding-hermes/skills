@@ -10,7 +10,7 @@ description: >-
   items, verifies the fixes with real commands, updates statuses, and escalates
   stale items. Owns the fleet board as its project list, reports to the user as
   its stakeholder, and leaves a decision trail in DuckBrain.
-version: 1.2.0
+version: 1.2.1
 category: software-development
 ---
 
@@ -74,6 +74,11 @@ Report `open`, `dispatchable`, `dispatchable_ratio` every cycle; target ≥ 0.80
 of open rows and zero dispatchable is a PM failure to report — and the fix is the repair table, not
 a new row describing the problem. When the gap is "an existing row cannot be executed", fix *that
 row*.
+
+**Load the skill, then prove it.** The cycle's first action is `skill_view` on this skill; the
+report's first line is `SKILL: coding-hermes-project-manager v<version>`. If the skill cannot be
+loaded, the cycle does not run: report `SKILL-LOAD-FAILED: <error>` and stop rather than improvising
+a PM cycle from memory.
 
 ## Local CI is the gate — remote CI is an amplifier
 
