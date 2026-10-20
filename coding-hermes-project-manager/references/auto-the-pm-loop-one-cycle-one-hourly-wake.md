@@ -1,0 +1,45 @@
+# The PM Loop (one cycle = one hourly wake)
+
+
+**Project-scoped preflight:** read the lane board, then run `python3 ~/.hermes/stand-in/ledger_board_reconcile.py` before counting or reporting. Resolve the exact target board from scheduler.db; if the exact project row is absent, stop and escalate. Never substitute a satellite or stand-in path. Use reconciler buckets and reconciled counts, not raw ledger totals.
+
+**Scheduler identity overrides dispatch prose and supplied paths.** Treat the prompt's project/workdir as advisory whenever it disagrees with the current tick's `project_name`, the scheduler `projects.workdir`, or the resolved `.coding-hermes/board` symlink. Resolve the exact lane from `ticks` first, then its `projects` row; if that row is a satellite/monitoring stand-in, resolve the board symlink and identify the owning foreman row before reading liveness, cooldown, or writing. Verify the board with `readlink -f` and a real-file check. If the DB workdir is a stand-in, follow its symlink to the owning foreman board; DB plus resolved board outrank prompt paths. Report any path mismatch explicitly, because a successful write to the wrong board is invisible work, not a partial success. **Do not run any target-board census, probe, or reconciler attribution against the prompt-supplied path after a mismatch is found; quarantine it as dispatch metadata and use only the DB-resolved real board.**
+
+**Resolve JSONL task predicates in two jq stages.** Use `select(type=="object") | select((.status // "") | IN("pending", "in_progress", "blocked", "review", "parked"))`, not a compound `select(type=="object" and .status ...)`: jq may still evaluate the field access on string/event records and abort the census. A failed census is not a zero-row result; rerun with the type guard before making gating or before/after claims.
+
+**For CLI and verifier findings, reproduce both failure and control shapes.** A candidate is gated only after the exact command proves the claimed exit code and observable side effect (for example, an invalid flag must actually append the bad record or print the false verdict), plus a valid control remains healthy. Focused unit tests or a green build do not replace this surface probe; record the command and both results in the row so a foreman can rerun the same falsification.
+
+```
+1. Read the lane board and resolve the target board; run the canonical reconciler before listing or reporting.
+2. Read the ledger (tracking file) — what did we add before? What's the status?
+3. Delegate parallel gap-hunters (subagents) — find MANY gaps per cycle
+4. PRE-ADD GATE — think before you write: will the scheduler fix it?
+- **Write tasks (only gated ones) + wake foremen**
+5. Verify prior-run items — did the fixes actually land? Update ledger
+
+A prior live writer is not a permanent write block. Re-query family liveness immediately before the append: if the target/family has no currently running tick with a fresh heartbeat, re-read the board and write the gated rows; if a writer is currently running, stand down and defer all shared-board mutations and commits until it lands, then re-read the board and re-evaluate the gates. Treat an uncommitted board/events diff as owned sibling work when any family satellite writer is live, even if the target foreman itself is idle: do not normalize, reset, commit, or append over it. A historical timeout, failed tick, or writer that finished during the cycle is not a G6 block by itself; only current liveness, a fresh staged board diff, or an advancing external writer blocks the append. Continue read-only premise checks, but report each genuinely deferred action as a handoff with row ID, exact probe/result, and the next board action (close, refresh, or file); do not label it simply stale or leave the next PM to rediscover what to do. Do not create a separate report/evidence commit merely to substitute for the deferred board work: on a shared checkout it creates an unpushed local head and complicates attribution while the live writer is changing the same repository. Preserve durable evidence through the cycle log or existing producer artifact, then land the board mutation when the writer is quiet. Do not invent an authorization gate after the writer has finished, because that strands independently verified work for another cycle.
+
+**Publication and traceability gate:** before reporting a gated row as delivered, pair the board line and ledger item, write the board through an atomic line-preserving edit, and publish the resulting board commit. Open-row trace markers must never contain placeholder values such as `commit=to-be-filled`; use explicit pending semantics (`commit=none:pending`, `verdict=none:not-judged`) until a published SHA and independent verdict exist. A `/tmp` probe log may support the decision, but it is not durable evidence by itself: preserve the exact command and output in the row or a repository-local evidence artifact that a later verifier can read. Treat the DuckBrain cycle log as the final write of the cycle: finish every board close/refresh, ledger pair, commit, push, and parity check first; then take one stable board snapshot and derive the closing row counts, G8/validation verdict, liveness, and write-attribution from that same snapshot. Do not post the cycle log and then perform a board mutation. If an unavoidable later landing, writer-driven board change, or parity correction occurs, append a correction record at the same DuckBrain key with `correction=true` and `supersedes=<prior-record-id>`, using the post-change evidence. A changed board snapshot invalidates earlier counts and validation: rerun the census and validators after writers quiet, or report only pinned snapshots. Build logs from captured output—not memory: never approximate IDs, SHAs, counts, times, or statuses; ambiguous/truncated values require bounded re-extraction or an explicit unverified label.
+
+**Separate task-board validity from event-history validity:** report G8 task-line integrity, `boardctl validate` task errors, and `events.jsonl` errors as distinct results. A clean task audit does not make an event-ordering error clean, and a legacy event warning is not a task defect. Preserve mixed-schema event bytes; do not renumber, normalize, or broad-rewrite event history during a PM gap cycle. Escalate a real event-history error to board-maintenance ownership without inflating the actionable task backlog or filing a duplicate product row.
+
+**Use exact target liveness identity:** when the target has a primary `-foreman` lane, use that exact scheduler project name for the target's completed-tick count and last completion; use the family prefix only for detecting concurrent writers. Do not substitute the satellite PM lane's failed tick or an events.jsonl count for foreman liveness.
+6. Escalate stale/ignored items
+7. Log the cycle to DuckBrain + regenerate the HTML report
+```
+
+**Reporting Format**: Report terse to user: first line `OK` or `ESCALATE`, then:
+- `SKILL: coding-hermes-project-manager v<version>` — proof this cycle loaded the procedure rather
+  than improvising. If the skill could not be loaded, the cycle does not run: report
+  `SKILL-LOAD-FAILED: <error>` and stop.
+- `DISPATCHABLE: <n>/<open>` — the dispatchability ratio from Step 1b, with the ids you repaired
+  this cycle. An unchanged ratio across cycles means the repair pass is not happening.
+- Rows gated-in (count and IDs if any)
+- Items verified (with verification command)
+- Stale escalations (if any)
+- Foreman liveness (REQUIRED when 0 rows were gated-in): completed-tick count over a recent window (48h) plus the timestamp of the last `task_completed` event — take the timestamp from the TICKS table (`SELECT MAX(completed_at) FROM ticks WHERE project_name='<target>' AND status='completed'`), not from the events.jsonl census: legacy event lines carry no `created_at`/`ts`, so the census counts completions correctly (via `event_type`) but yields an EMPTY last-timestamp on live boards. Liveness evidence is what makes an empty cycle defensible rather than a skipped cycle.
+- Board row counts before/after: Report the reconciled open work count from the ledger board reconciliation (look for `board_open_work_count` in the reconciliation summary or count items where `project` matches TARGET in `board_open_work_items`). This represents the genuine prior-run follow-up list. Distinguish it from the target board's raw actionable-row count and from the fleet-wide `board_open_work_count`: label all three when they differ, rather than presenting the fleet total as the target backlog.
+- If the bare TARGET has no scheduler-project row, resolve the primary `<TARGET>-foreman` lane before reading cooldown, enabled state, zombies, liveness, or wake eligibility. Do not report `NULL` metadata from the failed bare-name query as a target fact; use the foreman lane for scheduler decisions and the resolved foreman workdir for the board, while retaining the bare TARGET name in the stakeholder report.
+
+
+
