@@ -10,7 +10,7 @@ description: >-
   items, verifies the fixes with real commands, updates statuses, and escalates
   stale items. Owns the fleet board as its project list, reports to the user as
   its stakeholder, and leaves a decision trail in DuckBrain.
-version: 1.1.0
+version: 1.2.0
 category: software-development
 ---
 
@@ -55,6 +55,37 @@ The ledger is the PM's memory of what was added, across all runs:
 Load the ledger. For each item with `status != verified`:
 - Check its row on the project board (does it still exist? status changed?)
 - That's your **prior-run follow-up list** for this cycle.
+
+## Step 1b — Dispatchability is the PM's job
+
+A row exists to be executed. A row a foreman cannot pick up is a **PM defect**, not a foreman
+defect. The PM owns the difference between "open" and "dispatchable", and repairs it every cycle
+before filing anything new:
+
+| Condition | PM action (same cycle) |
+|---|---|
+| No acceptance criteria | Write them into the row. If you cannot state them yet, file one `DEFINE-<n>` row for it and set the parent `blocked_on=DEFINE-<n>`. Never leave an open row with no way to judge it. |
+| Blocked but `blocked_on` empty | Probe the blocker live and record the exact result. Cleared ⇒ clear the field; real ⇒ name the owner and the unblock action. |
+| Blocker is remote CI | Re-check it live; see "Local CI is the gate". |
+| Owner-gated as a whole | Split it: the non-gated part becomes dispatchable now, the gated part keeps `blocked_on`. |
+| Duplicate of an existing row | Merge into the older row; one job never gets two ids. |
+
+Report `open`, `dispatchable`, `dispatchable_ratio` every cycle; target ≥ 0.80. A board with hundreds
+of open rows and zero dispatchable is a PM failure to report — and the fix is the repair table, not
+a new row describing the problem. When the gap is "an existing row cannot be executed", fix *that
+row*.
+
+## Local CI is the gate — remote CI is an amplifier
+
+Never idle, defer or down-scope work because hosted CI is unavailable. The authoritative gate is
+the one the machine can run: build, vet/lint, tests, or the repo's guard (`gitreins guard`) on the
+merged tree. Remote CI is a second opinion on a pushed SHA, not permission to work.
+
+- Local gates decide; record the exact command with the result.
+- `steps: 0` on a hosted run means a pre-runner billing/spending block, not a code verdict — note it
+  once on the row and keep working.
+- Never generalise one repo's outage to the fleet; cite repo + run id after checking that repo.
+- Report both columns: `local gate: PASS (command)` and `remote CI: blocked/absent/green`.
 
 ## Step 2 — Delegate Parallel Gap-Hunters (find MANY per cycle)
 
