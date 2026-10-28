@@ -1,0 +1,1 @@
+{"id": 1, "timestamp": "2026-10-28T13:48:25.666836+00:00", "event_type": "task_created", "task_id": "SKILL-001", "actor": "foreman", "detail": "{\"id\":\"SKILL-001\",\"status\":\"pending\"}", "tick_number": null}
