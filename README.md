@@ -31,6 +31,7 @@ This repository contains the skill files that power the Coding Hermes autonomous
 | [`coding-hermes-tools-usage`](coding-hermes-tools-usage/SKILL.md) | Reference | Decision table: which code-modification primitive (`toolsd`) fits the task — chosen by merit, never mandated |
 | [`coding-hermes-remote-bunker`](coding-hermes-remote-bunker/SKILL.md) | Reference | Working on a REMOTE bunker agent — mount vs socket vs exec, and which credentials (GitHub and other SSH resources) each mode can actually use |
 | [`github-app-auth`](github-app-auth/SKILL.md) | Reference | GitHub App credential issuer — one registered App mints short-lived, repo-scoped tokens so no personal access token is ever pasted onto a worker |
+| [`model-current-reference`](model-current-reference/SKILL.md) | Reference | What counts as a CURRENT model — release-window freshness, what the registry cannot route to, per-category picks with their evidence class. Ships a standalone stdlib script: point it at a `models.dev` dump and get the list, with or without a registry |
 
 ---
 
