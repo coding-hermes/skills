@@ -12,6 +12,9 @@ Usage:
     python3 check_scheduler_project.py            # dump all projects
 
 Output: one JSON line per matching project.
+
+GAP-111 board-acceptance trace: named lookup must find scheduler projects that
+sort after the list endpoint's first lexical window.
 """
 import json
 import sys
@@ -78,9 +81,10 @@ def main():
             print(json.dumps(normalize_project(project)))
             return
 
-    # The daemon clamps limit=1000 to 500 rows and returns a lexical window
-    # (observed 2026-10-29). This helper does not paginate; for named lookups,
-    # the list is only a fallback after the authoritative endpoint returns 404.
+    # GAP-111 correction (2026-10-29): the earlier pagination premise was stale.
+    # Measurement shows the daemon clamps limit=1000 to 500 rows and returns a
+    # lexical window. Named lookup therefore uses the authoritative
+    # single-project endpoint; the list is only a 404 fallback for compatibility.
     try:
         response = fetch_json(API)
     except Exception as error:

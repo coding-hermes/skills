@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Regression tests for check_scheduler_project.py; no live scheduler required."""
+"""GAP-111 board-acceptance tests for late-sorting scheduler project lookup.
+
+No live scheduler is required for these regressions.
+"""
 import contextlib
 import importlib.util
 import io
