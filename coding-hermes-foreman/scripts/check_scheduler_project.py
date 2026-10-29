@@ -15,6 +15,8 @@ Output: one JSON line per matching project.
 """
 import json
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 
 API = "http://localhost:9090/api/v1/projects"
@@ -28,26 +30,69 @@ SNAKE_MAP = {"Name": "name", "Enabled": "enabled", "CooldownS": "cooldown_s",
              "LastTickStarted": "last_tick_started"}
 
 
+def fetch_json(url):
+    with urllib.request.urlopen(url, timeout=10) as response:
+        return json.load(response)
+
+
+def normalize_project(project):
+    return {
+        key: project.get(key) if project.get(key) is not None else project.get(SNAKE_MAP[key])
+        for key in KEYS
+    }
+
+
+def project_from_response(response):
+    """Accept the current nested response and legacy direct project objects."""
+    if not isinstance(response, dict):
+        return None
+    project = response.get("project")
+    if isinstance(project, dict):
+        return project
+    if "Name" in response or "name" in response:
+        return response
+    return None
+
+
+def project_name(project):
+    return project.get("Name") if project.get("Name") is not None else project.get("name")
+
+
 def main():
     name = sys.argv[1] if len(sys.argv) > 1 else None
+    if name is not None:
+        lookup_url = f"{API}/{urllib.parse.quote(name, safe='')}"
+        try:
+            project = project_from_response(fetch_json(lookup_url))
+        except urllib.error.HTTPError as error:
+            if error.code != 404:
+                print(f"SCHEDULER_ERROR: {error}")
+                sys.exit(1)
+        except Exception as error:
+            print(f"SCHEDULER_ERROR: {error}")
+            sys.exit(1)
+        else:
+            if project is None:
+                print("SCHEDULER_ERROR: single-project response did not contain a project")
+                sys.exit(1)
+            print(json.dumps(normalize_project(project)))
+            return
+
+    # The daemon clamps limit=1000 to 500 rows and returns a lexical window
+    # (observed 2026-10-29). This helper does not paginate; for named lookups,
+    # the list is only a fallback after the authoritative endpoint returns 404.
     try:
-        with urllib.request.urlopen(API, timeout=10) as r:
-            d = json.load(r)
-    except Exception as e:
-        print(f"SCHEDULER_ERROR: {e}")
+        response = fetch_json(API)
+    except Exception as error:
+        print(f"SCHEDULER_ERROR: {error}")
         sys.exit(1)
-    projects = d if isinstance(d, list) else d.get("projects", [])
+    projects = response if isinstance(response, list) else response.get("projects", [])
     found = False
-    for p in projects:
-        # API shape changed 2026-08-04 (daemon restart): project entries now
-        # use snake_case keys (name, cooldown_s, priority, ...) instead of Go
-        # field names (Name, CooldownS, ...). Accept both for forward compat.
-        pname = p.get("Name") if p.get("Name") is not None else p.get("name")
-        if name is None or pname == name:
-            out = {}
-            for k in KEYS:
-                out[k] = p.get(k) if p.get(k) is not None else p.get(SNAKE_MAP[k])
-            print(json.dumps(out))
+    for project in projects:
+        if not isinstance(project, dict):
+            continue
+        if name is None or project_name(project) == name:
+            print(json.dumps(normalize_project(project)))
             found = True
             if name is not None:
                 return
