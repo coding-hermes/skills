@@ -1,7 +1,7 @@
 ---
 name: model-current-reference
 description: Use when picking a model or refreshing the models list.
-version: 1.0.0
+version: 1.0.1
 author: Bane + Hermes
 platforms: [linux, macos]
 metadata:

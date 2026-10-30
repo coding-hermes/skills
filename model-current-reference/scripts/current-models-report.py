@@ -189,10 +189,15 @@ def build_report(cache_path: pathlib.Path, tables_dir: pathlib.Path, window_days
                 break
         recs[cat] = list(seen.values())
 
-    dominant = [(m, c) for m, c in (
-        (rows[0][1], [x for x in recs if recs[x] and recs[x][0][1] == rows[0][1]])
-        for rows in recs.values() if rows
-    ) if len(c) >= 5]
+    # A model that tops several categories is one entry per MODEL, not one per category.
+    top_counts: dict[str, int] = {}
+    for rows in recs.values():
+        if rows:
+            top_counts[rows[0][1]] = top_counts.get(rows[0][1], 0) + 1
+    dominant = sorted(
+        ((m, c) for m, c in top_counts.items() if c >= 5),
+        key=lambda mc: (-mc[1], mc[0]),
+    )
 
     summary = {
         "date": today.isoformat(),
@@ -209,7 +214,7 @@ def build_report(cache_path: pathlib.Path, tables_dir: pathlib.Path, window_days
         "untracked_current": len(untracked) if has_registry else None,
         "blind_ranked": len(blind) if has_registry else None,
         "categories": len(recs),
-        "dominant_models": [{"model": m, "categories": len(c)} for m, c in dominant],
+        "dominant_models": [{"model": m, "categories": c} for m, c in dominant],
         "problems": problems,
         "status": "STALE" if problems else "OK",
     }
@@ -253,7 +258,7 @@ def build_report(cache_path: pathlib.Path, tables_dir: pathlib.Path, window_days
                 add(f"- **{cat}** — {picks}")
         if dominant:
             add("")
-            add("Saturation warning: " + ", ".join(f"`{m}` tops {len(c)} categories" for m, c in dominant)
+            add("Saturation warning: " + ", ".join(f"`{m}` tops {c} categories" for m, c in dominant)
                 + " — one battery is dominating the table; category leadership is weak evidence.")
 
     if untracked:
