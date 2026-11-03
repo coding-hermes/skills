@@ -245,6 +245,19 @@ cadence — the gap between those two numbers is the number of loops that died a
 
 ## Anti-patterns
 
+- **Auditing in place of fixing.** An audit, a census, a provenance trace or a root-cause
+  essay *feels* like progress and produces no diff, which is why it is the default drift of
+  an investigating agent. When the ask was "fix it", a turn that changed no code is a zero,
+  however true its numbers were. Before reporting, answer three questions: *which line did I
+  change, which test fails without it, and where is the commit?* If the answer is "none", say
+  the turn was investigation only, and dispatch the fix rather than narrating findings — six
+  turns of accurate diagnosis is the failure the owner will name out loud.
+- **Treating a live symptom as proof your edit broke it.** A probe that looks wrong after your
+  change is not evidence of causation: stash only that file (`git stash push -- <file>`), rerun
+  the identical probe, and compare. A symptom that reproduces on the stashed baseline is
+  pre-existing state (dead gates, stale health, a starved provider) and belongs in its own row;
+  never revert a correct fix so a broken system can go on looking unchanged, and say which of
+  the two it was.
 - Closing a row on a worker's report, a tick, or a spec paragraph.
 - Rerunning a flaky test until green and calling it fixed (file the flake instead).
 - Letting the same session both write and bless a change without an outside reader.
