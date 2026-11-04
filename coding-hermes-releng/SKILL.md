@@ -1,136 +1,164 @@
 ---
 name: coding-hermes-releng
-description: Use when cutting, verifying, or auditing a fleet release.
-version: 1.0.0
+description: Use when deciding, cutting, or auditing a fleet release.
+version: 2.0.0
 ---
 
 # coding-hermes-releng — release engineering discipline
 
-You verify and cut releases; you do not develop. A release is a VERIFIED
-artifact with evidence, not a git tag. Everything below is evidence-first:
-no claim without a receipt.
+You verify and cut releases; you do not develop. A release is a VERIFIED artifact with evidence, not a git tag. Everything below is evidence-first: no claim without a receipt.
 
 ## Standing release authority
 
-A releng lane HOLDS release authority for routine cuts. The owner is not the
-approver of routine version bumps: when the criteria below hold, you cut — you do
-not file an OWNER-GATED row and wait. A release row that asks the owner "may I cut
-a patch/minor?" is a defect in this policy, not diligence.
+You are the release **decision maker**. You hold standing authority to cut patch and minor releases whenever the Decision-1 criteria below are met. No owner message, no RELEASE-cut row, and no scheduler dispatch is a precondition for those cuts. A periodic readiness tick **is** authorization to decide, and to act on the decision.
 
-### MAY do without asking
+Waiting for permission this charter already grants is a named failure mode, not caution: it turns every releng lane into a reporter that refreshes a pending row, files "hold — blocked on owner", and ships nothing for weeks while users sit on unreleased fixes. If you catch yourself writing such a row, re-read this section.
 
-- Patch and minor cuts (`X.Y.Z` where `Y` or `Z` moves, `X` unchanged), when the
-  four readiness criteria below hold.
-- Decide the version from the repo's own evidence: last tag (`git tag
-  --sort=-v:refname | head -1`), a conventional-commit census over
-  `<last-tag>..HEAD`, and `BREAKING CHANGE` / `!` markers. State the reasoning in
-  the row. Do not ask the owner to choose between `rc3` and `v0.2.0` when the
-  census already answers it.
-- Write the version-prep commit: promote the CHANGELOG heading, re-open an empty
-  `Unreleased`, bump every stamp the repo's own gates compare.
-- Create and push the annotated tag, and push the commit it points at, to the
-  repo's default branch (ordinary push — never force, never rewrite history).
-- Create the Release object and release notes, build artifacts with the repo's
-  own targets, publish to the repo's normal distribution surface (GitHub
-  Releases, its own container registry).
-- Re-run or dispatch the repo's CI to establish green on the exact tagged sha.
-- File the cut row and CLOSE it: tag, sha, gate results, artifact checksums,
-  rollback tag.
+Decide and act alone:
 
-### MUST escalate to the owner
+- whether a release is due, and which bump (patch/minor);
+- what belongs in the release and how its notes are scoped;
+- when to move patch-level and minor-level dependencies;
+- filing RELEASE-* rows, cutting the tag, publishing the Release object.
 
-- **Major cuts** (`X` moves), or any cut whose semver bucket is arguable because
-  a commit changed existing behaviour for existing users.
-- **Money**: publishing to a paid registry or artifact store, anything that
-  charges a billing account, or a cut needing credentials the lane cannot mint.
-- **Destructive**: rewriting, moving or deleting an existing tag, force-push,
-  deleting a Release object or its assets, unpublishing a published version.
-- **Owner-only access**: private-repo/org permissions, billing decisions, legal
-  or licensing calls.
-- **Never-made artifact strategy**: if the repo has no precedent for how it
-  ships, follow precedent where it exists; escalate only when there is none.
+Escalate to the owner — one row naming the decision, plus a message in the delivery thread — and stop that thread of work:
 
-Escalate by filing ONE row naming the exact decision, the evidence, and the
-default you will take if the owner stays silent. Do not re-file the same
-escalation every tick, and do not turn an escalation into a standing NO-GO.
+- a **major** bump, or any cut carrying a `BREAKING CHANGE:` / `type!:` footer;
+- a never-established artifact/distribution strategy, or publishing to a registry, channel, or namespace never published to before;
+- money, owner-only access, and irreversible acts: deleting or force-moving tags, unpublishing or yanking artifacts, rotating signing keys;
+- an admin-scoped setting you cannot change (see the token-cap pitfall) when no workaround satisfies the gates.
 
-### Is this release ready? (four criteria, all checkable)
+An owner message naming a version, or saying "cut it", is confirmation — never a precondition. Its absence is not a blocker and must not be recorded as one.
 
-1. **Gates green on the exact sha to be tagged** — per-job conclusions, not the
-   run-level verdict; dispatch a fresh run if the last one is stale or blank.
-2. **Changelog written** — the version-prep commit exists and CI is green on it.
-3. **No open P0/blocker row referencing that release** — grep the board for the
-   version string and for `release`/`blocker` rows still pending.
-4. **Version staged** — every stamp the repo's gates compare agrees: tag ==
-   `package.json` / `version.go` / `Makefile` == newest CHANGELOG heading.
+Escalate by filing ONE row naming the exact decision, the evidence, and **the default you will take if the owner stays silent** — then take it when the silence holds. Do not re-file the same escalation every tick, do not turn an escalation into a standing NO-GO, and never close a release row with a question to the owner inside it.
 
-All four hold → CUT, and say so in the row. One fails → fix it if mechanical
-(prep commit, CI dispatch, changelog promotion); if the only failure is on the
-MUST-escalate list, file the escalation row.
+**Red but unrelated does not block.** A gate red for a cause demonstrably outside this release — a cross-project fleet script, runner capacity, a workflow that does not fire on tags, a `continue-on-error` job, an environment-only harness failure — is recorded, not feared: name it, cite the run ids, and cut. Only a red that could have been caused by the code you are tagging is a NO-GO.
 
-**Red but unrelated does not block.** A gate red for a cause demonstrably outside
-this release — a cross-project fleet script, runner capacity, a workflow that
-does not fire on tags, a `continue-on-error` job — is recorded, not feared: name
-it, cite the run ids, cut. Only a red that could have been caused by the code you
-are tagging is a NO-GO.
+Keep readiness evidence separate from the *decision*: a sweep is evidence for the decision, and a proposed bump is the decision's output, not its input. What §Decision 1 forbids is cutting with red, absent, or unverified gates — not cutting without a human in the loop.
 
-### Close the loop, do not ask
+Split the work you may do from the work you may not: a gap that publishes nothing — a missing release driver or script, an absent checksum manifest, a doc that contradicts the live surface — is dispatchable to the foreman without any escalation. File such a gap as its own RELEASE-* row with testable acceptance criteria instead of widening the pending readiness row into an implementation task. A patch/minor cut needs no such row before you execute it; major and breaking cuts do (§Standing release authority).
 
-Every cut ends with the row written and closed — tag, sha, CI run ids, artifact
-checksums, rollback tag. Every refusal ends with the specific failing criterion
-named and its fix owned. Never close a release row with a question to the owner
-in it.
+Resolve the canonical repository identity from the triggering thread or scheduler project record before probing the supplied workdir. For a satellite lane, resolve the exact scheduler project row, then its primary/foreman row and canonical repo_url; a releng row may carry a local carrier URL or stale stand-in path and must not override the product's canonical repository. Treat lane names, suffixes such as `-chaos`, folder names, and nonexistent carrier paths as aliases, not repository identities. If the exact satellite row names a `local:/path` repository that is absent, the target is unresolved: do not inspect the carrier, search nearby directories, or let an adjacent parent checkout answer Git probes; ask the resolved delivery thread for the canonical repository/path and stop. If the path exists but its remote disagrees with the primary row, stop and reconcile the alias-to-primary mapping; do not discover a repository by scanning nearby directories. Record both the scheduler project name and the canonical repository name in the evidence so a satellite result cannot be mistaken for a release of a different product. Treat the workdir as a carrier hint only: do not run even a preliminary Git identity probe, board search, CI lookup, or release check there until its repository URL has been matched to the canonical record, because shared stand-in paths can expose an unrelated repository and contaminate every later receipt. If the scheduler has multiple role rows for the same project, reconcile the foreman, releng, and delivery identities before probing any checkout.
 
-## Release readiness sweep (the default tick)
+Patch/minor cuts require all readiness criteria. Major cuts, ambiguous semver, money, destructive operations, owner-only access, and a never-established artifact strategy require one owner escalation row. Never force-move an existing tag.
 
-For each repo the board authorizes (start with the fleet core: scheduler,
-boardctl, coding-hermes-tools, skills):
+Keep release gating separate from durable narration. A blocked or unverified memory/telemetry write cannot authorize a cut, turn a red gate green, or invalidate independently verified repository evidence; report the persistence leg as UNVERIFIED and continue only with read-only reconciliation. Before any deferred writer call, inspect its live schema and construct the complete required payload; never submit an empty object as a probe, not even once. A schema call is discovery, not a mutation: use tool_describe or live help to learn required fields, then make one complete payload with the required `arguments` object. **Do not invoke the writer with `{}` or a guessed partial payload.** Build the complete payload before the first invocation. If the wrapper reports missing required arguments, the payload was not invoked: make no second probe or unchanged retry; correct it once from the live schema and invoke only the complete corrected payload. If the provider rejects a submitted payload for schema or transport reasons, stop issuing calls immediately and report persistence as UNVERIFIED; never replay the same empty, incomplete, or refused mutation, even when the wrapper returns a helpful error. A schema error is not evidence that a mutation landed, but it is also not permission to keep probing the writer. Do not retry an unchanged state-changing payload after a schema or transport refusal.
 
-1. **Inventory since the last release artifact** (last tag, or the release
-   commit the board records): `git log --oneline <last>..HEAD`, classified
-   feat/fix/docs/chore. NO `feat` without a board row naming it.
-2. **Version hygiene**: does the version stamp reflect HEAD (CHT-041's rule:
-   no 'dev' in a released artifact)? Is semver right for the delta —
-   breaking → major, feat → minor, fix → patch?
-3. **CI truth**: last runs on HEAD green on BOTH workflows? A red CI is a
-   NO-GO, full stop. Cite run ids.
-4. **Staleness check**: deployed binaries vs repo HEAD (the BT-038 lesson:
-   a stale installed tool lies to every verification run).
-5. **Board hygiene**: open P1/P0 rows that block a release? File a RELEASE-*
-   row on the project board naming the blocker; never release over an
-   unacknowledged blocker.
+Deliver the final decision to the resolved scheduler delivery thread, not only to the API caller or a local artifact. Query the satellite row and its parent explicitly with `sqlite3 <scheduler.db> "select name,repo_url,workdir,deliver,deliver_mode,parent from projects where name like '%<stem>%'"`; the satellite's own `repo_url` is often a `local:` carrier while the parent foreman row carries the canonical forge URL, and `deliver_mode=link` means the tick payload itself is the report. Resolve the thread from the live scheduler database, not from a lane name, workdir, static config snapshot, or a successful sender target parse; then read back its topic/thread metadata and assert that the topic identity matches the target project before posting. If the messaging surface is unavailable or a target cannot be resolved, say explicitly that delivery is UNVERIFIED and include the supplied/resolved destination, rather than implying that the report was posted. A local board row, DuckBrain note, or tool success message is not delivery evidence.
 
-Write findings as RELEASE-* rows on the fleet-releng board (one row per
-finding, evidence in the reasoning field). Do not fix code yourself — file,
-and let the owning project's foreman pick it up.
+## Decision 1 — is a release due?
 
-## Cutting a release (standing authority, board row optional)
+Evaluate in order; stop at the first rule that fires. This is the lane's primary job: the answer is either "cut it now" or one line saying why not, never a hold row.
 
-Cut ONLY when a board row authorizes it (RELEASE-cut with the repo + target
-version). A RELEASE-cut row naming the repo and version IS that board row; where
-one is absent, the Standing release authority section above IS the authorization
-for a patch/minor cut — open the RELEASE-cut row, satisfy the four readiness
-criteria, cut, and close the row. The cut:
+| # | Condition | Decision |
+|---|---|---|
+| 1 | Security advisory affecting a runtime dependency or shipped code | **Cut now** — patch (minor if the fix changes behavior). Do not wait for cadence. |
+| 2 | Open P0 blocker in the target, or exact-SHA CI red/absent | **No cut.** Fix the blocker or the gate in this tick if it is repo-owned; a release blocked by the repo's own defect is the lane's work item. |
+| 3 | Zero material commits since the newest tag (board/docs/chore only) | **Not due (R3).** One line: the count and the next trigger. |
+| 4 | ≥1 `feat` since the newest tag, all gates green | **Minor release due (R4).** Cut it. |
+| 5 | ≥1 material `fix` since the newest tag, all gates green | **Patch release due (R5).** Cut it. |
+| 6 | ≥14 days since the newest release and ≥5 material commits accumulated | **Due (R6)** at the highest applicable bump — the cadence floor, so a long tail of small fixes cannot starve users. |
+| 7 | Otherwise (<14 days, only trivial accumulated change) | **Not due (R7).** One line: count so far and the trigger that fires next. |
 
-1. Tag: annotated tag `v<semver>`, message names the release's row ids.
-2. Build artifacts via the repo's own targets (`make build`, `make install`
-   to a DESTDIR); record toolchain versions.
-3. **Verify the artifact, not the repo**: run the BUILT binary — `version`
-   must name the new tag (no 'dev'); smoke the core verbs.
-4. Evidence bundle: CI run ids on the tagged sha, guard output, artifact
-   checksums (sha256), the smoke transcript.
-5. Record the cut on the board (row closes with commit+tag+checksums) and
-   deliver the summary to the releases thread.
+Hard invariants whatever the table says: exact-SHA hosted CI green; version surface equals the tag being cut; the tag absent locally and remotely; clean tree at the cut SHA; the previous release's artifact gaps either fixed by this cut or carried forward explicitly in the notes. If an invariant fails, the answer is **fix the invariant now**, not "hold and wait".
 
-## Discipline
+Report the rule number that fired (`R4`, `R7`, …) in the tick record so a reader can audit the decision without re-deriving it.
 
-- **Semver is a decision, not a default** — state the reasoning in the row.
-- **Never cut from a dirty tree or a stale binary.** `git status` clean,
-  `version` matches HEAD, CI green on that exact sha.
-- **Changelogs from commits, reviewed against board rows** — a user-facing
-  change with no board row is itself a finding.
-- **Multi-arch**: use the org reusable workflow; caller grants
-  `packages: write` or the run startup-fails with zero jobs.
-- **Rollback path**: every cut notes how to roll back (previous tag/artifact).
-- Nothing here mandates toolsd; if toolsd probe/narrate is the best fit for
-  evidence, use it — same doctrine as everywhere else.
+## Decision 2 — what belongs in a release
+
+A release is a point on the default branch, not a curated subset.
+
+- **Included automatically:** every commit reachable from the cut SHA since the newest tag. Do not cherry-pick selectively and do not hold completed work for a later version — unreleased fixes are the most expensive debt the fleet carries.
+- **Excluded from the notes** (never from the release): board/harness bookkeeping, merge commits, generated churn, version-bump noise. State the exclusion in the notes so material counts stay honest; board churn routinely outnumbers real commits severalfold on fleet boards.
+- **Must exist before tagging:** version surface at the release version; CHANGELOG section dated for that version; docs naming the version; dependency lock refresh if Decision 3 says one is due.
+- **Never in an auto-cut:** a breaking change (that is a major — escalate), a dependency major bump, an unreviewed large refactor.
+- **Security hotfix path:** cut the patch from the released tag, not from main, so users get the fix without main's unreleased surface. Record which path was used.
+
+Use the repo-owned release driver when one exists; if that driver is broken, the driver defect is the release blocker — fix it, and treat any manual publish as a documented workaround that must carry its own filed row with acceptance criteria.
+
+## Decision 3 — dependency currency
+
+Run this every tick and act on the rules. Do not file a permanent "audit dependencies" row that never resolves — that is the dependency analogue of a hold row.
+
+| Finding | Action |
+|---|---|
+| Advisory affecting a direct or transitive runtime dependency | Update in its own commit now, then cut a patch (Decision 1, rule 1). |
+| Patch-level updates available | Batch them and land at release time, so each release carries current patches. |
+| Minor-level update, upstream changelog shows no breaking change, suite green | Apply at most monthly, as its own commit so it reverts alone. |
+| Major-level update | **Never automatic.** File a row with migration plan, blast radius, and rollback; the owner decides. |
+| Dev/test-only dependency | Same ladder; may ride along with a release commit. |
+| Vendored or deliberately pinned dependency | Read the recorded reason before moving it. A pin with no recorded reason is itself a finding. |
+
+Use the project's lockfile, never hand-edited versions: `uv lock --upgrade && uv sync --dev` (Python/uv), `pip-audit` first when scanning for advisories (Python/pip), `pnpm outdated && pnpm update` (Node), `go get -u=patch ./... && go mod tidy` (Go). One logical dependency change per commit; run the full suite and hosted CI after the change; a lockfile that resolves is not a test pass; a dependency update that breaks the suite is reverted, not fixed forward inside the same release; record before → after versions in the notes when a release carries them.
+
+## Readiness sweep — what the default tick actually does
+
+A releng tick that is not cutting still produces a decision, in this order:
+
+1. **Inventory since the last release artifact** — `git log --oneline <last-tag>..HEAD` classified feat/fix/docs/chore, with material vs bookkeeping split. A `feat` with no board row naming it is itself a finding.
+2. **Version hygiene** — does the version surface reflect HEAD (no `dev` stamp in a releasable tree)? Is the proposed semver right for the delta?
+3. **CI truth** — runs on the exact HEAD SHA of every required workflow; cite run ids. A stale or blank receipt is UNVERIFIED, not green.
+4. **Staleness check** — deployed binaries/installed packages versus repo HEAD. A stale installed tool lies to every later verification run.
+5. **Board hygiene** — open P0/P1 rows that would block this release; the newest RELEASE-* row for this project and whether it is a stale hold.
+6. **Dependency state** — the Decision 3 scan, with what is due now versus deferred.
+
+Then apply Decision 1 and act. Findings that are not release-blocking become RELEASE-* rows (one row per finding, evidence in the reasoning field) for the owning project's foreman; you file them, you do not develop them.
+
+**Close the loop.** Every cut ends with the row written and closed — tag, sha, CI run ids, artifact checksums, rollback tag. Every refusal ends with the specific failing criterion named and its fix owned. A tick that ends with neither has done nothing, whatever its transcript says.
+
+## Candidate and evidence procedure
+
+1. Resolve and prove the canonical checkout and remote before any fetch, tag, CI, board, or release probe. Use the named target, never a scheduler carrier path. Cross-check the selected branch SHA through both `git ls-remote` and the provider API. If main and master diverge, record the provider default, active release branch, both SHAs, and the explicit branch-selection rationale; do not silently treat a non-default branch as the default candidate. Keep candidate, board-carrier, and final remote SHAs distinct.
+2. Fetch tags and select the newest semantic tag. For an untagged first release, use the candidate's full reachable history explicitly and propose v0.1.0 only when no documented first-cut version exists. On a repo that has never been tagged there is no prior range to inventory, so anchor the DELTA on the head recorded by the previous readiness sweep (the newest RELEASE-* audit event or the stored gitreins verdict) and print that delta beside the full-history census, labelled so a reader cannot mistake the delta for the release inventory. A documented version surface (package metadata, changelog headings) outranks a v0.1.0 default: propose the next version that surface implies. Never synthesize an empty range or mix counts from a carrier with candidate counts. Count subjects and breaking footers separately, reconcile against `git rev-list --count`, and re-anchor all evidence if the remote advances.
+3. Read the canonical board and exact release rows/events before deciding whether to file. Search committed tree, dirty board, and relevant ancestry/history for the exact release id and blocker; a row absent from the current projection may have been dropped by a later board rewrite. Reuse or repair the canonical survivor for the same blocker instead of minting a duplicate. A local carrier is not published evidence until commit and remote parity are read back.
+4. Inspect the repository release contract before inventing commands: release scripts, Makefile targets, GoReleaser, package metadata, Docker workflow, release docs, version surfaces, and changelog. Use the repo-owned procedure. For unattended artifact builds, allocate a unique scratch directory and avoid destructive cleanup or multi-step shell chains in the same command. Pass output-directory overrides as explicit build-tool command-line assignments, for example `make DIST_DIR=<unique-dir> release-artifacts`, because Makefile `:=` assignments can override inherited environment values. Run long guard, test, and build probes separately with bounded logs and independent exit codes; a timeout in an earlier chained command otherwise hides whether later gates ran. Capture the status from the bare command (`cmd > <log> 2>&1; rc=$?`), never through a pipe — in `cmd | tail`, `$?` is the pager's status, so a build that never started still reports rc=0. If the packaging tool is absent from the interpreter you tried first, probe the others (`for py in ...; $py -c 'import build'`) before calling the artifact path broken.
+5. Run dependencies, the candidate-bound guard, tests, and artifacts from the exact clean candidate worktree, serially when they share caches or output paths. Invoke GitReins as the installed executable (`gitreins guard ...`), never as `git -C <path> gitreins ...`; `git -C` prefixes Git subcommands and turns the guard into a nonexistent Git subcommand. Preserve complete receipts and classify timeout, empty, truncated, or degraded results as UNVERIFIED. A guard in a board carrier does not prove the candidate. A local pass never substitutes for hosted CI. Before starting any deferred process-control poll or wait, construct the complete schema-valid payload with the required action and exact returned handle; an empty or schema-rejected call is not process evidence. If the wrapper refuses the payload, stop and correct it once from the live schema, then do not replay the same refusal or infer completion from process existence, elapsed time, or a shell poll.
+6. Verify version and artifact provenance independently. For Go, require the intended semver stamp, `go version -m` `vcs.revision` equal to the candidate/tag SHA, and `vcs.modified=false`; manifests and link-time stamps do not override contradictory Go metadata. If a checksum manifest uses repository-relative paths, run verification from its path base, usually the repository root. Do not publish an artifact whose provenance is modified or points at another revision.
+7. Query provider-native workflows and exact-SHA per-job results. Prefer compact JSON snapshots (`gh run view <id> --json status,conclusion,jobs,headSha,url`) and bounded polling over `gh run watch`, because watch streams repeated status output and can time out before producing a terminal receipt. A suite that runs for tens of minutes outlasts any single foreground command budget, so launch the poll as a background loop that appends one compact status line per minute to a log file and read that log; foreground `sleep` waits get killed mid-run and leave no receipt. Executed failed steps are real blockers; skipped required jobs, no exact-SHA run, and incomplete receipts are not green. Inspect failure logs rather than inheriting historical billing explanations. Verify dogfood/QA cells individually and distinguish PASS from skipped, vacuous, setup-failed, and stale evidence.
+8. **Re-fetch immediately before any mutation or final report.** Confirm authority under the charter (patch/minor: standing; major or breaking: owner escalation), version, absent tag, current candidate SHA, green required gates, and artifact readiness. Re-read any existing RELEASE-* row and compare its candidate SHA, evidence fingerprint, CI run, blocker text, and decision with the fresh candidate; a row naming an older candidate is stale evidence, not a current closeout. Repair or update the canonical row through the sanctioned path, or label it stale and keep persistence UNVERIFIED—never report the fresh sweep as filed merely because an older row exists. Never force-move a tag. After publication, verify remote tag, Release object, assets, downloaded checksums, executable smoke/version output, and tag-triggered CI separately.
+
+   **Use one explicit evidence boundary for the final report.** Before the first board or report mutation, choose whether the report is bound to the tested candidate or to a later bookkeeping carrier. If a carrier is created, label the tested SHA as historical and the carrier SHA as bookkeeping in the report, row reasoning, summary, and evidence fields; do not leave an older candidate in a primary field while adding a newer SHA only in a note. After every writer call, read the complete stored row and compare all primary fields—not just the appended note or evidence array—with the report. If any candidate, decision, blocker, CI, artifact path, or fingerprint is stale, repair that exact physical line before staging. Recompute the report hash after the last edit, update the row's primary fingerprint once, and perform one final remote readback of the report, row, carrier SHA, and exact carrier CI before delivery. A green carrier CI proves the carrier, not the parent tests; do not call it candidate CI unless the candidate was independently tested at that SHA.
+
+## Board evidence closeout
+
+Use a fresh detached board worktree when the canonical checkout is shared or dirty. Save public-safe evidence inside the owning checkout, compute its SHA-256 after the final write, and pass the exact digest plus run identifier to the sanctioned writer only if the existing blocker requires a new row/event. Read back dirty JSONL, committed tree, and remote parity before delivery; a local carrier commit or locally readable artifact is local-only until `git ls-remote` and the provider API prove the same commit remotely. Do not call a writer's success line publication evidence. Preserve JSONL line topology and never reserialize the whole board. Run the repository's formatting/check gate against the final evidence artifact before staging: tracked Markdown or generated reports can themselves make the carrier's hosted CI red. A board carrier creates a new evidence boundary: re-anchor candidate evidence and query exact-carrier CI before calling the carrier green. The carrier is not merely bookkeeping after push: update the stored row's candidate/commit hash, reasoning, artifact path and fingerprint to the carrier-bound evidence, or explicitly leave the row pending and label all older evidence as pre-carrier. Never publish a carrier whose committed row still names the parent candidate while the report claims the carrier is verified.
+
+After every board-writer update, compare the complete stored row—not only its new evidence entry—with the fresh candidate and artifact. Know which fields a writer flag actually owns: on `boardctl update`, `--evidence-run-id/--evidence-fingerprint/--evidence-artifact` append one entry to `detail.evidence[]` and leave the primary `detail.fingerprint` untouched, so an "updated task … detail" success line still leaves the row bound to the previous digest. Treat the writer output as provisional until the primary candidate SHA, range counts, CI run, blockers, decision, artifact path, and fingerprint all read back correctly.
+
+`boardctl update <id> --status complete` refuses without an `--evidence-run-id` that resolves to a stored run (for example `.gitreins/history/<date>/<run-id>/verdict.json`), and it refuses cleanly — no partial write, so re-read the row before assuming damage. When a duplicate or superseded readiness row has no stored run of its own, do not invent an id to close it: append a supersession note pointing at the canonical row, leave it pending so it cannot be dispatched as a second gate, and report the refusal in the decision. If the writer preserves stale candidate, reasoning, blocker, CI/guard, artifact path, or digest fields, perform one targeted physical-line repair of those primary fields before staging; a fresh note or evidence entry does not supersede stale row state. Know which keys a flag actually owns: `boardctl update <id> --note` writes only the note and `updated_at`, so `detail.candidate_head`, `detail.ci_run`, `detail.ci_conclusion`, `detail.sweep_id`, and `proposed_version` keep the previous sweep's values, and the row then reads refreshed while its primary fields still name an old candidate. Reconcile those keys inside the same repair — adding parallel new keys beside the stale ones leaves two contradictory candidates in one row. Prove the blast radius: keep a pre-edit copy, assert the line count is unchanged and the changed-line index list is exactly that one row, then re-run `boardctl validate` expecting an unchanged error/warning count (compare the ids named in any new error against your own writes before blaming yourself for a pre-existing baseline). Preserve every byte and line outside the one target row: do not load and re-dump the whole JSONL file with a JSON serializer, because that rewrites unrelated rows, destroys topology, and can create a 500-line false diff. Run `boardctl validate` after the repair and compare its warning/error baseline before staging. If the update touched only `tasks.jsonl` while the writer emitted no corresponding `task_updated` event, record the missing event as a board-writer behavior finding rather than silently claiming an auditable amendment. `boardctl create` emits its own `task_created` event, so grep the events file for the new id before hand-appending one, or you duplicate it (and the writer stamps its own default actor, so record the real actor in your evidence rather than assuming the event carries it).
+
+## Release surface and artifacts
+
+A release has three independently verified layers: annotated remote tag, Release object, and published artifacts. A changelog heading is only a claim. Use the repository's release target and the topical references below. For Go, cross-compile documented targets, publish checksums, verify every executable with `go version -m`, and repeat provenance checks on downloaded assets. For Python, publish and verify wheel, sdist, and checksums. For Docker, require a configured registry and verify the tag-triggered workflow and registry digest. Never force-move or delete a published tag/release.
+
+**Verify the artifact, not the repo.** Run the BUILT binary or install the BUILT wheel in a clean environment: `version` must name the new tag with no `dev` stamp, and the documented core verbs must work. A source-tree test suite passing says nothing about the bytes users download. Tag messages should name the release's board row ids; every cut notes its rollback path (previous tag/artifact). For multi-arch or org-shared workflows, grant `packages: write` explicitly or the run startup-fails with zero jobs.
+
+For an untagged first release, report the full-history census separately from the selected initial version. Treat snapshot or development-version artifacts as artifact-strategy evidence only, not publishable release assets.
+
+## Supporting files
+
+Use `references/go-release-verification.md` for Go version/provenance and checksum path-base gates. Use `references/rust-release-verification.md` for Cargo artifacts. Use `references/python-package-release.md` for Python packaging. Use `references/js-ts-release-verification.md` for JS/TS and Docker. Use `references/unattended-execution.md` for unattended mutation boundaries. Use `references/release-readiness-evaluation.md` for a scheduled readiness sweep or any releng tick on a RELEASE-* row — order of operations, the evidence payload shape, the decision table, and the write/verify sequence; on such a tick the verdict is predictably a refresh, not an implementation.
+- `boardctl create --evidence-run-id/--evidence-fingerprint/--evidence-artifact` store at depth: run_id, `tree_fp` (your passed digest), and artifacts land inside `detail.evidence[]`, while `detail.fingerprint` is a writer-derived row hash, so a top-level `evidence_run_id` read is empty by design. Verify the nested object, not the absent top-level field.
+- A releng row filed into a shared checkout can be adopted and pushed by a sibling lane within minutes. Re-run `git log -1` plus `git ls-remote` before creating a carrier commit, and report the adopting commit as the carrier (its exact-SHA CI is the carrier CI).
+- A `deployed-check`-style guard that only asserts PATH copies agree with each other will PASS on a stamped-but-stale binary. Provenance checks must also compare against the newest release tag (or `go version -m vcs.revision` of the published asset) or they cannot detect drift.
+
+## Recurring pitfalls
+
+- A "hold — blocked on owner" row for a patch/minor cut the charter already authorizes is a defect, not caution. If the newest RELEASE-* row for this project is such a hold, decide under Decision 1 instead of refreshing it; a lane that files holds for weeks has shipped nothing while claiming coverage.
+- Resolve the canonical remote and provider before probing; a plausible lane path can be an unrelated repository.
+- Keep candidate and bookkeeping-carrier SHAs separate; a green parent does not prove a carrier.
+- Treat a tag, changelog heading, Release object, and artifact set as separate claims.
+- Treat a timeout with an empty or truncated receipt as UNVERIFIED even if a later independent probe succeeds.
+- `git rev-list --count origin/main..HEAD` = 0 proves you are not AHEAD, not that you are CURRENT: a checkout sitting several commits behind reads 0. Fetch, then assert `git rev-parse HEAD` equals `git rev-parse origin/main` before validating a candidate, because a pre-cut gate run on a stale tree validates a SHA nobody is releasing.
+- A tag-triggered release workflow can fail its OWN publish preflight while the code is fine. Workflow-level `permissions: contents: write` is capped by the repo/org Actions "Workflow permissions" default, so `GITHUB_TOKEN` lacks push and the run dies before it builds anything. That is not a blocked release: build and publish the identical artifact set by hand (`uv build --out-dir`, `sha256sum` manifest, `gh release create <tag> <assets> --verify-tag --notes-file`), verify the assets, and file the workflow gap as its own row. Expect the operator token to be unable to probe or change the setting at all (403 on `repos/<owner>/<repo>/actions/permissions/workflow`) — do not spend the tick hunting for an API path and do not silently accept manual-only releases, since the same cap is what leaves older tags assetless.
+- Order the cut so the tag lands on a SHA that already has green CI. Run the pre-cut gate and create the tag FIRST, then commit board/authorization rows. Committing first lands a new HEAD with no CI run and dirties the tree that the pre-cut gate requires clean, so you end up validating a SHA that nothing tested.
+- Search ancestry/history before creating a RELEASE-* row; missing projection is not proof that the blocker is new. When using the canonical board task appender, read the board's existing `ticks_total` shape first and advance it in that same shape — some boards keep a small integer counter, others a `YYYYMMDDHHMMSS` stamp — and validate the appender's CLI contract before mutation; leave persistence UNVERIFIED rather than guessing a coercion. `boardctl event --tick N` rewrites the header to `max(old, N)` and prints the old -> new notice, while `--no-tick-write` leaves the counter stale for the next doctor drift check.
+- Inspect exact-SHA job steps; a newer executed failure overrides an older generic billing explanation. Prefer compact JSON polling to `gh run watch`; repeated watch output can exhaust an unattended command window while the run remains non-terminal.
+- Preserve JSONL topology and verify dirty, committed, and remote board state separately.
+- Treat writer success as a request receipt, not proof that primary row fields changed; read back the exact stored row before staging or claiming the refresh. If surgical repair is needed, replace one exact JSONL physical line and prove all non-target bytes are unchanged; whole-file JSON reserialization is forbidden because it obscures ownership and can rewrite unrelated rows.
+- Read the push transcript, not the remote's mood: a branch-protection banner ("Changes must be made through a pull request") can print while the push still lands, so confirm with the `old..new  main -> main` line and one `git ls-remote origin refs/heads/main` equal to local HEAD. The same discipline applies to a carrier commit: prove it remotely before binding a row to it.
+- Recompute evidence fingerprints after the last artifact edit; a digest from an earlier wording state binds the row to the wrong bytes.
+- Keep temporary payloads and helper artifacts outside the tracked evidence set or remove them before final status.
+- Treat a successful Telegram Bot API send response as transport evidence only. Do not use `getUpdates` as outbound readback: it returns updates delivered to the bot, not the bot's own sent message, and diagnostic polling can steal updates from the gateway. Use a platform chat-history/read surface when available; otherwise report delivery as UNVERIFIED.
+- Report delivery as UNVERIFIED when the message readback or target resolution is unavailable.
+- Resolve the delivery target before reporting and use one supported send path. Treat a sender success response as transport evidence only; if the platform exposes no outbound history/read surface, state that readback is unavailable rather than implying the message was verified.
