@@ -65,3 +65,9 @@ If any of those is missing, the finding is real even if the code "has" the featu
   that never got to answer; charging them creates a feedback loop where the gate starves itself.
 - **Silent success** — exit 0, nothing produced. The most expensive of the three, because it looks
   healthy on every dashboard.
+
+A worked implementation of the self-inflicted-failure rule (which reasons to exclude from a
+completion rate, the discrimination test that proves the gate still rejects genuinely bad lanes,
+and why editing the computation changes nothing until the materialised averages file is
+regenerated) lives in `task-router` → `references/outcome-floor-and-self-inflicted-failures.md`.
+Read it before "fixing" a quality gate by lowering its threshold.

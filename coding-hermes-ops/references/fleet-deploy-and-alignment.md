@@ -42,11 +42,20 @@ one of them cut a 691-row board to a single row, which is why the append-only ru
 |---|---|---|
 | `-foreman` | 6h | project primary (varies by ruling: 900s … 12h) |
 | `-sync` | 6h | state reconciliation |
-| `-qa` | 12h | quality sweep |
+| `-qa` | 12h | quality sweep — ONE per project |
 | `-ops` | 24h | operations sweep |
 | `-pm` / `-releng` | 24h | planning / release engineering |
 | `-dogfood` | 3d | real-use validation |
 | `-docs` / `-readme` / `-review` / `-perf` | 7d | slow-moving artefacts |
+
+This table IS the closed role set. A `-<role>-qa` composite (`-docs-qa`, `-readme-qa`, `-releng-qa`,
+`-foreman-qa`, `-review-qa`, `-perf-qa`) is fabricated — a second QA beside the real `-qa`, or a QA
+sweep of a README. Delete such rows in both stores; never create one to "match" a peer family, because
+the peers carry them too and diffing against a peer inherits the defect. Group families by lane NAME
+(role suffixes stripped, longest-first, only when the stripped stem is itself a registered row) —
+grouping by workdir over-splits, since stand-in dirs are named per lane. Standing a host down onto a
+subset of families (both stores written while the daemon is stopped, then a boot that must resurrect
+nothing): `coding-hermes-lane-ops` → `references/fleet-stand-down.md`.
 
 `lane_cadence.py check` exits 1 on drift. It also flags a row whose `cooldown_s` and
 `cooldown_pin_s` disagree even when one of them is correct — that disagreement is ambiguity the
