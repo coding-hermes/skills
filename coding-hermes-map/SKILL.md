@@ -85,6 +85,7 @@ graph TD
 | `coding-hermes-worker-model` | Choosing a model for a new task | Mechanical/foreman-direct tasks | EXISTS |
 | `coding-hermes-worker` | Need to spawn independent work session | Task is foreman-direct (specs, docs, mechanical) | EXISTS |
 | `coding-hermes-trailblazer` | A release, migration, rollout, or change crosses system boundaries; probe likely downstream reactions early | Routine isolated changes; general backlog discovery; difficult-question research | EXISTS — optional sidecar; does not replace QA/release gates |
+| `coding-hermes-nasa-spec` | A system needs a design spec before code exists (Rumsfeld → facts → flows → modules → contracts → R-table) or a spec set must pass a structural gate before dispatch | The change is one bounded fix with no design surface | EXISTS — composes with `nasa-handbook` (the page), `rumsfeld-matrix` (quadrants), `coding-hermes-specs` (worker briefs), `coding-hermes-quorum` (review) |
 | `coding-hermes-guard` | Before every commit | — (always needed) | PLANNED — use GitReins MCP `guard_run` directly |
 | `coding-hermes-cron` | Running as a cron/scheduler job | Interactive session | EXISTS — **also serves as foreman workflow reference when foreman skill is absent** |
 | `hilo-usage` | Need dependency impact analysis | Simple tasks, single-file changes | EXISTS |

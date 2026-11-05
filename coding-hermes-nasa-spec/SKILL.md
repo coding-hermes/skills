@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-nasa-spec
-description: Full design spec method: Rumsfeld, flows, contracts, quorum.
-version: 1.0.0
+description: "Full design spec method: Rumsfeld, flows, contracts, quorum."
+version: 1.1.0
 author: totalwindupflightsystems
 license: MIT
 category: software-development
@@ -219,6 +219,25 @@ Rules:
 - Failure modes are per dependency, with the direction of failure (fail closed /
   open / degraded) stated.
 
+## Phase 5b — the field contract every module section must satisfy
+
+A module section is a claim with its evidence attached, in a fixed order — not prose about a
+component. The full field contract, with the failure each field prevents, is
+`references/module-section-fields.md`. Five of those fields carry the most weight and are
+editable-in by the owner, so they are non-negotiable:
+
+| field | rule |
+|---|---|
+| dependencies + library contracts | three tables — runtime (version, required location, **how absence is DETECTED**), library (the call or field relied on, never "uses X"), service (peer, direction, transport, payload, compatibility, **both sides' file and function**) |
+| verification | a command a stranger can run, the expected output, the date and the revision. A check that cannot fail is decoration; a check that last passed three revisions ago is `UNVERIFIED` |
+| why it matters | not what it does — what breaks if it is absent, and what breaks if it LIES |
+| metrics | type, labels, the question it answers, where scraped. **Emits none → write "none" and carry the section as RED.** An unobservable module on the critical path is a finding, not a blank |
+| log lines | every operator-visible line verbatim, plus its kind: **descriptive** (reports that something happened) or **evidentiary** (can be cited as proof). A line that says so is not proof it is so |
+
+Status vocabulary is `VERIFIED` / `UNVERIFIED` / `FAILING`. There is no "done" and there is no
+blank: an empty required field IS the finding, rendered RED. A document that renders every
+section comfortably full is a document that stopped measuring.
+
 ## Phase 6 — Submodules
 
 Recurse one level, and only as deep as the testable unit. One file per
@@ -307,9 +326,18 @@ Requirements live in a table whose shape IS the contract with the judge:
 Rules:
 
 - **one R per normative statement**, `must` = something fails without it;
-- **exactly one assertion** per R: `test:` for behaviour, `check:` for a
-  prohibition or a prose claim (a grep, a schema lint, a rendered-page check);
-- **evidence is mandatory**: `fact: FACT-nn` or `decision: <where recorded>`;
+- **exactly one assertion** per R, and it lives in the ASSERTION COLUMN (4th
+  cell): `test:` for behaviour, `check:` for a prohibition or a prose claim
+  (a grep, a schema lint, a rendered-page check). Prose elsewhere in the row
+  does not count — a row whose statement says "(see check: above)" while the
+  assertion column is empty is a hole, and the checker now says so. The target
+  must be runnable: an identifier or path (`TestExpiredRejects`,
+  `scripts/lint_board.sh`), never a phrase (`test: it rejects expired tokens`);
+- **the row is exactly five columns.** Four columns (a missing cell) or six (an
+  unescaped `|`) shift the columns silently, so the checker refuses the row
+  rather than guessing which cell was meant;
+- **evidence is mandatory**: `fact: FACT-nn` or `decision: <where recorded>`,
+  in the evidence column;
 - the coverage table maps R → module → flow → test, and the spec's own highest R
   number is parsed back, so a renumber cannot leave phantom statements passing.
 
@@ -321,10 +349,31 @@ python3 scripts/spec_coverage.py specs/
 
 The checker enforces: unique ids; every module names a real flow; every submodule
 names a real module; every contract has a resolving producer and consumer; every
-requirement names a real module, exactly one assertion, and a fact or decision;
-every flow declares `trigger:` and `exit:`. It warns on facts nobody cites, flows
-with no modules, modules with no submodule and no `leaf:`, and flows no contract
-touches. Exit 1 on errors; `--strict` makes warnings errors too.
+requirement attaches to a real module in its attach column, carries exactly one
+runnable assertion in its assertion column, and a fact or decision in its
+evidence column; every flow declares `trigger:` and `exit:`. It warns on facts
+nobody cites, flows with no modules, modules with no submodule and no `leaf:`,
+and flows no contract touches. Exit 1 on errors; `--strict` makes warnings
+errors too.
+
+**Prove the gate FIRES before trusting a PASS.** A checker that parses nothing
+reports zero violations, and a parser that silently ignores an unknown metadata
+key downgrades a real defect to a warning. The fixtures ship beside the script,
+and one command proves all three obligations:
+
+```bash
+python3 scripts/test_spec_coverage.py      # 18 obligations; exits 1 on any miss
+```
+
+`scripts/fixtures/good/` must exit 0 under `--strict`; `scripts/fixtures/bad/`
+carries one deliberately broken row per rule (duplicate decl id, unresolved
+flow/module/contract reference, missing `trigger:`/`exit:`, zero and two
+assertions, missing evidence, dangling fact, prose assertion in the wrong
+column, prose assertion target, four-column row, duplicate R id) and the score
+must name each one; `templates/` must still fail, because an unfilled template
+is not a spec. Run it after ANY parser change — the first version counted
+`test:`/`check:` anywhere in the row, so a statement containing "check:" passed
+with no assertion at all, and only the mutation test caught it.
 
 ## Phase 10 — Quorum: the panel decides
 
@@ -443,6 +492,15 @@ The handover is the directory plus the coverage report, not a chat message.
   and the exit code is not.
 - **Never arm an implementation loop on a FAIL round.** A spec that fails review
   teaches the loop to implement its errors faithfully.
+- **A gate that matches prose is not a gate.** Counting `test:`/`check:` anywhere
+  in a requirement row let a statement containing "(see check: above)" pass with
+  an empty assertion column — the requirement looked verified and pointed at
+  nothing. Parse the CELL, not the line; require a runnable target; and keep a
+  fixture that reproduces the hole so the fix cannot be reverted quietly.
+- **A template that teaches a shape the gate rejects is a defect, not an
+  example.** The shipped coverage template printed `| FACT-01 |` in the evidence
+  column while the checker demands `fact: FACT-01`; every spec written from it
+  would fail its own gate. Run the checker on the templates after editing them.
 
 ## Quick start
 
@@ -464,4 +522,13 @@ Support files:
 - `templates/quorum-brief.md`
 - `references/spec-to-page-mapping.md` — deeper spec → handbook block mapping,
   including which spec section supplies which paragraph, figure, table, and notice
+- `references/module-section-fields.md` — the field contract a module section must satisfy
+  (dependencies and library contracts, verification, metrics, log lines, failure modes) and
+  why an empty field is RED rather than incomplete
 - `scripts/spec_coverage.py` — the structural gate described in Phase 9
+- `scripts/test_spec_coverage.py` — the gate's own regression suite (good must
+  pass `--strict`, every bad-fixture rule must fire, unfilled templates must
+  fail); run it after any parser change
+- `scripts/fixtures/good/`, `scripts/fixtures/bad/` — the two fixture spec sets
+  the suite scores
+

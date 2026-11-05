@@ -14,7 +14,7 @@ Two tables that no checker can infer. Both are mandatory before quorum.
 
 | R | module | flow | assertion | evidence |
 |---|---|---|---|---|
-| R-001 | MOD-01 | FLOW-01 | test: TestExpiredRejects | FACT-01 |
+| R-001 | MOD-01 | FLOW-01 | test: TestExpiredRejects | fact: FACT-01 |
 
 ## Open questions carried
 

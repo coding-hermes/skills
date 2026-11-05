@@ -12,6 +12,7 @@ This repository contains the skill files that power the Coding Hermes autonomous
 | [`coding-hermes-north-star`](coding-hermes-north-star/SKILL.md) | Foundation | Architecture overview — the full system explained |
 | [`coding-hermes-discovery`](coding-hermes-discovery/SKILL.md) | Foundation | Discovery sweep — finds work across all languages |
 | [`coding-hermes-map`](coding-hermes-map/SKILL.md) | Foundation | Skill map — what each fleet skill does and when to use it |
+| [`coding-hermes-nasa-spec`](coding-hermes-nasa-spec/SKILL.md) | Spec | 仕様 design-spec method before any code exists — Rumsfeld quadrants with a mandatory sink each, facts ledger, flows → modules → contracts, numbered R-table, quorum, then the Apollo-style handbook page; ships the structural coverage gate and its own regression fixtures |
 | [`coding-hermes-foreman`](coding-hermes-foreman/SKILL.md) | Foreman | Per-project tick loop — inspects, plans, spawns workers |
 | [`coding-hermes-self-heal`](coding-hermes-self-heal/SKILL.md) | Foreman | Pre-tick self-heal — identity, deps, CI, transient fixes |
 | [`coding-hermes-worker-model`](coding-hermes-worker-model/SKILL.md) | Foreman | Worker model selection — cheapest model that works |

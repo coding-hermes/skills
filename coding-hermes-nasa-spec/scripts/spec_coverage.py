@@ -57,6 +57,19 @@ ID_IN_META = {
     "consumer": re.compile(r"MOD-\d+"),
 }
 ASSERTION = re.compile(r"\b(test|check)\s*:\s*(\S.*)$")
+# A runnable assertion names a test, a script, or a grep-able marker — never a
+# phrase. Prose that merely contains "check:" used to satisfy the gate.
+ASSERTION_TARGET = re.compile(r"^[A-Za-z0-9_./:@<>+=-]+$")
+
+
+def row_cells(row: str) -> list[str]:
+    """Split a markdown table row into stripped cells, honouring `\\|` escapes."""
+    body = row.strip()
+    if body.startswith("|"):
+        body = body[1:]
+    if body.endswith("|"):
+        body = body[:-1]
+    return [cell.strip() for cell in re.split(r"(?<!\\)\|", body)]
 
 
 @dataclass
@@ -232,29 +245,58 @@ def check(specs: Path) -> Report:
             continue
         req_seen[r.ident] = r
 
-        module_ids = ID_IN_META["module"].findall(r.text)
+        # Column layout is part of the contract: the assertion must be the 4th
+        # cell and the evidence the 5th. Counting `test:`/`check:` anywhere in
+        # the row lets prose satisfy the gate — regression: "prose assertion"
+        # in scripts/test_spec_coverage.py.
+        cells = row_cells(r.text)
+        if len(cells) != 5:
+            rep.err(
+                f"{r.ident} ({r.file}:{r.line}) has {len(cells)} columns; a requirement "
+                "row needs exactly 5: `| id | statement-or-module | flow | assertion | evidence |`"
+            )
+            continue
+
+        attach, assertion_cell, evidence_cell = cells[1:3], cells[3], cells[4]
+        attach_text = " ".join(attach)
+
+        module_ids = ID_IN_META["module"].findall(attach_text)
         if not module_ids:
-            rep.err(f"{r.ident} ({r.file}:{r.line}) has no `module: MOD-nn`")
+            rep.err(f"{r.ident} ({r.file}:{r.line}) has no `module: MOD-nn` in its attach column")
         for mid in module_ids:
             if mid not in mods:
                 rep.err(f"{r.ident} ({r.file}:{r.line}) names unknown {mid}")
 
-        assertions = re.findall(r"\b(?:test|check)\s*:", r.text)
+        stray = re.findall(r"\b(?:test|check)\s*:", " ".join([*attach, evidence_cell]))
+        if stray:
+            rep.err(
+                f"{r.ident} ({r.file}:{r.line}) names an assertion outside the assertion "
+                "column; prose does not satisfy the gate"
+            )
+
+        assertions = re.findall(r"\b(?:test|check)\s*:", assertion_cell)
         if len(assertions) != 1:
             rep.err(
                 f"{r.ident} ({r.file}:{r.line}) has {len(assertions)} assertions "
                 "(exactly one `test:` or `check:` is required)"
             )
-        if not re.search(r"\b(test|check)\s*:\s*\S", r.text):
-            rep.err(f"{r.ident} ({r.file}:{r.line}) has an empty assertion")
+        else:
+            target = re.sub(r"^\s*(?:test|check)\s*:\s*", "", assertion_cell).strip()
+            if not target:
+                rep.err(f"{r.ident} ({r.file}:{r.line}) has an empty assertion")
+            elif not ASSERTION_TARGET.match(target):
+                rep.err(
+                    f"{r.ident} ({r.file}:{r.line}) assertion target {target!r} is not "
+                    "runnable; name a test or a check, not a description"
+                )
 
-        if not re.search(r"\b(?:fact|decision)\s*:\s*\S", r.text):
+        if not re.search(r"\b(?:fact|decision)\s*:\s*\S", evidence_cell):
             rep.err(
                 f"{r.ident} ({r.file}:{r.line}) has no `fact: FACT-nn` or "
-                "`decision:` evidence"
+                "`decision:` evidence in its evidence column"
             )
 
-        for fid in re.findall(r"\bfact\s*:\s*(FACT-\d+)", r.text):
+        for fid in re.findall(r"\bfact\s*:\s*(FACT-\d+)", evidence_cell):
             if fid not in facts:
                 rep.err(f"{r.ident} ({r.file}:{r.line}) cites missing {fid}")
 
