@@ -1,7 +1,7 @@
 ---
 name: model-current-reference
 description: Use when picking a model or refreshing the models list.
-version: 1.0.1
+version: 1.0.2
 author: Bane + Hermes
 platforms: [linux, macos]
 metadata:
@@ -136,6 +136,12 @@ Read `problems[]` — it names which clock is stale, not just that something is.
 
 - **A fresh snapshot does not mean a fresh registry.** The two clocks fail independently; the
   report separates them for exactly this reason.
+- **The registry clock measures BACKFILL, not ingestion.** Lanes keep arriving (`valid_from` moves
+  every day) while nearly every newly imported row carries a NULL `release_date`, so
+  `registry_newest_age_days` can breach the ceiling on a registry that is importing perfectly.
+  Read `release_date` coverage beside the age: a rising row count with flat coverage is date
+  backfill work (vendor roster, or the snapshot's own `release_date`), not a broken importer.
+  Report it as backfill — never "fix" it by stamping plausible dates.
 - **Recommending from the top of a saturated category.** The same model winning 10 categories is
   a battery artefact (a multi-category key over a multi-task probe), not dominance.
 - **Mixed units.** Our probes are damped at ingest, so a probe's 0.85 and a third-party 1.0 are
@@ -150,7 +156,8 @@ Read `problems[]` — it names which clock is stale, not just that something is.
 
 ## Verification
 
-- [ ] `--json` shows both ages and both counts, and `status` matches the problems list
+- [ ] `--json` shows both ages, both counts and `release_date` coverage, and `status` matches
+      the problems list
 - [ ] `references/current-models.md` regenerated in the same pass as any data change
 - [ ] every recommendation carries a source class, and no `declared`-only pick leads a category
       that has measured evidence
