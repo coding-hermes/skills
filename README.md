@@ -15,6 +15,7 @@ This repository contains the skill files that power the Coding Hermes autonomous
 | [`coding-hermes-nasa-spec`](coding-hermes-nasa-spec/SKILL.md) | Spec | 仕様 design-spec method before any code exists — Rumsfeld quadrants with a mandatory sink each, facts ledger, flows → modules → contracts, numbered R-table, quorum, then the Apollo-style handbook page; ships the structural coverage gate and its own regression fixtures |
 | [`coding-hermes-foreman`](coding-hermes-foreman/SKILL.md) | Foreman | Per-project tick loop — inspects, plans, spawns workers |
 | [`coding-hermes-self-heal`](coding-hermes-self-heal/SKILL.md) | Foreman | Pre-tick self-heal — identity, deps, CI, transient fixes |
+| [`coding-hermes-stuck-lane-triage`](coding-hermes-stuck-lane-triage/SKILL.md) | Foreman | 診断 Looping lane diagnosis — separates fast re-fire (admission mode) from empty ticks (outcome mix) from the real barrier; coverage-proof gate before any residue delete |
 | [`coding-hermes-worker-model`](coding-hermes-worker-model/SKILL.md) | Foreman | Worker model selection — cheapest model that works |
 | [`coding-hermes-supervisor`](coding-hermes-supervisor/SKILL.md) | Supervisor | Fleet-wide oversight — health, starvation, failures, costs |
 | [`coding-hermes-scheduler`](coding-hermes-scheduler/SKILL.md) | Broker | Operating the fleet scheduler daemon — API, config, ops |
