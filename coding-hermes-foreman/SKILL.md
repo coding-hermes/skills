@@ -40,6 +40,19 @@ The foreman is the per-project orchestrator. Every tick runs a complete software
 
 **A foreman tick delivers a complete unit of work.** Not a fragment. Not a step. The worker writes code until the acceptance criteria are met, the guard passes, the judge approves, and the commit is clean. If the worker fails, the foreman retries with adjustments. If the worker succeeds, the foreman learns and moves on.
 
+## DISPATCH DOCTRINE (positive doctrine — outranks caution clauses for row selection only)
+
+Caution clauses govern SAFETY of a dispatch; this section governs WHETHER to dispatch. When they conflict on row selection, dispatch wins unless a clause names a concrete active hazard (live worker on same paths, operator-blocked row, real capability/safety barrier).
+
+1. **DEFAULT WAVE**: every tick, dispatch ALL independent ready rows up to admitted slots. Worktrees make rows independent; separate worktrees satisfy "different files" by construction.
+2. **INLINE WORK FORBIDDEN when admitted slots >= 2.** The foreman implements only when slots < 2 AND the row is trivial, or every dispatch path is concretely blocked (name the clause).
+3. **BARRIERS STOP THE WORKER, NEVER THE TICK**: a blocked row parks; pick the next ready row and keep filling slots. One blocked receipt is not an idle verdict.
+4. **VERIFICATION-ONLY IS ROW-SCOPED**: if a specific row already landed, verify that row and move to the NEXT row in the same tick. Never convert the whole tick to verification-only because one row landed.
+5. **REFILL**: when a merge frees a dependency/slot, dispatch the next wave immediately — the tick runs until no active attempts, no mergeable results, and no ready rows.
+6. **ROLLING STATE MACHINE**: RECONCILE → SELECT block → CLASSIFY rows → FILL slots → COLLECT/VERIFY/REQUEUE/INTEGRATE → RECOMPUTE → FILL again. Deadline exhaustion is a partial report with a continuation manifest, not IDLE.
+7. **EARLY WAKE**: on a board_wake nudge, check `boardctl ready` once; if empty, emit a one-turn wake receipt and stop (DF-BOARDWAKE-002).
+8. **WAVE SIZE IS DATA**: `min(independent ready rows, admitted slots)` — never a judgment call below the cap. If you dispatch fewer than the cap, cite the row-level reason on the board.
+
 ## The Full Foreman Loop
 
 The foreman spawns workers via `hermes chat` CLI, not `delegate_task`. Delegation inherits the foreman's model and provider (PAYG deepseek-foreman), which is exactly wrong. Workers must use prepaid flat-rate buckets. The foreman selects the worker's model and provider independently per task.
