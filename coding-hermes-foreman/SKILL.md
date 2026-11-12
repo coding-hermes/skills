@@ -48,7 +48,14 @@ The foreman spawns workers via `hermes chat` CLI, not `delegate_task`. Delegatio
 # CORRECT — independent session, separate model/provider
 # Use cd for workdir (hermes chat has no --workdir flag)
 # Use terminal(background=true) for async (hermes chat has no --background flag)
-cd /home/kara/<project> && hermes chat -q '<compiled prompt>' -m '<coding-model>' --provider '<prepaid-bucket>' --ignore-rules --cli -Q
+cd /home/kara/<project> && hermes chat -q '<compiled prompt>' -m '<coding-model>' --provider '<prepaid-bucket>' --ignore-rules --cli -Q --max-turns 2000 --run-budget 7200
+
+# TURNS/BUDGET ARE MANDATORY: an unset --max-turns inherits agent.max_turns (config default
+# 500) and a card with a big scope dies mid-task with its brief half-done and no verdict.
+# Heavy cards need real budgets — kanban goals already default to goals.max_turns: 10000.
+# Size: routine code task 1000; multi-file migration / full-battery run 2000;
+# repo-wide analysis 5000. If a card dies on turns, RE-DISPATCH with the remaining
+# scope named, never mark it done.
 ```
 
 ```python
@@ -104,6 +111,9 @@ Load skill: coding-hermes-board (full board + self-pause procedure).
 **⚠️ BOARD-V2: active board is `.coding-hermes/board/` — READ: `tasks.jsonl`/`dump_board_state.py` (refs: board-tools-arg-conventions.md), or `boardctl` (github.com/coding-hermes/boardctl); WRITE: `append_board_event.py`. **📌 CANONICAL STORE = JSONL — board.db RETIRED 2026-09-03 (Bane doctrine: no db cache file; the JSONL files ARE the board): db/parquet caches deleted fleet-wide, db-only scripts retired; `git ls-files .coding-hermes/board/` must list NO .db/.parquet; NEVER recreate board.db (JSONL-NORM-001); full doctrine: refs/board-storage-canonical.md** — tasks.md stale pre-migration or ABSENT post-migration (missing tasks.md + only `.bak` = migration-complete). Matrix 🔄 drift: reconcile from events.jsonl/tasks.jsonl (ref: commit-trailer-and-board-mirror-drift.md). Dispatch order: INSERT task row BEFORE the event (ref: board-v2-migration-and-dispatch-order.md). Header counters stale — re-sync from DuckBrain; `last_commit` lags one tick (ref: board-jsonl-header-last-commit-lag.md). Tracked-markdown boards (no board/ dir): APPEND at BOTTOM — old TOP entry ≠ stale; verify `git log -1 -- tasks.md` + highest #NNN (ref: tracked-markdown-board-reading.md). **⚠️ ALWAYS read the TAIL first on tracked-markdown boards.** Gate with `git log -1 --oneline` (commit message carries the tick, e.g. "Tick #219") + `grep -n 'Tick #NNN' .coding-hermes/tasks.md | tail -3` → read ONLY from the latest entry line onward (`tail -n 120` is the zero-waste recovery). A head-first read of a 400KB+ board burns 100K+ chars of stale context (h3: 35 recurrences — the scheduler prompt's "Read .coding-hermes/tasks.md" is satisfied by the gate-first tail read, NEVER by a bare head read_file; the read fires from prompt text in whatever batch it gets scheduled, so do not trust an in-head "I'll read the tail" plan). **Project-specific foreman-ops references (`references/<project>-foreman-ops.md` and any per-project tick ledger) MUST load in batch 1, parallel with this skill and BEFORE any tasks.md read** — batch-2-or-later loading costs the stale head read every time; record recurrences honestly in the ledger (verify the actual tool-call sequence before writing "clean"). EXCEPTION: off-by-one board PREPENDS at TOP (ref: off-by-one-foreman-ops.md). Multi-event append pitfalls: refs/duckdb-board-multi-event-append-pitfalls.md; fixtures crash: refs/board-read-script-fixtures-coalesce.md.**
 
 **Scheduler IDLE/light-audit ticks** (no pending code tasks, no fixture window open): full recipe in `references/scheduler-idle-light-tick-recipe.md` — gate battery, event JSON shape, header `--set` conventions, fixture-row updates, scanner-safe storm-watch probe, idle-counter/self-pause semantics.
+
+## Lane Authority — OWNER-RATIFIED 2026-11-11 (SCHED-GAP-16937)
+Standing classification, verbatim source: `docs/lane-authority.md` in the coding-hermes-scheduler repo. A lane MAY decide alone: code work in its own repos (fix, don't file-to-ask), re-statusing its own rows (blocked→pending when the blocker resolves; re-file defects to the repo that OWNS the code, path+function named), housekeeping purges with read-back proof, scope-narrowing to the free subset, rollbacks of its own automation, filing new rows with runnable criteria, closing rows on file-read evidence. A lane MUST ask the owner: money, credentials, public surfaces, foreign data deletion, security posture, fleet structure (other projects' lanes/cadences/config), irreversible operations. When unsure: most recent explicit owner instruction first, then the file — **an unanswered offer is NOT consent**; "maybe we should X" = evaluate, not authorize; one decision card per decision (owner-decision-briefing shape), never a vague `OWNER:` placeholder, never silent parking. TRIAGE-00x rows re-triage the parked rows against this; cite the file, not personal judgement.
 
 ## Step 1.5 — Discovery Sweep
 Load skill: coding-hermes-discovery
