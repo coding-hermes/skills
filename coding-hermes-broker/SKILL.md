@@ -1,3 +1,12 @@
+---
+name: coding-hermes-broker
+description: >-
+  Scheduling brain — explains the weight-budget knapsack model deciding which
+  projects run and when; reference for tuning fleet scheduling.
+version: 1.0.1
+author: Bane + Hermes
+---
+
 # coding-hermes-broker
 
 **Status:** Active  

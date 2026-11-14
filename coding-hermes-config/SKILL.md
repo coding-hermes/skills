@@ -1,3 +1,12 @@
+---
+name: coding-hermes-config
+description: >-
+  Foundation config skill — loads FIRST for all coding-hermes skills; stores
+  fleet setup (keys, models, providers, paths) in DuckBrain /fleet/config.
+version: 1.0.1
+author: Bane + Hermes
+---
+
 # coding-hermes-config
 
 **Status:** Active  
