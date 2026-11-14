@@ -55,6 +55,29 @@ systemctl kill -s KILL <unit> && sleep 5 && systemctl is-active <unit>   # it ca
 
 If any of those is missing, the finding is real even if the code "has" the feature.
 
+## The receiver leg is part of the alarm
+
+`health=ok` plus a proven firing event proves the detector and nothing past it. A rule evaluated in
+the evaluator reaches a human only through the route, so measure the last hop too before calling an
+alarm live: the alertmanager's own readiness (`curl -s -o /dev/null -w '%{http_code}'
+<am>:9093/-/ready`), that the evaluator lists it as a REGISTERED target (`/api/v1/alertmanagers`, not
+merely configured in `prometheus.yml`), the route the rule's labels select (`severity=critical` →
+which receiver), and a delivery the receiver actually accepted — grep the sender's container log for
+`POST /webhook` with a status and a timestamp inside the alert window (`docker logs <router> |
+grep -c 'POST'`, then the last entry). A receiver that is up but whose log's newest POST predates the
+window is an untested final hop, which is exactly how a fleet keeps "alerts" that have never once
+been delivered.
+
+Do the same arithmetic for a rule that is currently `inactive`: bind the published series value to
+the artifact it is derived from (`stat -c %Y` of the newest dump) and confirm the rule's own
+selector's label set matches the series' labels, so `inactive` reads as "correctly not firing" rather
+than "series silently absent". A selector that names one label value while the producer emits another
+(`exported_job="crier"` versus a generic `job=`) evaluates to empty forever and `inactive` hides it.
+
+When this file's rule lands only in a foreign, uncommitted checkout, the durability hold is the row you
+file on that project's board — with the acceptance arm that the rule exists in a COMMITTED revision of
+the file (`git show <rev>:<rules file> | grep -c <RuleName>` ≥ 1), not just in the working tree.
+
 ## Failure taxonomy worth keeping straight
 
 - **Unattributed failure** — a failure with no recorded reason. Keep it in any rate you compute
