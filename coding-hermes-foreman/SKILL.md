@@ -169,6 +169,16 @@ Assemble the complete context package for the worker. The worker prompt MUST inc
 
 **Compile through prompt-foundry** to produce a clean, well-structured worker prompt (model-specific formatting: GLM structured, MiniMax different).
 
+**Spec-context blocks at dispatch (the factory call site).** When the project ships a spec-context builder, run it for the row BEFORE authoring the brief and embed its output — this is the call site that keeps `spec context` / `spec assemble` from being dead code:
+
+```bash
+cd ~/<project> && PATH=$PWD/.venv/bin:$PATH python3 scripts/brief_spec_context.py \
+  --row <ROW-ID> --spec-root specs --repo-root "$PWD" \
+  --out /tmp/<ROW>-spec-context.md --status-json /tmp/<ROW>-spec-context.json
+```
+
+Embed the emitted section verbatim (each block heading carries that block's own byte count) and read the outcome from `--status-json`. Exit contract: **0** = a section was emitted, or the answer was *honestly* empty — a 0-byte file means embed NO context section (never a placeholder heading), and the reason (`unscoped` / `inactive` / `unknown-task`) belongs in the tick report; **3** = ambiguous — nothing emitted, name the candidate ids in the tick report instead of guessing; **2** = typed refusal — name the error code. Never hand-write a "SPEC CONTEXT" section from row text alone: that is the decorative-brief defect the builder exists to close.
+
 **The worker gets ONE message — no skills, no architecture, no fleet context, no model/provider awareness.** The foreman handles all of that. The worker just codes.
 
 ### Non-Code Tasks — When the Foreman IS the Worker
