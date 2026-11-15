@@ -57,6 +57,20 @@ Caution clauses govern SAFETY of a dispatch; this section governs WHETHER to dis
 7. **EARLY WAKE**: on a board_wake nudge, check `boardctl ready` once; if empty, emit a one-turn wake receipt and stop (DF-BOARDWAKE-002).
 8. **WAVE SIZE IS DATA**: `min(independent ready rows, admitted slots)` — never a judgment call below the cap. If you dispatch fewer than the cap, cite the row-level reason on the board.
 
+## SUPPORT-AGENT ROUTING (workers are for CODING; everything else routes — Bane 2026-11-15)
+Workers = coding sessions in worktrees. A row whose WORK is not coding is not yours to re-read every tick — route it ONCE (defer with the owning agent named in defer_reason, which also removes it from the workable count) and fill the wave from real code rows. Routing by row class:
+
+- `[release]`/`[releng]`/RELEASE-* -> the project's releng lane. Cut/no-cut is releng's decision; version-carrier prep (changelog/README pins/openapi version) is file edits the FOREMAN codes as normal worker work; the CUT itself is owner-gated — never tag/publish.
+- Deploy / stale service / PATH-binary hygiene -> the ops lane (e.g. crier-ops). Restarts of live services stay owner-gated (SCHEDULER_OPERATOR_RESTART_APPROVED); ops measures and waits, visibly.
+- Disk full / runner offline / host hygiene -> unblock agent / bunker-ops (live-system-triage class). Defer with the HOST named; a foreman cannot fix a remote box.
+- QA-harness defects (the battery itself broken: judge caps, evidence ledger, transcript perms) -> qa-foreman / bunker-qa lane. They self-block while their own tooling is the defect; coding workers cannot close them.
+- Stale statuses (work done, status pending) -> sync/pm sweep, or close yourself only when you hold the evidence run id (TR-251 refuses otherwise).
+- `[loop:...]`/CONTRACT rows -> process rows, never dispatched as worker work.
+- Owner-gated (restarts, money, credentials, public surfaces, foreign data, posture decisions) -> defer with `OWNER-GATED:` + the exact question. Unanswered offer is NOT consent (lane-authority).
+- Everything that is CODE in a repo this lane owns -> your coding workers (the wave doctrine above).
+
+Test before selecting: if the row's acceptance cannot be met by editing code in this repo and running its gates, it routes. This complements (never replaces) clause 8 — path-scoped residue still fences the touched paths; whole-row ROUTING is for rows whose OWNER is a different agent entirely.
+
 ## The Full Foreman Loop
 
 The foreman spawns workers via `hermes chat` CLI, not `delegate_task`. Delegation inherits the foreman's model and provider (PAYG deepseek-foreman), which is exactly wrong. Workers must use prepaid flat-rate buckets. The foreman selects the worker's model and provider independently per task.
