@@ -283,3 +283,15 @@ real use run and the records now in the repo, not test colors.
 - **Don't skip the skills/ directory.** The integration skill in the repo is
   what makes the knowledge reusable — without it, the docs are just read-once
   prose.
+- **A long-lived scratch tree is not evidence about a writer.** When a pending
+  row says "command X mutates file Y", re-measure it in a tree that ran ONLY
+  command X: hash the files, run the command, hash again. A scratch tree that
+  already accumulated a dozen commands cannot attribute a delta to any of them,
+  and filing the delta as X's fault sends a worker to "fix" code that is clean.
+  The honest row is a non-reproduction plus a named bisect target, not a
+  confirmation of the row's premise.
+- **Re-read the row's premise before re-proving it.** A row written against an
+  older commit may not describe current behaviour. Verified non-reproduction is
+  a finding worth filing: it saves the worker the wrong fix and tells the board
+  which rows are stale.
+
