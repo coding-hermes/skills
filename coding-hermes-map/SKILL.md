@@ -72,15 +72,71 @@ graph TD
     CF --> ND
 ```
 
+## How the agents work together — one tick, end to end
+
+The graph above shows *which skill to load*. This shows *how the agents actually interact* — who
+writes what, who is allowed to change what, and where learnings land.
+
+```mermaid
+sequenceDiagram
+    participant S as Scheduler daemon
+    participant F as Foreman (lane session)
+    participant W as Workers (worktrees)
+    participant G as Guard / GitReins judge
+    participant B as Board (JSONL, canonical)
+    participant D as DuckBrain (project namespace)
+    participant R as Skills repo (references/)
+
+    S->>F: admit tick (board-admitted or cooldown)
+    F->>F: self-heal (identity, deps, pull)
+    F->>B: read board, select block
+    Note over F,B: Dirty board is NEVER a tick barrier — commit board residue or cut worktree from a clean commit
+    F->>W: dispatch wave (1 worktree per worker, brief + ACs)
+    W->>W: code + tests in worktree (never the main tree)
+    W->>G: guard before commit
+    G-->>F: verdict
+    F->>F: merge wt branch, reap worktree
+    F->>B: closeout rows (evidence, hashes)
+    F->>D: write project learnings (keyed facts, decisions, pitfalls)
+    F->>R: durable, cross-project lesson → references/*.md via PR
+    Note over F,R: NEVER edit ~/.hermes/skills directly
+```
+
+### Where learnings are documented (and where they are NOT)
+
+| Kind of learning | Goes to | Never to |
+|---|---|---|
+| Project fact, decision, pitfall (only true for this project) | DuckBrain `<project>` namespace, `/project/<name>/...` | the skill files |
+| Lesson that generalizes to every future tick of this skill | skills repo `references/<topic>.md` **via PR**, linked from the skill's SKILL.md | local `~/.hermes/skills` |
+| Whole new procedure the fleet repeats | a new/extended skill in the skills repo **via PR** | local `~/.hermes/skills` |
+| Raw evidence, receipts, logs | the tick receipt / board row | skill files, DuckBrain payloads |
+
+### Skills are deployed, not edited (skill lock)
+
+`~/.hermes/skills` is a **deploy target, not a workspace**. The hourly enforcer
+(`~/.hermes/scripts/skill-lock-enforce.sh`) reverts LOCKED core skills (foreman, worker,
+boardctl, scheduler, bankai, broker, config) to the repo copy — any local edit is silently
+undone within the hour, and that is by design. The only write path is:
+edit in **this repo** → commit → land on `origin/main` → run the enforcer → verify the live
+copy by grep. Logs: `~/.hermes/logs/skill-lock.log`.
+
+### Execution goals (what "correct" measures)
+
+- Wave floor is 1; wave_size=0 must cite a concrete active hazard, never arithmetic.
+- A dirty board never produces a dry tick: commit the residue or dispatch from a clean worktree.
+- Foreman dry target **< 10%, ideally < 1%** — dry ticks must be true empty-board receipts, not
+  barrier burns (measured 2026-11-15: 344/week were; clause 8 of the foreman skill now forbids it).
+- Every closed row carries evidence (hashes, CI, test output); "done" is proven, not claimed.
+
 ## When to Use Each Skill
 
 | Skill | Load when... | Skip when... | Status |
 |-------|-------------|-------------|--------|
-| `coding-hermes-foreman` | Every foreman tick | — (always loaded) | PLANNED — not yet built; use `coding-hermes-cron` + this map instead |
+| `coding-hermes-foreman` | Every foreman tick | — (always loaded) | EXISTS |
 | `coding-hermes-foreman-imposter` | The user wants this conversation to own a multi-step coding goal and coordinate implementation workers | A scheduled foreman already owns the task, the user only needs one bounded change, or no coordination is needed | EXISTS — optional direct-contact mode; implementation workers only |
-| `coding-hermes-self-heal` | Start of every tick | — (always needed) | PLANNED — not yet built; run git status/log + hilo stats manually |
-| `coding-hermes-board` | After self-heal, need task selection | — (always needed) | PLANNED — not yet built; read `.coding-hermes/tasks.md` directly |
-| `coding-hermes-discovery` | Board is empty, need to find work | Board has actionable tasks | PLANNED — not yet built |
+| `coding-hermes-self-heal` | Start of every tick | — (always needed) | EXISTS |
+| `coding-hermes-board` | After self-heal, need task selection | — (always needed) | EXISTS as `coding-hermes-boardctl` (JSONL board ops) |
+| `coding-hermes-discovery` | Board is empty, need to find work | Board has actionable tasks | EXISTS |
 | `coding-hermes-audit` | Discovery finds nothing, last-resort scan | Discovery found tasks | PLANNED — embedded in NEVER-DONE tasks.md entry |
 | `coding-hermes-worker-model` | Choosing a model for a new task | Mechanical/foreman-direct tasks | EXISTS |
 | `coding-hermes-worker` | Need to spawn independent work session | Task is foreman-direct (specs, docs, mechanical) | EXISTS |
