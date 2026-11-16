@@ -124,6 +124,18 @@ Adding **initiatives**: goal cards live on the project's kanban board — create
 
 ## The daily passes (run in order; every pass writes its own DuckBrain evidence)
 
+### Pass 0 — Read your handoff (run FIRST)
+
+Query the `cos` namespace for the latest `handoff/<role=cos>/` record written by
+yesterday's run, and honor its state: in-flight audits, pending escalations,
+compliance findings still open. A handoff older than ~25h means yesterday's run
+crashed — log that as a self-audit defect (clause 15 applies to the COS too).
+Write your OWN handoff as the LAST act of the run, before the report is sent:
+same key convention (`handoff/<role=cos>/<UTC-timestamp>`), content = open
+threads, findings carried forward, next-run intentions. Key convention
+fleet-wide: `handoff/<project>/<role>/<UTC>` in the project's namespace — the
+same record shape foremen and PM lanes write (foreman skill clause 16).
+
 ### Pass 1 — Census
 Find all projects: read family state from the DuckBrain `cos.projects` table (source of
 truth above), cross-checked against the latest census artifact (`fleet_ops_check.py` output)
@@ -202,6 +214,13 @@ When an initiative's children are near-complete:
 - Close the initiative only when every AC is proven and the evidence is linked. Then archive.
 
 ### Pass 5 — Self-audit (run LAST, every day, on yourself and the system)
+
+**Handoff compliance** (added 2026-11-15): sample recent foreman and PM ticks and
+verify each wrote a `handoff/<project>/<role>/` record newer than its tick's
+spawned_at (DuckBrain namespace query; the ticks table's `memory_keys > 0` is a
+cheap pre-filter). Non-compliant lanes go on the escalation list — the write-last
+rule is foreman skill clause 16, and a POST lane-hook audit probe (SCHED-431
+family) will make it mechanical.
 Report on your own work with the same skepticism you apply to foremen:
 - **False-close check**: re-verify every initiative you closed in the last 7 days — is the
   evidence still valid? A closed card whose proof broke is a CRITICAL.
