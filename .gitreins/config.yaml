@@ -44,7 +44,7 @@ pipeline:
     - id: tier2
       type: ai_eval
       condition: "true"
-      max_iterations: 60
+      max_iterations: 150
       tools: [read_file, run_command, search_pattern, read_diff]
       prompt_template: |
         You are the WRITING-RULES judge for the coding-hermes skills repo.
@@ -54,3 +54,7 @@ pipeline:
         files, pass with one line "reference-only churn, not graded". Do not grade the
         underlying feature a skill describes — only the writing. Do not run any test
         suite; tier-1 already ran it. One criterion per proof; FAIL on violation.
+        CRITICAL: emit one item per task criterion and copy each task criterion text
+        VERBATIM into the item's criterion field — never reword, truncate, summarize
+        or shorten it; the coverage gate matches the exact text and an altered copy
+        counts as ungraded.
