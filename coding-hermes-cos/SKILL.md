@@ -107,8 +107,8 @@ hermes cron list | grep -i 'cos\|chief\|staff'
 ```
 
 **THE LOOP IS ONE (the operator ruling 2026-11-16, supersedes the per-project tier):**
-1. **06:00** `cos-state-sync` (no_agent script) — syncs scheduler + kanban + boards into the DuckBrain `cos` tables. The ONLY data-collection step.
-2. **07:00** `COS — chief of staff daily` (fleet agent pass) — THE only COS agent loop. Per-project detail comes from the same tables (`initiatives.project` tag, `cos.projects` status), not from separate per-project passes.
+1. **06:00** `cos-state-sync` (no_agent script) — the MECHANICAL leg: fleet census + foreman discovery (which families exist, which foremen are active). It finds what's there; it does not judge it.
+2. **07:00** `COS — chief of staff daily` (fleet agent pass) — the ANALYST leg: checks **ALL projects — foreman and non-foreman alike** (non-foreman projects are added when the operator asks) — and for each figures out **where the project currently is, what is done, what is good, what is missing, where the gaps are**; whether tasks need adding to an EXISTING initiative, whether a NEW initiative must be created, and whether a finished one needs VERIFICATION before close. Deep data comes from the active-foreman rows; non-foreman projects are analyzed from their cheap rows plus ad-hoc probes the pass runs itself.
 3. **07:45** `COS report — thermal print` (no_agent sidecar, prints the 07:00 output).
 
 **Per-project COS crons are DEPRECATED** — the four minted 2026-11-15 (`cos-consensus-daily`, `cos-code-factory`, `cos-tatara-daily`, `cos-auger-daily`) were paused 2026-11-16 before ever firing; do not create more, and do not re-enable them as standing loops (the operator: "multiple chief of staff loops… need to be aligned into a single one"). A project needing sustained deep-dive gets a TIME-BOXED manual pass using the sequence below, then hands back to the fleet loop. Never create a second fleet-wide COS either.
@@ -152,9 +152,12 @@ sources every day and NEVER works from a remembered list. Concretely, every pass
    not lazy.
 
 ### Pass 2 — Reconcile initiatives
-For each changed project, match outstanding work against kanban initiative cards:
+For each project IN SCOPE TODAY — every active-foreman family with changed state, plus every
+non-foreman project the operator added (they are NEVER skipped just for lacking a foreman):
+match outstanding work against kanban initiative cards:
 - **Missing** → create an initiative card (goal card) with user-story title, ACs with proofs,
-  and `decompose` into child cards; `link` children to the goal **before** any child goes ready.
+  and `decompose` into child cards; record the child ids in the goal card BODY or a comment —
+  read the link-semantics pitfall before reaching for `link`.
 - **Duplicate** → merge into the oldest card, keep both id sets in the body, archive the twin.
 - **Stale** (no foreman touch in N days, no block_kind) → `block` with `block_kind=stale`
   + the escalation question, or re-drive if the driver is obvious.
@@ -222,6 +225,11 @@ Blocked on you: <numbered list, one line each — or "nothing">
 Details: <links to cards touched>
 ```
 
+**One-ask rule for owner approvals:** when work is blocked on a decision, surface exactly
+ONE approval at a time, in its own message, phrased so a single word ("yes") unblocks it —
+state the action, then stop. Mid-work asks and multi-part asks read as noise to a distracted
+owner and stall the lane; everything non-blocking waits in "Blocked on you" instead.
+
 Deliver target: `telegram:<cos-channel>` (project review channel — the COS channel).
 
 ---
@@ -234,38 +242,63 @@ hermes kanban create "Title" --body "…"              # card (positional TITLE 
 hermes kanban create "Goal title" --body "ACs…" --goal   # initiative goal card
 hermes kanban specify <id>                            # flesh out triage card
 hermes kanban decompose <id>                          # split into child graph
-hermes kanban link <parent> <child>                   # BEFORE children go ready
+hermes kanban link <parent> <child>                   # BLOCKING edge: gates the
+                                                      # child on the parent being done;
+                                                      # for goal tracking cite ids in
+                                                      # the body instead
 hermes kanban set-model <id> <model> --provider <p>   # per-card cost control
-hermes kanban block <id> --kind <why>                 # blocked, with reason class
+hermes kanban block <id> <kind> "reason"              # kind is the CLOSED enum capability/
+                                                      # dependency/needs_input/transient (no
+                                                      # 'stale'); reason is POSITIONAL, no
+                                                      # --reason flag
 hermes kanban promote <id>                            # recovery path
 hermes kanban request-review <id> / request-changes <id>
 hermes kanban runs <id> / log <id> / context <id>     # evidence reads
 hermes kanban stats                                   # per-status + per-assignee
+hermes kanban boards create <slug>                    # slug ONLY — there is NO --name flag;
+                                                      # per-board DB; then use --board <slug>
+hermes kanban --board <slug> list                      # read a board WITHOUT switching the global current board
 hermes kanban notify-subscribe <chat> <task>          # terminal events to chat
 hermes kanban complete <id>                           # ONLY after AC evidence
 ```
 
 Board rows (foreman plane) — read freely; append only:
 ```bash
+boardctl -C <repo> next-id --family RELEASE-TJ --json          # mint the id (read-only)
+boardctl -C <repo> create --id <family>-<n> --type task --title "..." \
+  --acceptance-criteria "..." --reasoning "..."                 # file a row
 jq -c . row.json >> <project>/.coding-hermes/board/tasks.jsonl   # path-limited add
 ```
+`--type` is a CLOSED enum (bug, chore, feat, task — `boardctl types` lists it): a lane-style
+value like `releng` refuses the create outright. `--acceptance-criteria` is the dispatchability
+field — a row without it never dispatches; write testable criteria, not prose intents.
 
 ---
 
 ## Pitfalls (fleet history, paid for already)
 
-- **Link edges before ready** — a reclaimed running card re-promotes ignoring its parents.
+- **`link` is a BLOCKING edge, not a tracking edge** — kanban parent deps gate the child:
+  linking children to an OPEN goal demotes every ready child to todo, and `promote` cannot
+  bypass it ('unsatisfied parent dependencies'; promote only applies to todo/blocked;
+  unlinking restores the child to ready). For the normal initiative shape — a goal that
+  closes WHEN its children close — cite the child ids in the goal card body/comment instead
+  of linking. Reserve `link` for true sequences where parent work must be DONE before the
+  child starts. (A reclaimed running card re-promotes ignoring its parents, so for genuine
+  dependencies create-and-link BEFORE the child ever goes ready.)
 - **The circuit breaker is not a retry budget** — `consecutive_failures` tripping means a human
   decision is needed; `last_failure_error` names it.
 - **`complete` is a flag; `runs` is the truth.**
 - **Model overrides bill real quota** even at $0 — quote tokens as quota.
 - **Do not duplicate the foreman board** — one requirement, two planes, zero retranslation.
-- **The kanban 'current board' is global across sessions and `dispatch` has no `--board` flag** —
-  another workstream's `boards switch` re-points your commands mid-pass. Confirm the board name
-  in `list` output before any reconcile or dispatch action.
+- **The kanban 'current board' is global and re-points BETWEEN calls, not just mid-pass** —
+  another workstream's `boards switch` can land between two of YOUR create calls and split one
+  batch across three boards (paid: one initiative batch landed on three different boards in a
+  single session, strays had to be hunted per-board and archived). After any `boards switch`,
+  re-run `boards current` immediately before the batch; after creating cards, search each new
+  card id across ALL boards (`--board <slug> list --json` per board) before commenting or
+  linking on it.
 - **Most kanban verbs accept `--board <slug>` directly (`hermes kanban --board <slug> create/list`) — use it instead of `boards switch`**, which re-points the GLOBAL current board for every concurrent session. The pitfall below about dispatch having no `--board` flag still stands for `dispatch` only.
-- **`hermes cron create` has no `--model`/`--provider` flags**; inline `python3 -c` is blocked — write scripts to files.
-  write scripts to files.
+- **`hermes cron create` DOES take `--model`/`--provider`/`--pin`** (schedule and prompt are POSITIONAL: `hermes cron create --name X --deliver <chat> --model M --provider P --pin "0 8 * * *" "<prompt>"`; passing `--schedule` errors). Verify the stored job afterward: `--pin` can silently not stick — read the job back and, if `pin` is not set, set it directly in the cron jobs store. Inline `python3 -c` is blocked — write scripts to files.
 - **boardctl refuses a close you cannot evidence** — `update <id> --status complete` demands a
   full 40/64-hex `--commit-hash` AND an `--evidence-run-id` resolving to a stored run, and you
   (outside that lane) have neither. For a stale row on a lane you do not own, append the
@@ -276,6 +309,21 @@ jq -c . row.json >> <project>/.coding-hermes/board/tasks.jsonl   # path-limited 
   `tasks.jsonl`, so 9 lanes showing identical touch counts is one board changing, and family
   lanes inflate "changed projects" by ~10x. Group by board path before deciding what gets
   full-depth passes.
+- **A tiny initiative count while boards hold hundreds means the sync is board-blind** —
+  the fleet kanban is one DB per board under `~/.hermes/kanban/boards/<slug>/kanban.db`;
+  a sync reading only the legacy `~/.hermes/kanban.db` sees a handful of tasks and hides
+  every real initiative from the COS. `cos_state_sync.py` must iterate every per-board DB
+  (plus the legacy fallback); check `--verify` counts against `boards list` totals before
+  trusting a pass.
+- **DuckBrain `cos` tables have DECLARED columns — a sync row may not carry extra keys.**
+  Adding a provenance key (e.g. `board`) to an upsert row 400s the whole insert with
+  `VALIDATION_ERROR: Unknown column(s)` and silently drops that initiative from the pass;
+  project linkage comes from the `[tag]` title prefix, never a new column. If a column is
+  genuinely needed, it is a SUPA-6 declaration change, not a script edit.
+- **Refresh card CURRENT-STATE lines immediately before reporting, not once at creation** —
+  the fleet closes rows while a long setup pass runs, and a card whose body cites four
+  pending rows that are now complete feeds the next reconcile stale truth. Re-read every
+  cited row's status on origin/main right before the report; edit the body when the state moved.
 - **Scheduler tick queries are string-typed** — `ticks.created_at` is ISO text and the project
   column is `project_name`. Compare against an ISO string cutoff, never an epoch float: SQLite
   types text above numeric, so `created_at > <epoch>` silently matches the WHOLE table and
