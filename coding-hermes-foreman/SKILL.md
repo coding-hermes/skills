@@ -5,7 +5,7 @@ description: >-
   scans tasks, analyzes impact, loads memory, spawns workers, verifies
   quality, commits, learns, and scans external signals. Loaded by every coding-hermes
   foreman cron job. Follows the fleet architecture.
-version: 2.10.1
+version: 2.11.0
 author: Bane + Hermes
 platforms: []
 metadata:
@@ -71,13 +71,13 @@ Caution clauses govern SAFETY of a dispatch; this section governs WHETHER to dis
       "session": "this tick's hermes session id"
     }
     ```
-11. **WAVES CROSS BLOCKS AND SPAN TICKS (owner law, 2026-11-15)**: independence is defined by `depends_on` edges and file seams, NEVER by board family — a wave may mix rows from totally different parts of the project ("even if they are totally different parts of the project") as long as they are mutually unblocked and touch different paths. Where a lane prompt says "one block per tick", that is a soft preference, superseded here: when the chosen block has fewer ready rows than admitted slots, FILL THE REMAINING SLOTS from other blocks' ready rows (owner-approved rows first per §9). A wave may also SPAN TICKS: persist the wave manifest (.coding-hermes/waves/<wave-id>.json) and have the next tick RESUME the same wave id — refilling freed slots — instead of composing a fresh wave; multi-tick waves are the expected shape for work bigger than one tick's slots. Never discard a healthy wave to start a new one.
-7. **EARLY WAKE**: on a board_wake nudge, check `boardctl ready` once; if empty, emit a one-turn wake receipt and stop (DF-BOARDWAKE-002).
-8. **WAVE SIZE IS DATA**: `min(independent ready rows, admitted slots)` — never a judgment call below the cap. If you dispatch fewer than the cap, cite the row-level reason on the board.
+17. **WAVES CROSS BLOCKS AND SPAN TICKS (owner law, 2026-11-15)**: independence is defined by `depends_on` edges and file seams, NEVER by board family — a wave may mix rows from totally different parts of the project ("even if they are totally different parts of the project") as long as they are mutually unblocked and touch different paths. Where a lane prompt says "one block per tick", that is a soft preference, superseded here: when the chosen block has fewer ready rows than admitted slots, FILL THE REMAINING SLOTS from other blocks' ready rows (owner-approved rows first per §9). A wave may also SPAN TICKS: persist the wave manifest (.coding-hermes/waves/<wave-id>.json) and have the next tick RESUME the same wave id — refilling freed slots — instead of composing a fresh wave; multi-tick waves are the expected shape for work bigger than one tick's slots. Never discard a healthy wave to start a new one.
+18. **EARLY WAKE**: on a board_wake nudge, check `boardctl ready` once; if empty, emit a one-turn wake receipt and stop (DF-BOARDWAKE-002).
+19. **WAVE SIZE IS DATA**: `min(independent ready rows, admitted slots)` — never a judgment call below the cap. If you dispatch fewer than the cap, cite the row-level reason on the board.
 
-12. **WORK-ORDER OVER BOARD-PICKING (owner, 2026-11-15 — hermes-dagger r4 lesson):** when a review, audit, or owner call-out names work, the foreman passes a WORK-ORDER — the exact rows in priority order, each ALREADY converted into a worker brief with executable acceptance. Filing a finding row is not doing it: a row whose acceptance is prose ("no harness exists", "claims unverifiable") defers forever. Convert findings to runnable acceptance (named deliverable paths, runnable commands, evidence format) before the tick ends, and dispatch the work-order rows FIRST — general board fills come after. If a work-order row is blocked, report the blocker against that row; never substitute an easier row and call it progress. Hygiene closes do not count as gap progress — tick receipts report work-order movement separately.
-13. **OWNER-GATE DOES NOT BLEED:** a gated subtask (running an experiment, publishing, a restart) gates only its own row. Ungated siblings (building the harness, the grading battery) stay dispatchable and must never be parked because a sibling needs a decision.
-14. **BOARD TRACK AND PRODUCT TRACK ARE SEPARATE AND PARALLEL:** product track = workers building/probing rows in their own worktrees; board track = row edits, rescoping, evidence binding, stale-row closure. Dispatch the product wave FIRST, then do board work while workers execute — a running worker is not a reason to idle. A tick that only waits on workers while board work is actionable is an idle tick; a tick that only does board work while slots sit empty violates the wave floor. Board edits never block on worker results (bind evidence at verified-merge time), and in a shared checkout they go through the sanctioned writer or a plumbing commit without touching worker worktrees or the foreman's dirty files.
+20. **WORK-ORDER OVER BOARD-PICKING (owner, 2026-11-15 — hermes-dagger r4 lesson):** when a review, audit, or owner call-out names work, the foreman passes a WORK-ORDER — the exact rows in priority order, each ALREADY converted into a worker brief with executable acceptance. Filing a finding row is not doing it: a row whose acceptance is prose ("no harness exists", "claims unverifiable") defers forever. Convert findings to runnable acceptance (named deliverable paths, runnable commands, evidence format) before the tick ends, and dispatch the work-order rows FIRST — general board fills come after. If a work-order row is blocked, report the blocker against that row; never substitute an easier row and call it progress. Hygiene closes do not count as gap progress — tick receipts report work-order movement separately.
+21. **OWNER-GATE DOES NOT BLEED:** a gated subtask (running an experiment, publishing, a restart) gates only its own row. Ungated siblings (building the harness, the grading battery) stay dispatchable and must never be parked because a sibling needs a decision.
+22. **BOARD TRACK AND PRODUCT TRACK ARE SEPARATE AND PARALLEL:** product track = workers building/probing rows in their own worktrees; board track = row edits, rescoping, evidence binding, stale-row closure. Dispatch the product wave FIRST, then do board work while workers execute — a running worker is not a reason to idle. A tick that only waits on workers while board work is actionable is an idle tick; a tick that only does board work while slots sit empty violates the wave floor. Board edits never block on worker results (bind evidence at verified-merge time), and in a shared checkout they go through the sanctioned writer or a plumbing commit without touching worker worktrees or the foreman's dirty files.
 
 ## SUPPORT-AGENT ROUTING (workers are for CODING; everything else routes — Bane 2026-11-15)
 Workers = coding sessions in worktrees. A row whose WORK is not coding is not yours to re-read every tick — route it ONCE (defer with the owning agent named in defer_reason, which also removes it from the workable count) and fill the wave from real code rows. Routing by row class:
@@ -531,7 +531,7 @@ Store your understanding so YOU remember it next tick. This is how you build con
 
 **What to scan:**
 
-1. **CI changes:**
+23. **CI changes:**
    ```bash
    # GitHub repos — gh 404 OR empty (exit 0) = stale repo name: git remote -v FIRST (ref: gh-ci-404-wrong-repo-signal-scan.md)
    gh run list -R <repo> --limit 5
@@ -539,7 +539,7 @@ Store your understanding so YOU remember it next tick. This is how you build con
    ```
    Any new failures? Any previously-failing pipelines that are now green? Steward/audit + CI probe: `references/steward-audit-human-blocked-ticks.md`.
 
-2. **Remote commits:**
+24. **Remote commits:**
    ```bash
    git fetch origin
    git log HEAD..origin/main --oneline
@@ -548,13 +548,13 @@ Store your understanding so YOU remember it next tick. This is how you build con
    
    **⚠️ Branch trap — verify WHICH remote branch is live first.** Two remote branches (main + master) can make the unpushed count wrong — check `git branch -r` and `git symbolic-ref refs/remotes/origin/HEAD` before counting. See `references/scheduler-self-pause-execution.md`. **Local-only repo (`git remote -v` empty):** skip fetch/push/CI/issue scans; note it in board. Ref: `references/local-only-repo-signal-scan.md`.
 
-3. **New issues:**
+25. **New issues:**
    ```bash
    gh issue list -R <repo> --limit 10
    ```
    Any new issues filed since the last tick? If an issue is labeled `bug` or `critical`, create a task immediately: `## [ ] BUG — <issue title> (#<number>)`.
 
-4. **Dependency updates + vulns:**
+26. **Dependency updates + vulns:**
    ```bash
    # Go
    go list -u -m all 2>/dev/null | grep -F '[' | head -10
@@ -568,7 +568,7 @@ Store your understanding so YOU remember it next tick. This is how you build con
    ```
    If critical security updates are available, create `## [ ] DEPS — update <package>`. Note: this is a lightweight check — full vulnerability scanning (govulncheck, npm audit, pip-audit) runs in Step 1.5d during the discovery sweep.
 
-5. **DuckBrain cross-reference:**
+27. **DuckBrain cross-reference:**
    Did another project's foreman discover a pattern relevant to this project? Load DuckBrain with a cross-project query. If the Hivemind foreman found a concurrency pattern that applies here, the foreman should know about it before the next tick.
 
 **After the scan:** If new tasks were created (max 3 from signals), the board now has items. When the next tick fires at Step 1, it will find them. The scan also informs task prioritization — a new `bug` issue should be picked before the next scheduled feature work.
@@ -622,20 +622,20 @@ When GitHub Actions is broken/blocked (billing annotation, dead runners, 4-15s
 failing runs) foremen must NOT stall waiting for GitHub. Run the CI battery
 yourself and record the evidence:
 
-1. **Detect**: `gh run list -R <repo> --limit 5` + `gh run view <id> -R <repo>`
+23. **Detect**: `gh run list -R <repo> --limit 5` + `gh run view <id> -R <repo>`
    — read the ANNOTATIONS (billing block) — see `local-ci-execution` skill.
-2. **Host-local first** (fast): `act -W .github/workflows/<wf>.yml -j <job>`
+24. **Host-local first** (fast): `act -W .github/workflows/<wf>.yml -j <job>`
    (act is installed at `~/.local/bin/act`; `-P ubuntu-latest=node:22-bookworm`
    in `~/.config/act/actrc`). Go repos: replicate the workflow commands directly
    (build → vet → test → lint) — full recipe in `local-ci-execution` skill.
-3. **Bunker temp agent** (when host is loaded or the env needs isolation):
+25. **Bunker temp agent** (when host is loaded or the env needs isolation):
    `~/.hermes/scripts/bunker-ci.sh run bunker-las-03 <repo-dir> -W .github/workflows/ci.yml -j <job>`
    — spawns a FRESH temp agent (TTL 4h), syncs the repo, runs act inside it,
    destroys the agent on exit. Environment is NEVER polluted (temp agent per
    run). `bunker-ci.sh status` lists fleet health. Bunkers: bunker-las-01..04
    (tailnet, las-03 verified 2026-08-27), bunker-mvp, bunker-7840hs (local).
    Requires the bunker CLI with the 300s spawn fix (rebuild: `cd ~/bunker && make build`).
-4. **Report**: local/bunker CI results are valid evidence for board closeout —
+26. **Report**: local/bunker CI results are valid evidence for board closeout —
    note "CI verified locally (bunker-las-03)" with the ACT_EXIT + job results in
    the event detail; file a board row for the CI fix if the local run exposes a
    real failure (guard-green/CI-red class).
@@ -644,8 +644,7 @@ yourself and record the evidence:
 
 > Full corpus (56K, 166 lines): `references/pitfalls.md` — load on demand when a pitfall pattern is suspected. Top ones:
 > **Judge/scratch daemon live-verification vs prod auth stores:** a gitreins tier-2 judge or any agent live-verifying `--auth=apikey` with a scratch daemon and no HOME override can REPLACE the production `~/.duckbrain/auth.json` and SIGTERM the live daemon (proven duckbrain #477, judge ff743016; key-file recovery at `~/.hermes/state/duckbrain-tokens/*.key`). Full chain + recovery + prevention: `references/judge-live-verify-auth-store-isolation.md`.
-## Pitfalls
-### Worker Claim Verification
+### Worker Claim Verification (cont.)
 Fabricated gitreins criteria + unverified task closures — see `references/worker-claim-verification.md`.
 **GitReins task timing — create AFTER worker commit, not pre-dispatch.** Worker guard restore wipes pre-dispatch tasks from `.gitreins/tasks.yaml` → `judge_evaluate` fails `Task not found`. Re-create 
 ### Sibling Subagent File Conflicts

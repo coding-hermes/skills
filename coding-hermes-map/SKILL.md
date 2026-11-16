@@ -1,7 +1,7 @@
 ---
 name: coding-hermes-map
 description: Skill map for all coding-hermes skills. Shows what each skill does, when to use it, and why. Included in every coding-hermes skill so agents always know the full toolbox.
-version: 1.2.0
+version: 1.3.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:

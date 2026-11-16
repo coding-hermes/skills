@@ -6,7 +6,7 @@ description: >-
   the foremen that implement them, unblocks what is stuck, and pushes acceptance
   until initiatives are PROVEN complete — never merely marked done. Self-audits its
   own calls and the system daily. Reports to the project review channel.
-version: 0.1.0
+version: 0.2.0
 author: the operator + Hermes
 platforms: [linux]
 metadata:

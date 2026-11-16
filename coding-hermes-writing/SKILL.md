@@ -5,7 +5,7 @@ description: >-
   frontmatter, body structure, section style, references/, the normative manifest,
   or dispatch classes. This is the single writing authority: rules, formats, style.
   GitReins guard on this repo enforces the mechanical subset; the rest is review.
-version: 0.1.0
+version: 0.2.0
 author: Bane + Hermes
 platforms: [linux]
 metadata:
@@ -128,7 +128,7 @@ judging a whitespace diff trains noise.
 - **Testing the checker**: run it against a deliberately-broken scratch copy before
   trusting a green pass — a checker that has never seen a failure is not a checker.
 
-## 6. Pitfalls
+## 7. Pitfalls
 
 - **`description:` folded style (`>-`)** — a single-line description breaks agent matching.
 - **Duplicate clause numbers** — the foreman skill carries two `7.`s from a merge; new
