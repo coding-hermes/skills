@@ -55,7 +55,11 @@ the DuckBrain namespace **`cos`** as declared tables (SUPA-6), synced by
 
 - **`projects`** — one row per FAMILY (scheduler lanes grouped by workdir; the canonical
   repo workdir owns the plain name, stand-in/sync dirs get hash suffixes). Columns:
-  `project` (pk), `kind`, `status` (active<48h / idle<14d / stale / unknown),
+  `project` (pk), `kind`, `status` (active<48h / idle<14d / stale / unknown; the sync is
+  foreman-focused, so two more values exist: `foreman-off` = the family HAS a foreman lane
+  but it is disabled — recoverable, deep scan returns on enable; `no-foreman` = a legitimate
+  project without a foreman lane — first-class, NEVER treated as broken, its activity is
+  board-mtime only and `open_rows` is NULL by design),
   `admission_mode`, `workdir`, `board_path`, `lane_count`, `lanes` (json), `open_rows`
   (board rows not in a closed status), `last_activity_at`, `updated_at`.
 - **`initiatives`** — one row per kanban task: `initiative_id` (pk, e.g. `t_36f607eb`),
@@ -77,7 +81,9 @@ the `X-Total-Count` response header. On-demand refresh before a pass:
 `python3 ~/.hermes/scripts/cos_state_sync.py` (PATCH-upsert by pk, idempotent; `--verify`
 prints table counts). Writes go through PATCH `?pk=eq.<id>` → POST fallback; the store is
 insert-only (duplicate pk POSTs 409) and rate-limits bursts (429 + retryAfter — the script
-backs off automatically). Scope ad-hoc SQL probes to kanban.db/scheduler.db ONLY when
+backs off automatically, and the upsert re-patches on a 409-after-429 race instead of dying
+mid-burst; the store's burst limiter can fail the PATCH late in a 599-row run and a naive
+PATCH→POST fallback then dies on the duplicate). Scope ad-hoc SQL probes to kanban.db/scheduler.db ONLY when
 verifying a sync discrepancy — the tables are what you reason and report from.
 
 ---
@@ -106,12 +112,42 @@ Before standing up a COS for any project, ALWAYS check what already exists:
 hermes cron list | grep -i 'cos\|chief\|staff'
 ```
 
-**THE LOOP IS ONE (the operator ruling 2026-11-16, supersedes the per-project tier):**
-1. **06:00** `cos-state-sync` (no_agent script) — the MECHANICAL leg: fleet census + foreman discovery (which families exist, which foremen are active). It finds what's there; it does not judge it.
-2. **07:00** `COS — chief of staff daily` (fleet agent pass) — the ANALYST leg: checks **ALL projects — foreman and non-foreman alike** (non-foreman projects are added when the operator asks) — and for each figures out **where the project currently is, what is done, what is good, what is missing, where the gaps are**; whether tasks need adding to an EXISTING initiative, whether a NEW initiative must be created, and whether a finished one needs VERIFICATION before close. Deep data comes from the active-foreman rows; non-foreman projects are analyzed from their cheap rows plus ad-hoc probes the pass runs itself.
+**THE LOOP (operator design, corrected 2026-11-16): a TIERED COS, not a single cron.**
+1. **06:00** `cos-state-sync` (no_agent script) — the ONE fleet census cron: mechanical leg (fleet census + foreman discovery).
+2. **07:00** `COS — chief of staff daily` (fleet agent pass) — the fleet ANALYST leg: checks ALL projects, files the day's report.
 3. **07:45** `COS report — thermal print` (no_agent sidecar, prints the 07:00 output).
+4. **Per-project card managers** `cos-<family>-cards` — ONE per enabled foreman, staggered 15-min slots from 08:00 (load-safe). Scope: ONLY that project's cards — verify card state vs board/repo truth, repair evidenced drift ([tag] prefixes, linkage, stale closes), born-subscribe in-flight cards, write evidence to DuckBrain `/per-project/<family>/<date>`, stay quiet unless drift or a blocker. They do NOT do fleet analysis and do NOT work the tasks.
 
-**Per-project COS crons are DEPRECATED** — the four minted 2026-11-15 (`cos-consensus-daily`, `cos-code-factory`, `cos-tatara-daily`, `cos-auger-daily`) were paused 2026-11-16 before ever firing; do not create more, and do not re-enable them as standing loops (the operator: "multiple chief of staff loops… need to be aligned into a single one"). A project needing sustained deep-dive gets a TIME-BOXED manual pass using the sequence below, then hands back to the fleet loop. Never create a second fleet-wide COS either.
+**The operator's correction that governs scope readings:** "align the multiple fleet loops into a single one" means collapse DUPLICATE fleet-wide loops into one — it does NOT cancel the per-project tier. When a consolidation ruling could plausibly reach a tier of standing infrastructure that does real work, ASK before deleting that tier; deleting standing automation on a scope guess costs a rebuild and the operator's time. Consolidate duplicates, preserve distinct tiers.
+
+**State-flip forensics (kept for the enforcer hunt):** paused fork jobs were twice
+observed flipped back to `enabled=true, state=scheduled` within hours by an
+unknown reconciler. `cronjob_manage` has no delete action; the CLI does:
+`hermes cron delete <job_id>` (`remove`/`rm` alias). Verify the fleet legs'
+`enabled`/`next_run_at` survived, and re-check hours later.
+
+**COS-to-foreman alignment census (the operator's standing check):** every ENABLED
+foreman must have a kanban board with live cards — for each `-foreman` lane read its
+workdir's `.coding-hermes/board/tasks.jsonl` (exists? row count? open count?). A foreman
+enabled with no board, or a live board whose foreman is parked for days while open rows
+pile up, is an alignment defect to surface — not a normal state.
+
+**After a guard shed, restore by signature and verify by count.** A disk/load guard
+mass-pauses lanes through the scheduler API: victims carry `disabled_by='api-pause'`
+and `disabled_reason` starting `paused via POST /projects/{name}/pause` — select exactly
+those, and POST `/api/v1/projects/<name>/resume` per lane with the operator token from
+`~/.hermes/scheduler-auth.env` (`~/.hermes/scripts/shed-resume.py` does select+resume+readback).
+Never re-enable by owner-paused lanes' different reasons, and read back the enabled count
+afterwards. If the free-space condition that caused the shed persists, the guard re-sheds —
+say so when reporting the restore instead of promising the state will hold.
+
+**The scheduler PUT body is Go-typed and field-whitelisted — a raw DB-row dump 400s.**
+`enabled` and `no_global_fallback` are JSON booleans (`true`, not `1` — the DB stores ints
+and every int-typed bool in the body fails with `cannot unmarshal number into ... type bool`),
+and read-only columns (`created_at`, `updated_at`, tick caches) are rejected. Build the PUT
+body by projecting an explicit API-field whitelist from the DB row, never by dumping the row.
+Read back from the DB (not the PUT's echoed shape — the GET can return a different shape than
+it accepts) and treat `updated_at` moving as the real confirmation.
 
 Time-boxed deep-dive sequence (worked first-try on two projects):
 1. Create the initiative goal card FIRST (`hermes kanban create "<Goal title>" --goal --body "<ACs with proofs + current state>"`), then name its card id in the brief — the COS must reconcile against a real card on run one, not hunt for its own intent.
@@ -302,6 +338,17 @@ jq -c . row.json >> <project>/.coding-hermes/board/tasks.jsonl   # path-limited 
 `--type` is a CLOSED enum (bug, chore, feat, task — `boardctl types` lists it): a lane-style
 value like `releng` refuses the create outright. `--acceptance-criteria` is the dispatchability
 field — a row without it never dispatches; write testable criteria, not prose intents.
+The gate's outcome detector matches the bare words `exit`, `expect`, `return`, `print`, `outputs`
+(with word boundaries): "exits 0" and "the expected outcome is" do NOT match and FAIL a good row —
+phrase the criterion as "exit 0", "must return exit 0", or "expect <result>".
+Gate-check the row BEFORE committing it, not after: `python3 ~/.hermes/scripts/acceptance_gate.py audit <repo>` must show the new id passing before `git commit` — a gate-failing row that is already pushed costs a second fix commit, a re-push, and a window where foremen see an undispatchable row.
+
+**Cite foreman row ids IN FULL everywhere in card bodies** — never dash-shorthand lists like
+"README-2, -3, -4, -12": the coverage check (goal cards vs pending board ids) is a scripted id
+match, so shorthand makes cited rows read UNCOVERED and forces manual reconciliation every pass.
+And when the coverage check reports uncovered ids, validate the MATCHER before editing cards:
+`grep -E` does not support `(?:…)` groups (it warns and matches a fragment), so a malformed
+pattern fabricates gaps — a broken regex is a false CRITICAL on your own pass.
 
 ---
 
@@ -318,7 +365,18 @@ field — a row without it never dispatches; write testable criteria, not prose 
 - **The circuit breaker is not a retry budget** — `consecutive_failures` tripping means a human
   decision is needed; `last_failure_error` names it.
 - **`complete` is a flag; `runs` is the truth.**
+- **Verify card TITLES right after a batch create, not just the ids** — a title composed via shell
+  substitution or a pipeline (sed/head over a body file) can silently arrive as a fragment: the create
+  output shows a double space where the title should be (`Created t_xxx  (ready…)`). Run
+  `hermes kanban --board <slug> list --json | jq -r '.[]|[.id,.title]'` after every batch and repair
+  with `hermes kanban --board <slug> edit <id> --title "…"` — downstream dedupe and the `[tag]`
+  project linkage read the title, so a fragment title breaks both.
 - **Model overrides bill real quota** even at $0 — quote tokens as quota.
+- **The cos-sync token is namespace-scoped — project-namespace intake writes 403 on the HTTP path.**
+  `POST /api/memories` with the cos-sync token returns `Forbidden: token 'cos-sync-writer' has no
+  grant for namespace '<project>'` the moment the record targets anything other than `cos`. Fall
+  through to the DuckBrain MCP `remember` tool (it takes a `namespace` argument) for project-
+  namespace records instead of hunting for a token with the right grant.
 - **Do not duplicate the foreman board** — one requirement, two planes, zero retranslation.
 - **The kanban 'current board' is global and re-points BETWEEN calls, not just mid-pass** —
   another workstream's `boards switch` can land between two of YOUR create calls and split one
@@ -328,7 +386,10 @@ field — a row without it never dispatches; write testable criteria, not prose 
   card id across ALL boards (`--board <slug> list --json` per board) before commenting or
   linking on it.
 - **Most kanban verbs accept `--board <slug>` directly (`hermes kanban --board <slug> create/list`) — use it instead of `boards switch`**, which re-points the GLOBAL current board for every concurrent session. The pitfall below about dispatch having no `--board` flag still stands for `dispatch` only.
-- **`hermes cron create` DOES take `--model`/`--provider`/`--pin`** (schedule and prompt are POSITIONAL: `hermes cron create --name X --deliver <chat> --model M --provider P --pin "0 8 * * *" "<prompt>"`; passing `--schedule` errors). Verify the stored job afterward: `--pin` can silently not stick — read the job back and, if `pin` is not set, set it directly in the cron jobs store. Inline `python3 -c` is blocked — write scripts to files.
+- **`hermes cron create` DOES take `--model`/`--provider`/`--pin`** (schedule and prompt are POSITIONAL: `hermes cron create --name X --deliver <chat> --model M --provider P --pin "0 8 * * *" "<prompt>"`; passing `--schedule` errors). Verify the stored job afterward: `--pin` can silently not stick on create — set it with `hermes cron edit <job-id> --pin` (the edit path accepts the flag reliably). NEVER hand-edit the cron jobs store to fix a field: a direct file edit wedges the job (it stops firing, `Next run` freezes in the past, no execution attempts are ever recorded) — paid for once already. Detect a wedged job: `hermes cron list` shows `Next run` earlier than now, and `hermes cron runs <id>` shows no attempts. Recover: `hermes cron resume <id>` then `hermes cron run <id>` (fires immediately, source=direct), then confirm `Next run` advanced to the next future occurrence. Inline `python3 -c` is blocked — write scripts to files.
+- **The scheduler AUTO-PAUSES an agent job whose run outcome goes `unknown`** (a gateway/scheduler restart racing the run) — so after force-firing, re-check `hermes cron list` a minute later: a job that flipped back to `[paused]` is this protection firing, not your resume failing; resume again once the in-flight run reaches a terminal state. An `unknown` attempt does NOT mean the report failed to send — check whether the report landed in the deliver channel BEFORE re-firing, or the channel gets duplicate CoS reports.
+- **`hermes cron run` BLOCKS until the run reaches a terminal state** (a CoS pass runs tens of minutes) — a 90–300s foreground timeout kills the wrapper, not the run. Fire it with background=true and poll `hermes cron runs <id>` instead.
+- **Verify a per-project CoS loop is healthy with three reads, not one**: `hermes cron runs <id>` shows a recent `completed` attempt, `hermes cron list` shows state `scheduled` with `Next run` in the future, and the deliver channel shows the report. Any one alone lies (a `completed` run with no report, a `scheduled` job the auto-pause flipped minutes later, a report with no durable attempt).
 - **boardctl refuses a close you cannot evidence** — `update <id> --status complete` demands a
   full 40/64-hex `--commit-hash` AND an `--evidence-run-id` resolving to a stored run, and you
   (outside that lane) have neither. For a stale row on a lane you do not own, append the
@@ -358,5 +419,35 @@ field — a row without it never dispatches; write testable criteria, not prose 
 - **Scheduler tick queries are string-typed** — `ticks.created_at` is ISO text and the project
   column is `project_name`. Compare against an ISO string cutoff, never an epoch float: SQLite
   types text above numeric, so `created_at > <epoch>` silently matches the WHOLE table and
-  reports a day of ticks as six months of them. Derive dry/fail rates from the bounded window
-  only.
+  reports a day of ticks as six months of them. Derive dry/fail rates from the bounded window only.
+- **Read back the whole board after any batch card insertion** (especially a subagent fan-out
+  creating cards on your behalf): leaf agents over-execute the "insert cards" brief — they leave
+  child cards READY with worker assignees, create duplicates of the same intent, and skip
+  parking. Run `hermes kanban --board <slug> stats` + `ls` immediately after the batch reports
+  done: archive duplicates, `block` every ready card `dependency "<plane> parked: dispatched only
+  after activation"`, and confirm 0 ready/0 running across two read-backs before reporting the
+  plane as parked. Also do not assume a triage plane is inert because you armed nothing: the
+  board's auto-decomposer can split a freshly created card and a bound worker can dispatch it
+  minutes later — check `stats` for a running card before telling the owner everything is parked.
+- **Fan-out agents must PROVE tool access in their first call** — subagents commonly cannot use
+  the parent's plugin tools correctly (session_search ignoring supplied query args, MCP calls
+  dropping namespace arguments), then burn their whole iteration cap on retry loops and return
+  nothing. Write the brief so the first call is a tiny verification of the critical tool, with
+  an explicit instruction to stop and report the gap if it fails; for data-heavy mining, prefer
+  handing agents file-based inputs (paths to dumps/inventories) over tool-dependent ones.
+- **An EMPTY consolidated delegation result does not mean empty work** — a leaf agent's final
+  structured answer can come back as all-empty arrays (a formatting retry clobbers the real
+  output) while the deliverables are real on disk. Before re-dispatching or reporting failure,
+  check the durable surfaces the brief targeted (board rows via jq, committed files) and the
+  agent's live transcript log (`~/.hermes/cache/delegation/live/<delegation_id>/task-N.log` —
+  the full findings usually survive there even when the summary does not), then commit the
+  verified work yourself and say the summary was lost, not the work.
+
+## Project archaeology (onboarding a long-lived project)
+
+When the operator asks the CoS to absorb a project's history ("read the specs and old chat history,
+the fights we had"), mine three sources — repo specs (critique/clarifications carry the fights), the
+session DB, the DuckBrain namespace inventory — and synthesize a war-history document (vision → dated
+eras → fights with verbatim, honestly-sourced quotes → stuck-vs-reversed → recurring failure themes →
+current state). Then map every recurring theme to its owning artifact and FILE A CARD for any theme
+that never had an initiative. Full recipe: `references/project-archaeology.md`.
