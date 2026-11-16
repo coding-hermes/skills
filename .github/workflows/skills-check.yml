@@ -1,0 +1,16 @@
+name: skills-check
+on:
+  push:
+  pull_request:
+jobs:
+  writing-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Style rules (frontmatter FAIL tier, ratcheted baseline)
+        run: python3 scripts/style_check.py
+      - name: Manifest drift gate
+        run: python3 scripts/manifest_check.py

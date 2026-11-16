@@ -1,0 +1,41 @@
+coding-hermes-broker/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-config/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-discovery/SKILL.md: body does not open with an H1 title
+coding-hermes-docs/SKILL.md: frontmatter missing 'author'
+coding-hermes-dogfood/SKILL.md: frontmatter missing 'author'
+coding-hermes-dogfood/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-foreman/SKILL.md: body does not open with an H1 title
+coding-hermes-jsonl-board-append/SKILL.md: frontmatter missing 'author'
+coding-hermes-middle-out/SKILL.md: frontmatter missing 'author'
+coding-hermes-middle-out/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-model-router/SKILL.md: frontmatter missing 'author'
+coding-hermes-model-router/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-never-done/SKILL.md: frontmatter missing 'author'
+coding-hermes-never-done/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-north-star/SKILL.md: no frontmatter block
+coding-hermes-ops/SKILL.md: frontmatter missing 'version'
+coding-hermes-ops/SKILL.md: frontmatter missing 'author'
+coding-hermes-ops/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-ops/SKILL.md: version is not semver
+coding-hermes-project-manager/SKILL.md: frontmatter missing 'author'
+coding-hermes-project-manager/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-readme/SKILL.md: frontmatter missing 'author'
+coding-hermes-releng/SKILL.md: frontmatter missing 'author'
+coding-hermes-releng/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-scheduler/SKILL.md: body does not open with an H1 title
+coding-hermes-self-heal/SKILL.md: body does not open with an H1 title
+coding-hermes-specs/SKILL.md: frontmatter missing 'author'
+coding-hermes-specs/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-testing/SKILL.md: frontmatter missing 'author'
+coding-hermes-testing/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-tools-usage/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-worker/SKILL.md: frontmatter missing 'author'
+coding-hermes-worker/SKILL.md: frontmatter missing 'metadata'
+coding-hermes-worker-model/SKILL.md: body does not open with an H1 title
+evidence-backed-reporting/SKILL.md: frontmatter missing 'author'
+evidence-backed-reporting/SKILL.md: frontmatter missing 'metadata'
+fleet-daily-report/SKILL.md: frontmatter missing 'author'
+fleet-daily-report/SKILL.md: frontmatter missing 'metadata'
+fleet-retrospective/SKILL.md: frontmatter missing 'author'
+fleet-retrospective/SKILL.md: frontmatter missing 'metadata'
+gitreins-config-watchdog/SKILL.md: frontmatter missing 'author'

@@ -1,0 +1,242 @@
+{
+  "carterlasalle-project-review": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-bankai": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-boardctl": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-broker": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-config": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-cos": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-discovery": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-docs": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-dogfood": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-foreman": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-foreman-imposter": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-hardening-loop": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-jsonl-board-append": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-map": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-middle-out": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-model-router": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-nasa-spec": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-never-done": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-north-star": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-ops": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-perf": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-plus-ultra": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-prd-to-contracts": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-project-manager": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-quorum": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-readme": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-releng": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-remote-bunker": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-retrospective-self-improvement": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-scheduler": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-self-heal": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-skill-authoring": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-specs": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-stuck-lane-triage": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-supervisor": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-testing": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-tools-usage": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-trailblazer": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-worker": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-worker-model": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "coding-hermes-writing": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "evidence-backed-reporting": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "fleet-daily-report": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "fleet-retrospective": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "github-app-auth": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "gitreins-config-watchdog": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "model-current-reference": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  },
+  "update-patch": {
+    "dispatch": "trigger",
+    "layer": "",
+    "owner": "coding-hermes"
+  }
+}
