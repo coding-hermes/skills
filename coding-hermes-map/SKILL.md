@@ -89,6 +89,7 @@ sequenceDiagram
 
     S->>F: admit tick (board-admitted or cooldown)
     F->>F: self-heal (identity, deps, pull)
+    F->>D: READ latest handoff/<project>/foreman/ — honor in-flight waves, blockers + owners (clause 16; age > cadence = crashed session → clause 15)
     F->>B: read board, select block
     Note over F,B: Dirty board is NEVER a tick barrier — commit board residue or cut worktree from a clean commit
     Note over F,B: WORK-ORDER first — named rows from reviews/owner call-outs, converted to briefs with executable acceptance; board-picking is the fallback fill, never the plan
@@ -99,6 +100,7 @@ sequenceDiagram
     G-->>F: verdict
     F->>F: merge wt branch, reap worktree
     F->>B: closeout rows (evidence, hashes)
+    F->>D: WRITE handoff/<project>/foreman/<UTC> as the LAST act (state, wave table, blockers + owners, next action, evidence, session id — clause 16)
     F->>D: write project learnings (keyed facts, decisions, pitfalls)
     F->>R: durable, cross-project lesson → references/*.md via PR
     Note over F,R: NEVER edit ~/.hermes/skills directly
