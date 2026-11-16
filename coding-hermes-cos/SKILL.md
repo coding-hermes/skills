@@ -165,6 +165,17 @@ match outstanding work against kanban initiative cards:
   card body, note it in the report.
 
 ### Pass 3 — Shepherd
+**Watching topology (the operator, 2026-11-16): the daily pass is the FLOOR, not the ceiling.**
+Every in-flight card (ready/todo/blocked/running) is subscribed to the COS channel with
+`hermes kanban notify-subscribe <id> --platform telegram --chat-id <cos> --thread-id <topic>
+--chat-type thread --delivery-mode notify+wake` — a terminal event on the card (completion,
+failure, block) wakes the gateway agent immediately to read the board context and steer
+(nudge the foreman, land a finished branch, escalate) without waiting for 07:00. The pass
+subscribes every card it creates or promotes — **a card is born subscribed** — and checks
+subscriptions while shepherding (`hermes kanban notify-list`); an unsubscribed in-flight card
+is a gap to fix the same day. Rebalance/re-parenting events surface through the 06:00 sync
+diff instead.
+
 For each in-flight initiative:
 - Read the foreman's **runs and artifacts** (`hermes kanban runs`, board row evidence, session
   transcripts via the tick page) against the card's ACs.
@@ -324,6 +335,7 @@ field — a row without it never dispatches; write testable criteria, not prose 
   the fleet closes rows while a long setup pass runs, and a card whose body cites four
   pending rows that are now complete feeds the next reconcile stale truth. Re-read every
   cited row's status on origin/main right before the report; edit the body when the state moved.
+- **boardctl `--initiative` takes a lowercase-hyphen SLUG, not the kanban card id** — a card id like `t_xxxxxxxx` fails slug validation outright. The two planes link by CITATION, never by reusing the id: put the kanban card id in the row's reasoning and the row ids in the card body; use a human slug (`<project>-endstate`) for the boardctl initiative grouping.
 - **Scheduler tick queries are string-typed** — `ticks.created_at` is ISO text and the project
   column is `project_name`. Compare against an ISO string cutoff, never an epoch float: SQLite
   types text above numeric, so `created_at > <epoch>` silently matches the WHOLE table and
