@@ -437,8 +437,10 @@ postmortem and Go implementation template.
 ```bash
 git add <specific files only>     # NEVER git add -A or .
 git diff --cached                 # verify staged changes
-git commit -m "<type>: <description>" -m "Co-authored-by: $CODING_HERMES_CO_AUTHOR" --no-verify
+git commit -m "<type>: <description>" -m "Co-authored-by: $CODING_HERMES_CO_AUTHOR"
 ```
+
+The default commit runs the hooks — the hooks ARE the audit (flaps law, below). `--no-verify` never appears in the default template; it is only the named+disclosed exception, and the flaps law's proof burden applies.
 
 **Co-author is MANDATORY.** The second `-m` with `$CO_AUTHOR` must be on EVERY commit. **Env var name varies — do NOT fail the tick on a missing `$CO_AUTHOR`.** Resolution order: (1) `grep -iE "co_?author" ~/.hermes/.env`, (2) literal `Alexis Okuwa <wojonstech@gmail.com>`, (3) repo `.gitmessage`. **Filter-safe commit:** when the message contains a filter-flagged string (pipe chars, `curl|sh`, `git rm -r`), use `git commit --no-verify -F - <<'EOF'` (message + `Co-authored-by:` trailer embedded in a stdin heredoc, NO `-m`); full pattern `references/commit-stdin-heredoc.md`.
 
