@@ -16,8 +16,8 @@ Every coding-hermes skill includes this map. Load any one skill, get the full pi
 ```mermaid
 graph TD
     subgraph "Orchestrator"
-        CF[coding-hermes-foreman<br/>Full SDLC delivery loop<br/>When: every foreman tick<br/>Why: orchestrates all steps]
-        FI[coding-hermes-foreman-imposter<br/>Current conversation owns planning and coordination<br/>When: direct foreman mode is requested<br/>Why: no coordinator handoff]
+        CF[coding-hermes-foreman<br/>Full SDLC delivery loop<br/>When: every foreman tick<br/>Why: orchestrates all steps<br/>Law: work-order dispatch — pass the exact rows+briefs, never "pick from board"; board track runs in parallel with worker product track]
+        FI[coding-hermes-foreman-imposter<br/>Current conversation owns planning and coordination<br/>When: direct foreman mode is requested<br/>Why: no coordinator handoff<br/>Law: call out the direct work; owner-gate does not bleed to ungated siblings]
     end
 
     subgraph "Phase 0 — Prepare"
@@ -91,6 +91,8 @@ sequenceDiagram
     F->>F: self-heal (identity, deps, pull)
     F->>B: read board, select block
     Note over F,B: Dirty board is NEVER a tick barrier — commit board residue or cut worktree from a clean commit
+    Note over F,B: WORK-ORDER first — named rows from reviews/owner call-outs, converted to briefs with executable acceptance; board-picking is the fallback fill, never the plan
+    Note over F,B: Board track and product track run in PARALLEL: after dispatching the wave, the foreman does board work (rescope, evidence-bind, close stale) while workers execute — never idle-wait on a running worker
     F->>W: dispatch wave (1 worktree per worker, brief + ACs)
     W->>W: code + tests in worktree (never the main tree)
     W->>G: guard before commit

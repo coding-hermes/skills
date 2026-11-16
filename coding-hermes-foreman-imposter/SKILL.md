@@ -46,6 +46,14 @@ Do not use this skill to impersonate a user, bypass a project foreman’s author
 9. **Report directly to the user.** State what changed, what was verified, what remains, and any decision needed. Distinguish worker-reported facts from foreman-verified facts. Keep updates concise, but surface a blocker as soon as it changes the plan.
 10. **Close or continue the goal deliberately.** Re-check the goal's acceptance criteria and remaining workload. Close only criteria supported by evidence. For Bankai/full-auto work, continue through remaining authorized work; do not treat one successful wave as goal completion. Stop or pause at a permission boundary and return control to the user.
 
+## WORK-ORDER DISPATCH AND PARALLEL TRACKS (owner, 2026-11-15 — hermes-dagger r4 lessons)
+
+These rules govern what gets dispatched and when. They exist because a foreman that "picks work from the board" starves hard rows for weeks while cheap hygiene closes look like progress.
+
+1. **Call out the direct work — a work-order, never board-picking.** When a review, audit, or owner call-out names work, do not browse the board and fill slots with whatever is easy. Pass the WORK-ORDER: the exact rows in priority order, each already converted into a worker brief, and dispatch those first. Filing a finding row is not doing it — a row whose acceptance is prose ("no harness exists", "claims unverifiable") defers forever. Convert each finding into executable acceptance (named deliverable paths, runnable commands, evidence format) before the tick ends, then dispatch. If a work-order row is blocked, report the blocker against that row; never substitute an easier row and call it progress. Hygiene closes do not count as gap progress — report work-order movement separately.
+2. **Owner-gate does not bleed.** A gated subtask (running the experiment, publishing, a restart) gates only its own row. Ungated siblings (building the harness, the grading battery) stay dispatchable and must never be parked because a sibling needs a decision.
+3. **Board work and product work are separate, parallel tracks.** Product track = workers building/probing rows in their own worktrees. Board track = row edits, rescoping, evidence binding, stale-row closure. Dispatch the product wave FIRST, then do board work while workers execute — a running worker is not a reason to idle, and there is no reason to wait on a worker while board work is actionable. Conversely, a tick that only does board work while admitted slots sit empty violates the wave doctrine. Board edits never block on worker results — bind evidence at verified-merge time. In a shared checkout, board edits go through the sanctioned writer or a plumbing commit without touching worker worktrees or the foreman's dirty files.
+
 ## Worker brief minimum
 
 Every worker brief must include:
@@ -54,6 +62,7 @@ Every worker brief must include:
 - Exact repository and worktree/branch to use; no ambiguous shared checkout.
 - In-scope files or an explicit boundary, plus out-of-scope files and side effects.
 - Acceptance criteria and commands or evidence that will verify them.
+- Acceptance criteria must be EXECUTABLE: runnable commands asserting concrete values at the tested SHA, with named deliverable paths and the evidence format the worker must return (probe output excerpts, verdict tables). Prose findings ("X does not exist") are not acceptance criteria — convert them before dispatch, and the foreman live-verifies the returned SHA before any merge or row close.
 - A requirement to report commit SHA, files changed, checks actually run, failures, and assumptions.
 - A requirement not to update shared boards, merge, push, change fleet configuration, or dispatch further workers unless explicitly assigned.
 - A traceability marker/commit-footer requirement when the repository's doctrine requires it.
