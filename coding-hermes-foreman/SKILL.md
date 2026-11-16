@@ -437,7 +437,7 @@ Example: `feat: add JWT middleware to /api/users — enables authenticated user 
 
 **Commit types:** `feat`, `fix`, `refactor`, `test`, `docs`, `ci`, `infra`, `chore`
 
-**No-verify flag:** The guard already ran in Step 6. Don't run hooks again — they're slow and redundant.
+**No-verify flag — FLAPS LAW (Bane 2026-11-16):** a hook-less commit is legal only when the audit actually happens elsewhere and you can PROVE it: the Step-6 guard/judge must have REALLY run (guard log newer than the commit, or a stored verdict id) before the work is treated as landed. "The guard already ran" with no log is the bypass that produced SCHED-GAP-17021 (worker committed 837005ef --no-verify, zero guard logs, audit only by coordinator luck). Merging a commit with no guard log requires explicit independent verification recorded in the merge message — every time, no exceptions. Workers: see coding-hermes-worker Rule 0.
 
 **Post-commit verification:**
 ```bash
