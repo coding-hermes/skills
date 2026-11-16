@@ -102,7 +102,24 @@ Every skill carries exactly one dispatch class in `skills-manifest.json`:
 `scripts/manifest_check.py` FAILs when a SKILL.md directory is missing from the manifest
 or a manifest entry has no SKILL.md. Regenerate with `scripts/manifest_check.py --write`.
 
-## 5. Enforcement (what actually runs)
+## 5. Enforcement tiers — what tier 1 catches and what needs a tier-2 judge
+
+Tier 1 (mechanical, blocks every commit) covers only what a pattern can decide:
+frontmatter validity, name/dir match, manifest drift, baseline regressions, H1
+presence, TODO/FIXME, size budget, CJK. **Tier 2 (LLM judge) fires on material
+SKILL.md body edits — any commit touching a skill body, not just references/ or
+the manifest — because those need judgment the checker cannot make:**
+
+- description is *actually* trigger-style (matches how agents search)
+- doctrine clarity: clauses citable, no two live versions of one rule
+- owner law quoted verbatim, accurately, with attribution
+- new rules carry a measurable signature; the composition set is sane
+- superseded text properly rewritten, not appended
+
+Reference-only churn (scripts/, references/, manifest regens) skips tier 2 —
+judging a whitespace diff trains noise.
+
+## 6. Barrier implementation (what actually runs)
 
 - `scripts/style_check.py` — frontmatter FAIL tier + body WARN tier. GitReins guard and CI run it.
 - `scripts/manifest_check.py` — manifest drift FAIL. `--write` regenerates.
