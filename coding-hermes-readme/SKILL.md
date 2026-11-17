@@ -83,3 +83,11 @@ notes do not get executed.
 - **The example that was true two versions ago** and has never been re-run because nothing executes it.
 - **The README describing the roadmap** while the code does something else; the reader believes the roadmap.
 - **The quiet deletion**: a feature or flag removed from code and left documented.
+
+## Filing mechanics that cost a tick to learn
+
+- **Priority vocabulary is per-repo.** Some boards close at P0-P3 and refuse P4/P5 outright (TR-348; `scripts/board_priority_normalize.py` maps the label into the P3 row and keeps "P4 —"/"P5 —" in the TITLE). File at the repo's ceiling and put the doc-severity label in the title. Pushing P4 to a P0-P3 board fails the commit gate with `off-vocabulary priority emission`.
+- **`superseded` is not a write status.** A duplicate is folded as `blocked` plus a `decline` object: `{code: SUPERSEDED, reason, evidence, needs, routed_to: <canonical-id>, by}`. Blocked rows without a decline object fail `decline_contract` at commit time, and `boardctl` has no decline verb — inject the object with `jq` on the JSONL, atomically, then re-validate.
+- **`boardctl create` evidence flags are a trap**: `--evidence-artifact` / `--evidence-fingerprint` are refused without `--evidence-run-id`. Put evidence paths in `--note` with the `ch:trace` marker instead.
+- **Re-check the premise before re-filing.** A row filed last week can die mid-week: a seed-broken premise vanished when the fix landed, leaving a *narrower* false promise (silent rc=1 vs a quoted error message). Read the code at the current tip and rewrite the row rather than filing a sibling.
+- **Pre-push CI gate**: a docs-only commit is still refused when the branch tip's newest completed run is red. `ALLOW_RED_PUSH=1` is the sanctioned override, logged by the gate — say so in the commit message and the report instead of hiding it.
