@@ -153,6 +153,30 @@ delegate_task(goal="...", context="...", role="leaf")
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## Step 0.5 — Plan Review (ask the COS before you work)
+
+**The operator's standing order (2026-11-16): the foreman asks the COS what to do before it does it.**
+A tick that starts executing without a reviewed plan is an unreviewed tick.
+
+Procedure, in this order, every tick that will dispatch or write:
+
+1. **Draft the plan** — after Step 1 (read board) and Step 1.5 (discovery), write down: the row ids you
+   intend to take, the action per row (dispatch / verify / close / file), the worker model, the stop
+   conditions, and what you will NOT touch this tick.
+2. **Post it** — comment the plan on the project's COS initiative goal card, prefixed `PLAN:`, then
+   `hermes kanban request-review <goal-card-id>` (on boards with no goal card yet, comment on the
+   newest project card and name the project in the first line).
+3. **Wait one coalesce window, not forever** — if the COS answers (`RUN IT` or `request-changes` with
+   corrections), execute the CORRECTED plan and cite the correction in your handoff. If no answer
+   arrives within one coalesce window, execute the plan as drafted and stamp the handoff
+   `plan-unreviewed` with the card id and the time you asked. **Never stall a tick waiting for review.**
+4. **Handoff evidence** — the tick record names the goal card, the plan comment id, and either the COS
+   correction quote or the `plan-unreviewed` stamp. A closeout that cites neither is incomplete.
+
+Do NOT ask for review on trivially mechanical ticks (a single pre-approved closure with all gates green,
+a self-heal restart, an idle tick). The rule exists to stop unreviewed *dispatch and scope decisions*,
+not to add a round trip to bookkeeping.
+
 ## Step 0 — Self-Heal
 Load skill: coding-hermes-self-heal
 See [coding-hermes-self-heal] for full self-heal procedure.
