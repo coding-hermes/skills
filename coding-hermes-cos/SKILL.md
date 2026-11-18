@@ -377,6 +377,27 @@ pattern fabricates gaps — a broken regex is a false CRITICAL on your own pass.
   grant for namespace '<project>'` the moment the record targets anything other than `cos`. Fall
   through to the DuckBrain MCP `remember` tool (it takes a `namespace` argument) for project-
   namespace records instead of hunting for a token with the right grant.
+- **The board slug is not the project name — enumerate before assuming.** A card manager's
+  brief names the implementation board path and the family name, and it is tempting to reach for
+  `hermes kanban --board <family>`. On a long-lived project the requirements plane can live under a
+  different slug entirely (measured: family `monitoring` → board slug `fleet-monitoring`; no
+  `monitoring` board exists among 62). Passing the family name creates a NEW empty board and then
+  reports "0 cards" against a project that has eight. Read `hermes kanban boards list` and match on
+  the board whose cards carry the project's `[tag]` (or whose DB holds the ids a prior handoff
+  names) before concluding a plane is missing.
+- **A card missing from `cos.initiatives` may be a STALE READ VIEW, not a failed sync.** Before
+  filing a sync defect, measure the view's freshness: `jq -r '.created_at' …/tables/initiatives/current.jsonl
+  | sort | tail -1` vs the card's `created_at`. Measured 2026-11-18: current.jsonl's newest row was
+  two days old while 309 distinct ids present in the newest append partition were absent from it, so
+  every initiative touched since that compaction was invisible to the fleet pass while the sync
+  itself reported success repeatedly. The card is fine and the board is authoritative for that
+  project — the repair is a compaction/sync change, and it is NOT a card edit.
+- **A committed board is not automatically a readable board — check for uncommitted rows first.**
+  Auto-row writers (alert-router, SRE passes) append straight to the working-tree JSONL, so rows can
+  sit uncommitted for hours and vanish from every `git show main:<board>` reader and worktree worker.
+  `git status --porcelain` on the board dir, plus a per-line `jq -e .` parse check and the board
+  validator's error count BEFORE and AFTER (identical counts prove the append added nothing new), is
+  the full evidence set for landing them under a COS commit.
 - **Do not duplicate the foreman board** — one requirement, two planes, zero retranslation.
 - **The kanban 'current board' is global and re-points BETWEEN calls, not just mid-pass** —
   another workstream's `boards switch` can land between two of YOUR create calls and split one
