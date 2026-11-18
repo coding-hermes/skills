@@ -411,6 +411,22 @@ pattern fabricates gaps — a broken regex is a false CRITICAL on your own pass.
 - **The scheduler AUTO-PAUSES an agent job whose run outcome goes `unknown`** (a gateway/scheduler restart racing the run) — so after force-firing, re-check `hermes cron list` a minute later: a job that flipped back to `[paused]` is this protection firing, not your resume failing; resume again once the in-flight run reaches a terminal state. An `unknown` attempt does NOT mean the report failed to send — check whether the report landed in the deliver channel BEFORE re-firing, or the channel gets duplicate CoS reports.
 - **`hermes cron run` BLOCKS until the run reaches a terminal state** (a CoS pass runs tens of minutes) — a 90–300s foreground timeout kills the wrapper, not the run. Fire it with background=true and poll `hermes cron runs <id>` instead.
 - **Verify a per-project CoS loop is healthy with three reads, not one**: `hermes cron runs <id>` shows a recent `completed` attempt, `hermes cron list` shows state `scheduled` with `Next run` in the future, and the deliver channel shows the report. Any one alone lies (a `completed` run with no report, a `scheduled` job the auto-pause flipped minutes later, a report with no durable attempt).
+- **`hermes cron runs <name>` reports "No cron execution attempts recorded" for a job that HAS run — it
+  needs the job ID.** Read the id from the job store (`~/.hermes/cron/jobs.json`, a list or `{"jobs":[]}`)
+  and pass that; a name-shaped argument returns an empty attempt list, which reads as "this loop has
+  never fired" and has already produced one false self-audit finding against a healthy loop. Corroborate
+  with `last_run_at`/`last_status` in the store plus the per-run files in `~/.hermes/cron/output/<job_id>/`.
+- **Repairing undispatchable rows: one appended `GATE ARM:` line beats a rewrite.** A row failing the
+  gate for "names no runnable command" or "does not state the expected outcome" usually needs one extra
+  line, not a new criterion — `GATE ARM: Run \`<real command>\`; expect <observable>.` — because a
+  backticked command satisfies the command arm and the bare word `expect` satisfies the outcome arm
+  (note "returns 200" does NOT: `return` needs a word boundary). Angle-bracket placeholders are a
+  separate mechanical defect: substitute a literal (`<host>` -> `127.0.0.1:8080`, `<port>` -> the port
+  the docs use) rather than deleting the criterion, and keep the original text above the appended line
+  verbatim so the row's intent survives. Re-run the audit AFTER the commit and quote before/after pass
+  fractions — a criteria repair that is not re-audited on the committed tree is unproven. EMPTY criteria
+  are not this case: writing acceptance for a finding whose provenance is unproven is blind re-queueing;
+  append a note naming the re-establish-or-refute step instead.
 - **boardctl refuses a close you cannot evidence** — `update <id> --status complete` demands a
   full 40/64-hex `--commit-hash` AND an `--evidence-run-id` resolving to a stored run, and you
   (outside that lane) have neither. For a stale row on a lane you do not own, append the
