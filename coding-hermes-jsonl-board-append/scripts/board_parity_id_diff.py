@@ -6,6 +6,12 @@ Needs duckdb: invoke via ~/.hermes/venvs/board/bin/python3.
 
 Prints: id counts per store, jsonl-only ids, db-only ids, max ids, and a VERDICT.
 
+Mixed event-id shapes (DF-CRIER-513): fleet boards carry ints next to legacy
+"evt-..." string ids, pure-digit strings and null ids — on BOTH stores. The DIFF
+stays a raw id-SET comparison (a non-numeric id is a real id and must still show
+up in the only-* listings), but every ordering/arithmetic step (sorted(), max())
+runs over the NUMERIC candidates only, so a mixed set can never raise TypeError.
+
 Verdict meanings (per idle-cheap-audit-ladder parity doctrine):
 - "benign jsonl-superset stable gap": jsonl-only ids present, NO db-only ids, max ids
   EQUAL. Append stays safe (next event = MAX+1, no collision); record the gap set as a
@@ -21,6 +27,41 @@ import json
 import sys
 
 import duckdb
+
+
+def numeric_ids(ids):
+    """The subset of *ids* usable as an event-id bound, as ints.
+
+    Numeric candidates are ints (bools excluded - True is an int in Python) and
+    strings that are pure ASCII digit strings. Nulls and non-numeric string ids
+    ("evt-7") are ignored here; they stay in the parity DIFF, they just cannot be
+    ordered.
+    """
+    out = []
+    for value in ids:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            out.append(value)
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            out.append(int(value))
+    return out
+
+
+def id_sort_key(value):
+    """sorted() key that tolerates mixed id shapes: numeric ids first, then strings."""
+    if isinstance(value, bool):
+        return (1, 0, str(value))
+    if isinstance(value, int):
+        return (0, value, "")
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        return (0, int(value), "")
+    return (1, 0, "" if value is None else str(value))
+
+
+def max_numeric(ids):
+    """Largest numeric id, or None when the store holds no numeric id at all."""
+    return max(numeric_ids(ids), default=None)
 
 
 def main() -> int:
@@ -42,13 +83,18 @@ def main() -> int:
     db_ids = set(r[0] for r in con.execute("SELECT id FROM events").fetchall())
     con.close()
 
-    only_jsonl = sorted(jsonl_ids - db_ids)
-    only_db = sorted(db_ids - jsonl_ids)
+    only_jsonl = sorted(jsonl_ids - db_ids, key=id_sort_key)
+    only_db = sorted(db_ids - jsonl_ids, key=id_sort_key)
+    max_jsonl = max_numeric(jsonl_ids)
+    max_db = max_numeric(db_ids)
     print(f"jsonl ids: {len(jsonl_ids)}  db ids: {len(db_ids)}")
     print(f"jsonl-only ids: {only_jsonl}")
     print(f"db-only ids: {only_db}")
-    print(f"max jsonl: {max(jsonl_ids) if jsonl_ids else 'EMPTY'}  max db: {max(db_ids) if db_ids else 'EMPTY'}")
-    if only_jsonl and not only_db and max(jsonl_ids) == max(db_ids):
+    print(f"max jsonl: {max_jsonl if max_jsonl is not None else 'EMPTY'}  "
+          f"max db: {max_db if max_db is not None else 'EMPTY'}")
+    if max_jsonl is not None:
+        print(f"next jsonl id (max numeric + 1): {max_jsonl + 1}")
+    if only_jsonl and not only_db and max_jsonl == max_db:
         print("VERDICT: benign jsonl-superset stable gap — append safe (MAX+1), record baseline, do not repair")
     else:
         print("VERDICT: REAL DESYNC — diagnose before appending")
