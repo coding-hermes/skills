@@ -13,7 +13,13 @@ Usage:
       [--commit "chore(board): close TASK_ID (tick N)"]
 
 Conventions (verified dexdat-core tick #137):
-- event ids: MAX(id)+1 across events.jsonl (authoritative tick numbering).
+- event ids: MAX(id)+1 across events.jsonl (authoritative tick numbering), computed
+  over NUMERIC candidate ids only (ints, and pure-digit strings such as "42").
+  Fleet boards carry mixed id shapes - the real crier events.jsonl holds plain ints
+  alongside string ids and null ids - so a bare max() over every row raised
+  TypeError before a single event was written and killed every closeout (DF-CRIER-511).
+  Non-numeric and missing ids are ignored; a board with no numeric id at all starts
+  at 1. Existing lines are never renumbered, reordered or rewritten.
 - events appended: task_completed (detail JSON: commit/guard/judge/tick) then audit (tick summary).
 - tasks.jsonl row: status/worker_status -> complete, completed_at=now, commit_hash, guard_result, ci_result, foreman_note.
 - board.jsonl header: ticks_total = the COMPLETING tick number (dispatch-only ticks do NOT bump), last_commit, last_tick, updated_at, ticks_idle=0.
@@ -49,6 +55,30 @@ import os
 import subprocess
 
 BOARD_FILES = ("events.jsonl", "tasks.jsonl", "board.jsonl")
+
+
+def numeric_event_ids(events):
+    """Yield the event ids that can be ordered against a new int id.
+
+    Numeric candidates are ints (bools excluded - True is an int in Python) and
+    strings that are pure ASCII digit strings, so a legacy "9" still bounds the
+    sequence. Nulls, id-less rows and non-numeric string ids ("evt-3") are ignored.
+    """
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        value = e.get("id")
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            yield value
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            yield int(value)
+
+
+def next_event_id(events):
+    """Next event id as an int: max(numeric candidates) + 1, or 1 when there are none."""
+    return max(numeric_event_ids(events), default=0) + 1
 
 
 def stage_board_files(bdir, files, commit_message=None):
@@ -118,7 +148,7 @@ def main():
 
     with open(f"{bdir}/events.jsonl") as f:
         events = [json.loads(l) for l in f if l.strip()]
-    nid = max(e["id"] for e in events) + 1
+    nid = next_event_id(events)
     new_events = [
         {"id": nid, "timestamp": now, "event_type": "task_completed", "task_id": args.task_id,
          "actor": "foreman", "detail": json.dumps({"commit": args.commit, "guard": args.guard, "judge": args.judge, "tick": args.tick}),

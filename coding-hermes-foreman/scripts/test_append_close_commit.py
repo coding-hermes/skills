@@ -7,6 +7,11 @@ in the working tree - every `git show main:<board>` reader saw a closed row with
 completion event. The close scripts wrote the files and left the commit to a human
 instruction, so callers under-staged.
 
+DF-CRIER-511 adds the second half: the real crier events.jsonl carries MIXED id
+shapes (ints, string ids, null ids), and the close script's bare
+`max(e["id"] for e in events)` raised TypeError before writing a single event, so
+every fleet closeout died. The next id must come from the numeric candidates only.
+
 Run:  python3 coding-hermes-foreman/scripts/test_append_close_commit.py
       (also collectable by pytest / unittest discovery)
 
@@ -14,6 +19,7 @@ No live board is touched: every fixture is a throwaway git repo under TMPDIR.
 """
 import json
 import os
+import py_compile
 import subprocess
 import sys
 import tempfile
@@ -50,16 +56,18 @@ def git(repo, *args, check=True):
     return res
 
 
-def seed_board(repo):
-    """Minimal board: one prior event, one pending row, one header object."""
+def seed_board(repo, events=None):
+    """Minimal board: prior events (default one audit event), one pending row, one header."""
     bdir = Path(repo) / BOARD
     bdir.mkdir(parents=True, exist_ok=True)
-    (bdir / "events.jsonl").write_text(json.dumps({
-        "id": 1, "timestamp": TS, "event_type": "audit", "task_id": None,
-        "actor": "foreman",
-        "detail": json.dumps({"tick": 1, "summary": "fixture seed"}),
-        "tick_number": 1,
-    }) + "\n")
+    if events is None:
+        events = [{
+            "id": 1, "timestamp": TS, "event_type": "audit", "task_id": None,
+            "actor": "foreman",
+            "detail": json.dumps({"tick": 1, "summary": "fixture seed"}),
+            "tick_number": 1,
+        }]
+    (bdir / "events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in events))
     (bdir / "tasks.jsonl").write_text(json.dumps({
         "id": "FIX-001", "title": "fixture task", "status": "pending",
         "worker_status": "idle", "attempts": 0,
@@ -70,18 +78,28 @@ def seed_board(repo):
     }) + "\n")
 
 
-def make_repo(committed=True):
+def mixed_events(event_ids):
+    """Event rows carrying those exact id shapes, in board order (DF-CRIER-511)."""
+    return [{
+        "id": eid, "timestamp": TS, "event_type": "audit", "task_id": None,
+        "actor": "foreman",
+        "detail": json.dumps({"tick": idx + 1, "summary": f"fixture seed id={eid!r}"}),
+        "tick_number": idx + 1,
+    } for idx, eid in enumerate(event_ids)]
+
+
+def make_repo(committed=True, events=None):
     """Throwaway repo whose board sits at the git root."""
     repo = tempfile.mkdtemp(prefix="df-crier-510-")
     if committed:
         git(repo, "init", "-q")
         git(repo, "config", "user.email", "fixture@board.test")
         git(repo, "config", "user.name", "Board Fixture")
-        seed_board(repo)
+        seed_board(repo, events)
         git(repo, "add", "-A")
         git(repo, "commit", "-q", "-m", "fixture: seed board")
     else:
-        seed_board(repo)
+        seed_board(repo, events)
     return repo
 
 
@@ -268,6 +286,70 @@ class StageAfterWriteTests(unittest.TestCase):
         self.assertEqual(committed, {f"{rel}/events.jsonl", f"{rel}/tasks.jsonl",
                                      f"{rel}/board.jsonl"},
                          "pathspec must resolve relative to the board dir, not the git root")
+
+
+class MixedEventIdTests(unittest.TestCase):
+    """DF-CRIER-511: the next event id comes from the NUMERIC ids only.
+
+    The real crier events.jsonl mixes int ids with string ids and null ids, so the
+    bare `max(e["id"] ...)` died with TypeError before any event was written.
+    """
+
+    def assert_compiles(self, script):
+        """py_compile clean, emitted into TMPDIR so the repo tree stays clean."""
+        with tempfile.TemporaryDirectory(prefix="df-crier-511-pyc-") as tmp:
+            try:
+                py_compile.compile(str(script), cfile=os.path.join(tmp, "out.pyc"),
+                                   doraise=True)
+            except py_compile.PyCompileError as exc:
+                self.fail(f"{script.name} does not compile: {exc}")
+
+    def close(self, repo):
+        return run_script(COMPLETED, repo, "FIX-001", "2", "abc1234",
+                          "--summary", "tick 2 - FIX-001 complete (abc1234, +10/-2).")
+
+    def test_mixed_int_str_null_ids_are_skipped_and_appended_ids_are_ints(self):
+        # 4 (int) / "evt-3" (non-numeric str) / None / "9" (pure-digit str)
+        repo = make_repo(events=mixed_events([4, "evt-3", None, "9"]))
+        bdir = Path(repo) / BOARD
+        seeded = (bdir / "events.jsonl").read_text()
+
+        res = self.close(repo)
+        self.assertEqual(res.returncode, 0, f"stdout={res.stdout!r} stderr={res.stderr!r}")
+        self.assertNotIn("TypeError", res.stderr)
+        self.assertIn("OK: events [10,11]", res.stdout, "max numeric is 9 -> 10, 11")
+
+        text = (bdir / "events.jsonl").read_text()
+        self.assertTrue(text.startswith(seeded), "existing event bytes must be preserved")
+        rows = [json.loads(l) for l in text.splitlines() if l.strip()]
+        self.assertEqual(len(rows), 6, "four seeded events + two appended")
+
+        appended = rows[-2:]
+        for row, expected in zip(appended, (10, 11)):
+            self.assertIsInstance(row["id"], int)
+            self.assertNotIsInstance(row["id"], bool)
+            self.assertEqual(row["id"], expected)
+        self.assertEqual([r["event_type"] for r in appended], ["task_completed", "audit"])
+        self.assertEqual(appended[0]["task_id"], "FIX-001")
+
+        # untouched neighbours keep their exact original shapes
+        self.assertEqual([r["id"] for r in rows[:4]], [4, "evt-3", None, "9"])
+
+        tasks = [json.loads(l) for l in (bdir / "tasks.jsonl").read_text().splitlines() if l.strip()]
+        self.assertEqual(tasks[0]["status"], "complete")
+        self.assertEqual(tasks[0]["worker_status"], "complete")
+        self.assertEqual(tasks[0]["commit_hash"], "abc1234")
+
+        self.assert_compiles(COMPLETED)
+
+    def test_board_without_any_numeric_id_starts_at_one(self):
+        repo = make_repo(events=mixed_events(["evt-3", None]))
+        res = self.close(repo)
+        self.assertEqual(res.returncode, 0, f"stdout={res.stdout!r} stderr={res.stderr!r}")
+        self.assertIn("OK: events [1,2]", res.stdout)
+        rows = [json.loads(l) for l in
+                (Path(repo) / BOARD / "events.jsonl").read_text().splitlines() if l.strip()]
+        self.assertEqual([r["id"] for r in rows], ["evt-3", None, 1, 2])
 
 
 if __name__ == "__main__":
