@@ -17,18 +17,66 @@ USAGE:
 MECHANICS (proven crier ticks 72-102):
   - events.jsonl is the AUTHORITATIVE git-tracked store.
   - new id = MAX(existing id)+1 — json.loads per line tolerates BOTH "id": 87 and "id":87 forms.
-  - board.db is a DUCKDB file despite the .db extension: plain INSERT INTO via the duckdb
-    module, NEVER sqlite3 ("file is not a database"), NEVER INSERT OR REPLACE
-    (events table has no PK constraint -> Binder Error).
   - Order: run this FIRST, then the one-shot append_board_event.py for the audit event
-    (it auto-picks the next id). Then verify JSONL max id == board.db max id via
-    read_duckdb_board.py. If the JSONL line appended but the DB insert failed, backfill
-    with a small script that plain-INSERTs the LAST events.jsonl line — do NOT re-append.
+    (it auto-picks the next id), and the JSONL max id must equal the last event id.
+
+STAGED BY DEFAULT (DF-CRIER-510): after writing, the script `git add -f`s events.jsonl
+so a caller commit cannot leave the e2e event behind. Outside a git repo it prints a
+NOTICE and skips staging instead of failing; a git failure is reported, never raised
+(the write already happened and re-running would append a duplicate event).
 """
 import json
 import sys
 import datetime
 import os
+import subprocess
+
+BOARD_FILES = ("events.jsonl",)
+
+
+def stage_board_files(bdir, files, commit_message=None):
+    """git add the board files just written; optionally pathspec-commit them.
+
+    A git failure is reported, never raised: the JSONL writes already happened and
+    aborting would invite a re-run, which appends duplicate events.
+    Returns 0 on success or skip, 1 only when a requested commit did not land.
+    """
+    names = [f for f in files if os.path.exists(os.path.join(bdir, f))]
+    if not names:
+        return 0
+    try:
+        top = subprocess.run(["git", "-C", bdir, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=60,
+                             stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"WARN: git unavailable ({exc}); {len(names)} board file(s) written but NOT staged")
+        return 0
+    if top.returncode != 0:
+        print(f"NOTICE: {bdir} is not inside a git repo; "
+              f"{len(names)} board file(s) written but NOT staged")
+        return 0
+
+    add = subprocess.run(["git", "-C", bdir, "add", "-f", "--"] + names,
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if add.returncode != 0:
+        print(f"WARN: git add failed for board files ({(add.stderr or add.stdout).strip()}); "
+              f"files are written but UNSTAGED - commit them manually")
+        return 0
+    print(f"OK: staged {', '.join(names)} - a caller commit cannot under-stage the board")
+
+    if not commit_message:
+        return 0
+    com = subprocess.run(["git", "-C", bdir, "commit", "-m", commit_message, "--"] + names,
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if com.returncode != 0:
+        print(f"ERROR: git commit failed ({(com.stderr or com.stdout).strip()})")
+        print("ERROR: the board files ARE written and staged. Do NOT re-run this script "
+              "(it would append duplicate events) - commit manually:")
+        print(f"  git -C {bdir} commit -m {json.dumps(commit_message)} -- {' '.join(names)}")
+        return 1
+    print(f"OK: committed {', '.join(names)}: {commit_message}")
+    return 0
+
 
 if len(sys.argv) < 4:
     print(__doc__)
@@ -61,3 +109,4 @@ event = {
 with open(events_path, "a") as f:
     f.write(json.dumps(event, ensure_ascii=False) + "\n")
 print("JSONL appended, id", new_id)
+sys.exit(stage_board_files(board, BOARD_FILES))
