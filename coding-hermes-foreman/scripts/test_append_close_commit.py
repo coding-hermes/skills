@@ -12,6 +12,10 @@ shapes (ints, string ids, null ids), and the close script's bare
 `max(e["id"] for e in events)` raised TypeError before writing a single event, so
 every fleet closeout died. The next id must come from the numeric candidates only.
 
+DF-CRIER-512 is the same defect in the DISPATCH writer
+(append_board_task_dispatched.py): every dispatch append died on the mixed crier
+board before its event line was written.
+
 Run:  python3 coding-hermes-foreman/scripts/test_append_close_commit.py
       (also collectable by pytest / unittest discovery)
 
@@ -119,6 +123,15 @@ def make_nested_repo():
 def run_script(*args):
     return subprocess.run([sys.executable] + [str(a) for a in args], capture_output=True,
                           text=True, stdin=subprocess.DEVNULL, env=clean_env())
+
+
+def load_script_module(name, path):
+    """Import a sibling script by path (they are entry points, not packages)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, str(path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def porcelain(repo, sub=BOARD):
@@ -350,6 +363,102 @@ class MixedEventIdTests(unittest.TestCase):
         rows = [json.loads(l) for l in
                 (Path(repo) / BOARD / "events.jsonl").read_text().splitlines() if l.strip()]
         self.assertEqual([r["id"] for r in rows], ["evt-3", None, 1, 2])
+
+
+class DispatchedMixedEventIdTests(unittest.TestCase):
+    """DF-CRIER-512: the DISPATCH writer takes the same numeric-only next id.
+
+    append_board_task_dispatched.py carried the identical bare
+    `max(e["id"] for e in events) + 1`, so on the real crier board (ints + "evt-..."
+    + nulls) every dispatch append raised TypeError before writing its event.
+    """
+
+    def dispatch(self, repo):
+        return run_script(DISPATCHED, repo, "FIX-001", "2", "glm-5.2", "zai-glm", "4242")
+
+    def events_of(self, repo):
+        text = (Path(repo) / BOARD / "events.jsonl").read_text()
+        return text, [json.loads(l) for l in text.splitlines() if l.strip()]
+
+    def test_mixed_ids_append_next_numeric_id_and_stage(self):
+        # the exact shapes from the ticket: 41 (int), "evt-7" (str), None, 42 (int)
+        repo = make_repo(events=mixed_events([41, "evt-7", None, 42]))
+        seeded = (Path(repo) / BOARD / "events.jsonl").read_text()
+
+        res = self.dispatch(repo)
+        self.assertEqual(res.returncode, 0, f"stdout={res.stdout!r} stderr={res.stderr!r}")
+        self.assertNotIn("TypeError", res.stderr)
+        self.assertIn("event id=43 appended", res.stdout, "max numeric is 42 -> 43")
+
+        text, rows = self.events_of(repo)
+        self.assertTrue(text.startswith(seeded), "existing event bytes must be preserved")
+        self.assertEqual(len(rows), 5, "four seeded events + one appended")
+        self.assertEqual([r["id"] for r in rows[:4]], [41, "evt-7", None, 42],
+                         "neighbouring ids keep their exact original shapes")
+
+        dispatched = rows[-1]
+        self.assertIsInstance(dispatched["id"], int)
+        self.assertNotIsInstance(dispatched["id"], bool)
+        self.assertEqual(dispatched["id"], 43)
+        self.assertEqual(dispatched["event_type"], "task_dispatched")
+        self.assertEqual(dispatched["task_id"], "FIX-001")
+        self.assertEqual(dispatched["tick_number"], 2)
+        # detail stays a JSON-encoded STRING (readers json.loads it)
+        detail = dispatched["detail"]
+        self.assertIsInstance(detail, str)
+        self.assertEqual(json.loads(detail),
+                         {"model": "glm-5.2", "provider": "zai-glm", "pid": 4242,
+                          "task": "FIX-001", "tick": 2})
+
+        tasks = [json.loads(l) for l in
+                 (Path(repo) / BOARD / "tasks.jsonl").read_text().splitlines() if l.strip()]
+        self.assertEqual(tasks[0]["worker_status"], "dispatched")
+        self.assertEqual(tasks[0]["attempts"], 1)
+
+        # the dispatch write is staged, not left in the worktree (DF-CRIER-510)
+        lines = porcelain(repo)
+        self.assertTrue(lines, "expected staged board changes, git status was clean")
+        for line in lines:
+            self.assertEqual(line[1], " ", f"worktree-side change still pending: {line!r}")
+        self.assertEqual(unstaged_paths(repo), set())
+        self.assertEqual(staged_paths(repo),
+                         {f"{BOARD}/events.jsonl", f"{BOARD}/tasks.jsonl"})
+
+        self.assert_compiles(DISPATCHED)
+
+    def test_all_numeric_board_next_id_is_still_max_plus_one(self):
+        repo = make_repo(events=mixed_events([41, 42]))
+        res = self.dispatch(repo)
+        self.assertEqual(res.returncode, 0, f"stdout={res.stdout!r} stderr={res.stderr!r}")
+        self.assertIn("event id=43 appended", res.stdout)
+        self.assertEqual([r["id"] for r in self.events_of(repo)[1]], [41, 42, 43])
+
+    def test_board_without_any_numeric_id_starts_at_one(self):
+        repo = make_repo(events=mixed_events(["evt-9", None]))
+        res = self.dispatch(repo)
+        self.assertEqual(res.returncode, 0, f"stdout={res.stdout!r} stderr={res.stderr!r}")
+        self.assertIn("event id=1 appended", res.stdout)
+        self.assertEqual([r["id"] for r in self.events_of(repo)[1]], ["evt-9", None, 1])
+
+    def test_pure_digit_string_bounds_the_sequence_and_bools_do_not(self):
+        """Unit-level contract of the replicated helper (kept in step with 511)."""
+        mod = load_script_module("df_crier_512_dispatched", DISPATCHED)
+        self.assertEqual(mod.next_event_id([]), 1)
+        self.assertEqual(mod.next_event_id([{"id": 7}, {"id": "8"}, {"id": "evt-9"},
+                                            {"id": None}, {}]), 9)
+        # True is an int in Python but must not bound a sequence
+        self.assertEqual(mod.next_event_id([{"id": 3}, {"id": True}]), 4)
+        self.assertEqual(mod.next_event_id([{"id": "0041"}]), 42)
+        self.assertEqual(list(mod.numeric_event_ids([{"id": 5}, {"id": "6"}, {"id": "x"}])),
+                         [5, 6])
+
+    def assert_compiles(self, script):
+        with tempfile.TemporaryDirectory(prefix="df-crier-512-pyc-") as tmp:
+            try:
+                py_compile.compile(str(script), cfile=os.path.join(tmp, "out.pyc"),
+                                   doraise=True)
+            except py_compile.PyCompileError as exc:
+                self.fail(f"{script.name} does not compile: {exc}")
 
 
 if __name__ == "__main__":
