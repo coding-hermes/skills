@@ -51,7 +51,11 @@ pipeline:
         FIRST read coding-hermes-writing/SKILL.md in full — it is the normative rule set.
         Grade the task's diff against those rules. Grade only MATERIAL SKILL.md edits:
         if the diff touches only scripts/, references/, skills-manifest.json or board
-        files, pass with one line "reference-only churn, not graded". Do not grade the
+        files, emit every task criterion item with status PASS and put "reference-only
+        churn, not graded" in each item's detail field - the coverage gate requires
+        per-criterion items, so a bare one-line pass without items grades FAIL. You
+        MUST still emit the complete JSON verdict object with the top-level verdict
+        field set to "COMPLETE" in this case; do not replace the JSON with prose. Do not grade the
         underlying feature a skill describes — only the writing. Do not run any test
         suite; tier-1 already ran it. One criterion per proof; FAIL on violation.
         CRITICAL: emit one item per task criterion and copy each task criterion text
