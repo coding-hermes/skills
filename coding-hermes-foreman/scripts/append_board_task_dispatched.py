@@ -10,7 +10,15 @@ Usage:
   python3 append_board_task_dispatched.py REPO TASK_ID TICK_NUMBER MODEL PROVIDER PID
 
 Conventions:
-- event id: MAX(id)+1 across events.jsonl (authoritative — never reuse).
+- event id: MAX(id)+1 across events.jsonl (authoritative — never reuse), computed over
+  NUMERIC candidate ids only (ints, and pure-digit strings such as "42"). Fleet boards
+  carry mixed id shapes — the real crier events.jsonl holds plain ints alongside string
+  ids and null ids — so a bare max() over every row raised TypeError before a single
+  event was written and killed every dispatch append (DF-CRIER-512, the same class
+  DF-CRIER-511 fixed in append_board_task_completed.py). Non-numeric and missing ids are
+  ignored; a board with no numeric id at all starts at 1. Existing lines are never
+  renumbered, reordered or rewritten. The helpers are replicated (not imported from the
+  sibling script) because this file is deployed on its own in several places.
 - event shape: {"id", "timestamp", "event_type": "task_dispatched", "task_id",
   "actor": "foreman", "detail": <JSON-ENCODED STRING, not an object>, "tick_number"}.
   detail must be json.dumps(...) of the payload — prior dispatch events store the whole
@@ -35,6 +43,31 @@ import os
 import subprocess
 
 BOARD_FILES = ("events.jsonl", "tasks.jsonl")
+
+
+def numeric_event_ids(events):
+    """Yield the event ids that can be ordered against a new int id.
+
+    Numeric candidates are ints (bools excluded - True is an int in Python) and
+    strings that are pure ASCII digit strings, so a legacy "9" still bounds the
+    sequence. Nulls, id-less rows and non-numeric string ids ("evt-3") are ignored.
+    Mirrors append_board_task_completed.py (DF-CRIER-511) - keep the two in step.
+    """
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        value = e.get("id")
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            yield value
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            yield int(value)
+
+
+def next_event_id(events):
+    """Next event id as an int: max(numeric candidates) + 1, or 1 when there are none."""
+    return max(numeric_event_ids(events), default=0) + 1
 
 
 def stage_board_files(bdir, files, commit_message=None):
@@ -96,7 +129,7 @@ def main():
 
     with open(f"{bdir}/events.jsonl") as f:
         events = [json.loads(l) for l in f if l.strip()]
-    nid = max(e["id"] for e in events) + 1
+    nid = next_event_id(events)
 
     detail = json.dumps({
         "model": args.model,
