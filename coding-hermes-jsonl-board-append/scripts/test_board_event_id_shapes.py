@@ -12,6 +12,13 @@ Targets covered:
   templates/manual_append_no_duckdb.py       next_event_id(lines)       (ast-extracted)
   templates/append_event_no_header.py        numeric_event_ids(events)  (ast-extracted)
   templates/append_event_with_header.py      numeric_event_ids(events)  (ast-extracted)
+  scripts/board_jsonl_id_diff.py             max/sorted/set-compare     (read-side diagnostics,
+  scripts/board_parity_id_diff.py            max/sorted                 end-to-end on a fixture db)
+  scripts/board_parity_gap_classifier.py     max/sorted/age-test        (end-to-end, id-less rows too)
+
+The read-side parity diagnostics keep their id-SET diff semantics (a legacy
+"evt-7" is still listed in only_jsonl/only_db) and filter to numeric candidates
+only for the ordering/arithmetic steps.
 
 Run:  python3 coding-hermes-jsonl-board-append/scripts/test_board_event_id_shapes.py
       (also collectable by pytest)
@@ -40,6 +47,9 @@ DOCWRITER = HERE / "docwriter_inject_rows.py"
 MANUAL = TEMPLATES / "manual_append_no_duckdb.py"
 NO_HEADER = TEMPLATES / "append_event_no_header.py"
 WITH_HEADER = TEMPLATES / "append_event_with_header.py"
+JSONL_ID_DIFF = HERE / "board_jsonl_id_diff.py"
+PARITY_ID_DIFF = HERE / "board_parity_id_diff.py"
+GAP_CLASSIFIER = HERE / "board_parity_gap_classifier.py"
 
 TS = "2026-11-20 06:00:00.000000"
 
@@ -79,6 +89,28 @@ def make_board(ids=None, with_header=True):
             "updated_at": TS,
         }) + "\n")
     return repo, bdir
+
+
+def make_board_db(bdir, db_ids, id_column="INTEGER"):
+    """Populate board.db's events table with those ids (throwaway duckdb file).
+
+    Skips when duckdb is not importable by this interpreter — the scripts under
+    test import duckdb themselves, so a missing module is an environment gap
+    (use ~/.hermes/venvs/board/bin/python3), not a DF-CRIER-513 regression.
+    """
+    try:
+        import duckdb
+    except ImportError:  # pragma: no cover - board venv provides duckdb
+        raise unittest.SkipTest(
+            "duckdb not importable by this interpreter "
+            "(run under ~/.hermes/venvs/board/bin/python3)")
+    con = duckdb.connect(str(Path(bdir) / "board.db"))
+    try:
+        con.execute(f"CREATE TABLE events (id {id_column}, tick_number INTEGER)")
+        con.executemany("INSERT INTO events VALUES (?, ?)",
+                        [(eid, idx + 1) for idx, eid in enumerate(db_ids)])
+    finally:
+        con.close()
 
 
 def run_script(script, args):
@@ -233,11 +265,95 @@ class TemplateTests(unittest.TestCase):
                          sorted(close_tick.numeric_event_ids(events)))
 
 
+class ParityDiagnosticTests(unittest.TestCase):
+    """Read-side id-diff diagnostics on a MIXED-shape board (DF-CRIER-513 rework).
+
+    The DIFF must stay a raw id-set comparison — the legacy "evt-7" id is a real
+    id and belongs in the jsonl-only listing — while max()/sorted() run over the
+    numeric candidates only. Before the guard both scripts raised TypeError here.
+    """
+
+    # events.jsonl: two numeric ids (41, 42), one legacy string id, one null.
+    # board.db holds the numeric ids but not the legacy string, so "evt-7" lands
+    # in the jsonl-only listing and the gap reads as the benign jsonl-superset.
+    JSONL_IDS = [41, "evt-7", None, 42]
+    DB_IDS = [41, 42]
+
+    def fixture(self, db_ids=None, id_column="INTEGER"):
+        repo, bdir = make_board(self.JSONL_IDS)
+        make_board_db(bdir, self.DB_IDS if db_ids is None else db_ids, id_column)
+        return repo, bdir
+
+    def test_board_jsonl_id_diff_mixed_ids_exit_0_with_numeric_max(self):
+        _, bdir = self.fixture()
+        res = run_script(JSONL_ID_DIFF, [str(bdir)])
+        out = res.stdout
+        self.assertEqual(res.returncode, 0, f"stdout={out!r} stderr={res.stderr!r}")
+        self.assertNotIn("TypeError", res.stderr, res.stderr)
+        # max is the NUMERIC max (42 over 41, "42"-free ints); next id = 43.
+        self.assertIn("jsonl ids: 4 distinct, max 42", out)
+        self.assertIn("db ids:    2 distinct, max 42", out)
+        self.assertIn("next jsonl event id (max numeric + 1): 43", out)
+        # parity semantics preserved: non-numeric ids (null + legacy string) stay
+        # in the DIFF, they are dropped only from the ordering/arithmetic.
+        self.assertIn("jsonl-only ids: [None, 'evt-7']", out)
+        self.assertIn("db-only ids:    []", out)
+        self.assertIn("BENIGN-SUPERSET", out)
+
+    def test_board_parity_id_diff_mixed_ids_exit_0_with_numeric_max(self):
+        _, bdir = self.fixture()
+        res = run_script(PARITY_ID_DIFF, [str(bdir)])
+        out = res.stdout
+        self.assertEqual(res.returncode, 0, f"stdout={out!r} stderr={res.stderr!r}")
+        self.assertNotIn("TypeError", res.stderr, res.stderr)
+        self.assertIn("jsonl ids: 4  db ids: 2", out)
+        self.assertIn("jsonl-only ids: [None, 'evt-7']", out)
+        self.assertIn("db-only ids: []", out)
+        self.assertIn("max jsonl: 42  max db: 42", out)
+        self.assertIn("next jsonl id (max numeric + 1): 43", out)
+        self.assertIn("VERDICT: benign jsonl-superset stable gap", out)
+
+    def test_both_diagnostics_survive_a_mixed_db_column(self):
+        """board.db can hold legacy string ids too — mixed on BOTH sides."""
+        _, bdir = self.fixture(db_ids=["41", "evt-db", "42"], id_column="VARCHAR")
+        # each script's own max line wording; both must bound on the numeric ids
+        max_fragment = {JSONL_ID_DIFF: "max 42", PARITY_ID_DIFF: "max jsonl: 42  max db: 42"}
+        for script in (JSONL_ID_DIFF, PARITY_ID_DIFF):
+            res = run_script(script, [str(bdir)])
+            self.assertEqual(res.returncode, 0,
+                             f"{script.name}: stdout={res.stdout!r} stderr={res.stderr!r}")
+            self.assertNotIn("TypeError", res.stderr, script.name)
+            self.assertNotIn("Traceback", res.stderr, script.name)
+            # numeric candidates on the db side still bound the max ("41"/"42")
+            self.assertIn(max_fragment[script], res.stdout, script.name)
+
+    def test_board_parity_gap_classifier_mixed_ids_and_idless_row(self):
+        """Third site in the class: raw sorted/max + a KeyError on an id-less row."""
+        _, bdir = self.fixture()
+        # a row with NO id at all (pre-fix: r["id"] -> KeyError)
+        with open(bdir / "events.jsonl", "a") as fh:
+            fh.write(json.dumps({"timestamp": TS, "event_type": "audit",
+                                 "tick_number": 9}) + "\n")
+
+        res = run_script(GAP_CLASSIFIER, [str(bdir)])
+        out = res.stdout
+        self.assertEqual(res.returncode, 0, f"stdout={out!r} stderr={res.stderr!r}")
+        for bad in ("TypeError", "KeyError", "Traceback"):
+            self.assertNotIn(bad, res.stderr, res.stderr)
+        self.assertIn("max jsonl: 42", out)
+        # mixed ids stay listed, and the ordering-free ones are named
+        self.assertIn("id=None", out)
+        self.assertIn("id=evt-7", out)
+        self.assertIn("NOTE: non-numeric missing ids", out)
+        self.assertIn("CLASSIFICATION: benign", out)
+
+
 class CompileTests(unittest.TestCase):
     """Every touched file must compile (pyc emitted outside the repo tree)."""
 
     def test_touched_files_compile(self):
-        for path in (CLOSE, DOCWRITER, MANUAL, NO_HEADER, WITH_HEADER):
+        for path in (CLOSE, DOCWRITER, MANUAL, NO_HEADER, WITH_HEADER,
+                     JSONL_ID_DIFF, PARITY_ID_DIFF, GAP_CLASSIFIER):
             with tempfile.TemporaryDirectory(prefix="df-crier-513-pyc-") as tmp:
                 try:
                     py_compile.compile(str(path), cfile=os.path.join(tmp, "out.pyc"),
