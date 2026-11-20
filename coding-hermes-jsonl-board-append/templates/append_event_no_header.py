@@ -13,6 +13,29 @@ Usage: copy to /tmp/<tickprefix>_append.py, edit the CONFIG block, then
 import json
 from datetime import datetime, timezone
 
+
+def numeric_event_ids(events):
+    """Yield the event ids that can be ordered against a new int id.
+
+    Fleet boards carry mixed id shapes - plain ints next to legacy "evt-..." string
+    ids and null ids - so comparing every raw id against the running max raised
+    TypeError on the first string/null row. Ints and pure-digit strings ("42") bound the
+    sequence; nulls, id-less and non-numeric rows are ignored. Same contract as the
+    DF-CRIER-511 helpers in coding-hermes-foreman/scripts/append_board_task_completed.py,
+    inlined because templates are copy/pasted into /tmp, not imported.
+    """
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        value = e.get("id")
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            yield value
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            yield int(value)
+
+
 # --- CONFIG: edit per project/tick ---
 BOARD = "~/get-h3/<repo>/.coding-hermes/board"  # <repo>/.coding-hermes/board
 DETAIL = "/tmp/<tickprefix>_detail.json"                 # event detail JSON object (write_file it first)
@@ -49,21 +72,22 @@ with open(DETAIL) as f:
 # keep False. Check the last committed events.jsonl line first.
 detail_json = json.dumps(detail, ensure_ascii=False)
 
-# next id from JSONL (source of truth) — never from DB auto-increment
-max_id = 0
+# next id from JSONL (source of truth) — never from DB auto-increment.
+# NUMERIC ids only: the fleet's boards mix int ids with "evt-..." strings and nulls,
+# so comparing every row against the running max raised TypeError (DF-CRIER-511).
+events = []
 with open(EVENTS) as f:
     for line in f:
         line = line.strip()
         if not line:
             continue
         try:
-            e = json.loads(line)
-            if e.get("id", 0) > max_id:
-                max_id = e["id"]
+            events.append(json.loads(line))
         except json.JSONDecodeError:
             print(f"WARN malformed line: {line[:60]}")
+max_id = max(numeric_event_ids(events), default=0)
 next_id = max_id + 1
-print(f"next id: {next_id} (max {max_id})")
+print(f"next id: {next_id} (max numeric {max_id})")
 
 event = {
     "id": next_id,

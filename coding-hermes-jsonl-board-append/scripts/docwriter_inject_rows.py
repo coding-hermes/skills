@@ -20,6 +20,27 @@ import json, re, sys, datetime
 def parse_row(ln):
     return json.loads(ln)
 
+
+def numeric_event_ids(rows):
+    """Yield the event ids that can be ordered against a new int id.
+
+    Ints (bools excluded - True is an int in Python) and pure ASCII digit strings
+    (a legacy "9" still bounds the sequence). Nulls, id-less rows and non-numeric
+    string ids ("evt-3") are ignored - a bare max() over them TypeErrors on the
+    fleet's mixed-shape boards.
+    """
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        value = row.get('id')
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            yield value
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            yield int(value)
+
+
 def detect_style(last_line):
     sep = (',', ':') if ', ' not in last_line else None
     esc = '\\u' in last_line
@@ -169,14 +190,19 @@ def main():
     if ev_template is None:
         print("NO_EVENT_TEMPLATE"); sys.exit(3)
     ev = dict(ev_template)
-    maxid = 0
+    # Next event id over NUMERIC ids only: fleet boards carry mixed id shapes (ints,
+    # legacy "evt-..." strings, nulls, missing ids), so a bare max() over every row
+    # raised TypeError before the audit event was written. Malformed lines stay
+    # skipped, as before. Contract shared with close_tick_jsonl_board.next_event_id
+    # (DF-CRIER-511): ints + pure-digit strings bound the sequence, a board with no
+    # numeric id starts at 1.
+    event_rows = []
     for l in elines:
         try:
-            r = parse_row(l)
-            if isinstance(r, dict) and isinstance(r.get('id'), int):
-                maxid = max(maxid, r['id'])
+            event_rows.append(parse_row(l))
         except Exception:
             pass
+    maxid = max(numeric_event_ids(event_rows), default=0)
     detail_obj = {"doc_writer_run": run_date, "injected": created}
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     if 'timestamp' in ev:

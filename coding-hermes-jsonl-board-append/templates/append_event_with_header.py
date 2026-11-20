@@ -14,6 +14,29 @@ Usage: copy to /tmp/<tickprefix>_append.py, edit the CONFIG block, then
 import json
 from datetime import datetime, timezone
 
+
+def numeric_event_ids(events):
+    """Yield the event ids that can be ordered against a new int id.
+
+    Fleet boards carry mixed id shapes - plain ints next to legacy "evt-..." string
+    ids and null ids - so comparing every raw id against the running max raised
+    TypeError on the first string/null row. Ints and pure-digit strings ("42") bound the
+    sequence; nulls, id-less and non-numeric rows are ignored. Same contract as the
+    DF-CRIER-511 helpers in coding-hermes-foreman/scripts/append_board_task_completed.py,
+    inlined because templates are copy/pasted into /tmp, not imported.
+    """
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        value = e.get("id")
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            yield value
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            yield int(value)
+
+
 # --- CONFIG: edit per project/tick ---
 BOARD = "~/<repo>/.coding-hermes/board"
 TICK = 304
@@ -70,19 +93,20 @@ if TASKS_UPDATES:
     print(f"tasks.jsonl updated: {updated}")
 
 # ---------- 2. events.jsonl append (next id from JSONL, never DB) ----------
+# NUMERIC ids only: the fleet's boards mix int ids with "evt-..." strings and nulls,
+# so comparing every row against the running max raised TypeError (DF-CRIER-511).
 EVENTS = f"{BOARD}/events.jsonl"
-max_id = 0
+events = []
 with open(EVENTS) as f:
     for line in f:
         s = line.strip()
         if not s:
             continue
         try:
-            e = json.loads(s)
-            if e.get("id", 0) > max_id:
-                max_id = e["id"]
+            events.append(json.loads(s))
         except json.JSONDecodeError:
             pass
+max_id = max(numeric_event_ids(events), default=0)
 next_id = max_id + 1
 detail_obj = {"tick": TICK, "summary": EVENT_SUMMARY}
 inner = {"event_type": "audit", "task_id": None, "actor": "foreman", "detail": detail_obj}

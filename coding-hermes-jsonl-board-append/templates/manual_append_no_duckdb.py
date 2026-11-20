@@ -18,6 +18,33 @@ EDIT THESE:
 """
 import json, datetime
 
+
+def next_event_id(lines):
+    """Next event id: max over NUMERIC ids only, +1 (1 when the board has none).
+
+    Fleet boards carry mixed id shapes - plain ints next to legacy "evt-..." string
+    ids and null ids - so the previous bare max() over int() of every row's id raised
+    TypeError on a string row (and KeyError on an id-less row) before anything was
+    appended. Ints and pure-digit strings ("42") bound the sequence; nulls, id-less
+    and non-numeric rows are ignored. Same contract as the DF-CRIER-511 helpers in
+    coding-hermes-foreman/scripts/append_board_task_completed.py, inlined because
+    templates are copy/pasted into /tmp, not imported.
+    """
+    best = 0
+    for line in lines:
+        try:
+            value = json.loads(line).get("id")
+        except (ValueError, AttributeError):
+            continue
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            best = max(best, value)
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            best = max(best, int(value))
+    return best + 1
+
+
 BOARD_DIR = "<REPO>/.coding-hermes/board"   # e.g. ~/consensus/.coding-hermes/board
 TICK_N = 0                                  # e.g. 243
 EVENT_TYPE = "idle"                         # consensus convention for idle ticks
@@ -34,12 +61,12 @@ header_path = f"{BOARD_DIR}/board.jsonl"
 now = datetime.datetime.now()
 ts = now.strftime("%Y-%m-%d %H:%M:%S") + ".000000"
 
-# --- events append (compact ensure_ascii line; MAX+1 id) ---
+# --- events append (compact ensure_ascii line; MAX+1 id over numeric ids only) ---
 with open(events_path, "r", encoding="utf-8") as f:
     lines = f.readlines()
-max_id = max(int(json.loads(l)["id"]) for l in lines if l.strip())
+new_id = next_event_id(lines)
 event = {
-    "id": max_id + 1,
+    "id": new_id,
     "timestamp": ts,
     "event_type": EVENT_TYPE,
     "task_id": None,
@@ -67,7 +94,7 @@ with open(events_path, "r", encoding="utf-8") as f:
 hdr = json.load(open(header_path, encoding="utf-8"))
 print(f"events: {len(ev)} lines, last id {ev[-1]['id']}, tick_number {ev[-1]['tick_number']}")
 print(f"header: ticks_total={hdr['ticks_total']} ticks_idle={hdr['ticks_idle']} last_commit={hdr['last_commit']}")
-assert ev[-1]["id"] == max_id + 1, "event id != MAX+1"
+assert ev[-1]["id"] == new_id, "event id != MAX+1"
 
 # --- commit convention (JSONL era): NORMAL commit, no --no-verify ---
 # git add -f <repo>/.coding-hermes/board/board.jsonl <repo>/.coding-hermes/board/events.jsonl

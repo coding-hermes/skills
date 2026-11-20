@@ -8,9 +8,11 @@ pass:
 
   1. Marks a task row complete in tasks.jsonl (status, worker_status,
      completed_at, commit_hash, foreman_note).
-  2. Appends an event with id = max(existing INT id)+1 — event ids are plain
-     ints in events.jsonl, NOT strings; detail is stored as a JSON STRING
-     (fleet convention), not a nested object.
+  2. Appends an event with id = max(existing NUMERIC id)+1 — the id it WRITES is
+     always a plain int, but the ids it READS are not: fleet boards carry mixed
+     shapes (ints, legacy "evt-..." string ids, nulls), so the next id comes from
+     the numeric candidates only (ints and pure-digit strings such as "9").
+     Detail is stored as a JSON STRING (fleet convention), not a nested object.
   3. Bumps board.jsonl header (last_tick / ticks_total / last_commit /
      updated_at).
 
@@ -47,6 +49,32 @@ from datetime import datetime, timezone
 
 def now_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.000000")
+
+
+def numeric_event_ids(events):
+    """Yield the event ids that can be ordered against a new int id.
+
+    Numeric candidates are ints (bools excluded - True is an int in Python) and
+    strings that are pure ASCII digit strings, so a legacy "9" still bounds the
+    sequence. Nulls, id-less rows and non-numeric string ids ("evt-3") are ignored.
+    Same contract as the DF-CRIER-511 helpers in
+    coding-hermes-foreman/scripts/append_board_task_completed.py.
+    """
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        value = e.get("id")
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            yield value
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            yield int(value)
+
+
+def next_event_id(events):
+    """Next event id as an int: max(numeric candidates) + 1, or 1 when there are none."""
+    return max(numeric_event_ids(events), default=0) + 1
 
 
 def load_jsonl(path):
@@ -114,19 +142,16 @@ def main():
             sys.exit(f"task row {args.task} not found in tasks.jsonl")
         save_jsonl(tasks_path, rows)
 
-    # 2. event append — id = max int id + 1
+    # 2. event append — id = max NUMERIC id + 1 (mixed id shapes are ignored, not crashed on)
     rows = load_jsonl(events_path)
-    last_id = 0
-    for e in rows:
-        if isinstance(e.get("id"), int):
-            last_id = max(last_id, e["id"])
+    next_id = next_event_id(rows)
     if args.audit:
         etype = args.type or "audit"
         detail = {"tick": args.tick, "verdict": args.verdict, "type": etype,
                   "work": {"task": None, "commit": None}, "note": args.note}
         if args.gates:
             detail["gates"] = json.loads(args.gates)
-        event = {"id": last_id + 1, "timestamp": ts, "event_type": etype,
+        event = {"id": next_id, "timestamp": ts, "event_type": etype,
                  "task_id": None, "actor": "foreman", "detail": json.dumps(detail)}
     else:
         etype = args.type or f"worker-tick ({args.task})"
@@ -139,7 +164,7 @@ def main():
                   "work": {"tasks": tasks}}
         if args.gates:
             detail["gates"] = json.loads(args.gates)
-        event = {"id": last_id + 1, "timestamp": ts, "event_type": "worker_tick",
+        event = {"id": next_id, "timestamp": ts, "event_type": "worker_tick",
                  "task_id": args.task, "actor": "foreman", "detail": json.dumps(detail)}
     with open(events_path, "a") as f:
         f.write(json.dumps(event) + "\n")
