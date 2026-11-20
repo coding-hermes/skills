@@ -17,8 +17,9 @@ Usage (cron-safe: no python3 -c, no heredocs, no pipes):
   --reason      short source string for the task_created event detail
                 (default: "foreman")
 
-Event ids = MAX(id)+1 across events.jsonl (JSONL is the id authority).
-Tasks whose ids already exist in tasks.jsonl are skipped (idempotent).
+Event ids = MAX(numeric id)+1 across events.jsonl (JSONL is the id authority;
+int ids and legacy pure-digit string ids count, non-numeric/null ids are ignored -
+see max_event_id). Tasks whose ids already exist in tasks.jsonl are skipped (idempotent).
 Ordering per board convention: task rows BEFORE the task_created events.
 
 Proven: ring-runner tick 47 (2026-08-03) — RR-COV-01 + RR-GOV-01 created
@@ -93,17 +94,40 @@ def load_rows(path):
     return rows
 
 
+def numeric_event_ids(rows):
+    """Yield the event ids that can be ordered against the new int id.
+
+    Numeric candidates are ints (bools excluded - True is an int in Python) and
+    strings that are pure ASCII digit strings, so a legacy "9" still bounds the
+    sequence. Nulls, id-less rows and non-numeric string ids ("evt-3") are ignored.
+    Mirrors append_board_task_completed.py (DF-CRIER-511) and
+    append_board_task_dispatched.py (DF-CRIER-512). The helper is duplicated rather
+    than imported because every board script in this directory deploys standalone
+    (copied into a foreman skill dir / invoked from cron by absolute path) - keep
+    the copies in step.
+    """
+    for e in rows:
+        if not isinstance(e, dict):
+            continue
+        value = e.get("id")
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            yield value
+        elif isinstance(value, str) and value.isascii() and value.isdigit():
+            yield int(value)
+
+
 def max_event_id(path):
-    mid = 0
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            e = json.loads(line)
-            if e.get("id", 0) > mid:
-                mid = e["id"]
-    return mid
+    """Highest NUMERIC event id in events.jsonl, as an int (0 when there is none).
+
+    Fleet boards carry mixed id shapes - the real crier events.jsonl holds plain
+    ints (1795041048590000042) alongside legacy string ids and null ids - so
+    comparing every row's id against an int mid raised TypeError and killed every
+    task_created append before a single event (or the staging step) ran
+    (DF-CRIER-514; same class as DF-CRIER-511/512/513).
+    """
+    return max(numeric_event_ids(load_rows(path)), default=0)
 
 
 def main():
