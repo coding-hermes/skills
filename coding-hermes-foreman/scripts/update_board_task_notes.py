@@ -17,14 +17,67 @@ Usage (cron-safe: no python3 -c, no heredocs):
 
 Verifies the row exists (non-zero exit + ERROR if missing).
 tasks.jsonl full rewrite is fine - only events.jsonl is append-only.
+
+STAGED BY DEFAULT (DF-CRIER-510): after a successful rewrite the script `git add -f`s
+tasks.jsonl so a caller commit cannot leave the row update behind. Outside a git repo
+it prints a NOTICE and skips staging instead of failing; a git failure is reported,
+never raised (the write already happened).
 """
 import argparse
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime
 
+BOARD_FILES = ("tasks.jsonl",)
 
-def main() -> None:
+
+def stage_board_files(bdir, files, commit_message=None):
+    """git add the board files just written; optionally pathspec-commit them.
+
+    A git failure is reported, never raised: the JSONL writes already happened and
+    aborting would invite a re-run that could duplicate the update.
+    Returns 0 on success or skip, 1 only when a requested commit did not land.
+    """
+    names = [f for f in files if os.path.exists(os.path.join(bdir, f))]
+    if not names:
+        return 0
+    try:
+        top = subprocess.run(["git", "-C", bdir, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=60,
+                             stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"WARN: git unavailable ({exc}); {len(names)} board file(s) written but NOT staged")
+        return 0
+    if top.returncode != 0:
+        print(f"NOTICE: {bdir} is not inside a git repo; "
+              f"{len(names)} board file(s) written but NOT staged")
+        return 0
+
+    add = subprocess.run(["git", "-C", bdir, "add", "-f", "--"] + names,
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if add.returncode != 0:
+        print(f"WARN: git add failed for board files ({(add.stderr or add.stdout).strip()}); "
+              f"files are written but UNSTAGED - commit them manually")
+        return 0
+    print(f"OK: staged {', '.join(names)} - a caller commit cannot under-stage the board")
+
+    if not commit_message:
+        return 0
+    com = subprocess.run(["git", "-C", bdir, "commit", "-m", commit_message, "--"] + names,
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if com.returncode != 0:
+        print(f"ERROR: git commit failed ({(com.stderr or com.stdout).strip()})")
+        print("ERROR: the board files ARE written and staged. Do NOT re-run this script - "
+              "commit manually:")
+        print(f"  git -C {bdir} commit -m {json.dumps(commit_message)} -- {' '.join(names)}")
+        return 1
+    print(f"OK: committed {', '.join(names)}: {commit_message}")
+    return 0
+
+
+def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("repo")
     ap.add_argument("task_id")
@@ -61,7 +114,8 @@ def main() -> None:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     print(f"tasks.jsonl updated {args.task_id}: {sorted(updates)}")
+    return stage_board_files(board, BOARD_FILES)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

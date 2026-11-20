@@ -9,7 +9,8 @@ Usage:
   python3 append_board_task_completed.py REPO TASK_ID TICK_NUMBER COMMIT_HASH \
       --summary "tick 137 - TASK complete (commit, +N/-M). ..." \
       [--guard PASS] [--ci PASS] [--judge "PASS verdict abc (n/n criteria)"] \
-      [--note "foreman_note for the tasks row"]
+      [--note "foreman_note for the tasks row"] \
+      [--commit "chore(board): close TASK_ID (tick N)"]
 
 Conventions (verified dexdat-core tick #137):
 - event ids: MAX(id)+1 across events.jsonl (authoritative tick numbering).
@@ -17,12 +18,83 @@ Conventions (verified dexdat-core tick #137):
 - tasks.jsonl row: status/worker_status -> complete, completed_at=now, commit_hash, guard_result, ci_result, foreman_note.
 - board.jsonl header: ticks_total = the COMPLETING tick number (dispatch-only ticks do NOT bump), last_commit, last_tick, updated_at, ticks_idle=0.
 
-After running, commit with explicit files (never the whole dir):
-  git add .coding-hermes/board/events.jsonl .coding-hermes/board/tasks.jsonl .coding-hermes/board/board.jsonl
+STAGED BY DEFAULT (DF-CRIER-510). Writing the files is not a close: the close is
+the COMMIT. This script therefore stages exactly the board files it wrote
+(events.jsonl, tasks.jsonl, board.jsonl) with `git add -f`, so the caller's commit
+cannot under-stage the completion event line. Outside a git repo it prints a
+NOTICE and skips staging instead of failing.
+
+  --commit "message"  additionally commits those exact paths (pathspec commit), so
+                      write+commit is atomic and cannot be split by a caller that
+                      forgets the event file. Existing callers that omit the flag
+                      keep the old contract: write + stage, caller commits.
+
+  `git add -f` is deliberate: some boards keep .coding-hermes/ ignored-but-tracked
+  (that is why the documented recipe always force-added board.db-era files), and a
+  single ignored path poisons a multi-path `git add` so NOTHING is staged. All three
+  paths here are ones this script just wrote, so forcing them is safe.
+
+  Defect closed: crier commit be35c5a7 (2026-11-19) closed DF-CRIER-509 in
+  tasks.jsonl but left event id 1795041048590000012 UNCOMMITTED in the working
+  tree for ~24h - every reader of main:<board> saw a closed row with no event.
+
+  NEVER re-run this script to "retry" a commit: it appends DUPLICATE events. If
+  --commit fails, the files are already written and staged - commit by hand:
+    git -C <repo>/.coding-hermes/board commit -m "..." -- events.jsonl tasks.jsonl board.jsonl
 """
 import argparse
 import datetime
 import json
+import os
+import subprocess
+
+BOARD_FILES = ("events.jsonl", "tasks.jsonl", "board.jsonl")
+
+
+def stage_board_files(bdir, files, commit_message=None):
+    """git add the board files just written; optionally pathspec-commit them.
+
+    Staging-only unless commit_message is given, so every existing caller keeps its
+    behaviour and only gains the guarantee that the event line is staged. A git
+    failure is reported, never raised: the JSONL writes already happened and
+    aborting would invite a re-run, which appends duplicate events.
+    Returns 0 on success or skip, 1 only when a requested --commit did not land.
+    """
+    names = [f for f in files if os.path.exists(os.path.join(bdir, f))]
+    if not names:
+        return 0
+    try:
+        top = subprocess.run(["git", "-C", bdir, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=60,
+                             stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"WARN: git unavailable ({exc}); {len(names)} board file(s) written but NOT staged")
+        return 0
+    if top.returncode != 0:
+        print(f"NOTICE: {bdir} is not inside a git repo; "
+              f"{len(names)} board file(s) written but NOT staged")
+        return 0
+
+    add = subprocess.run(["git", "-C", bdir, "add", "-f", "--"] + names,
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if add.returncode != 0:
+        print(f"WARN: git add failed for board files ({(add.stderr or add.stdout).strip()}); "
+              f"files are written but UNSTAGED - commit them manually")
+        return 0
+    print(f"OK: staged {', '.join(names)} - a caller commit cannot under-stage the board")
+
+    if not commit_message:
+        return 0
+    com = subprocess.run(["git", "-C", bdir, "commit", "-m", commit_message, "--"] + names,
+                         capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if com.returncode != 0:
+        print(f"ERROR: git commit failed ({(com.stderr or com.stdout).strip()})")
+        print("ERROR: the board files ARE written and staged. Do NOT re-run this script "
+              "(it would append duplicate events) - commit manually:")
+        print(f"  git -C {bdir} commit -m {json.dumps(commit_message)} -- {' '.join(names)}")
+        return 1
+    print(f"OK: committed {', '.join(names)}: {commit_message}")
+    return 0
 
 
 def main():
@@ -36,6 +108,9 @@ def main():
     ap.add_argument("--ci", default=None)
     ap.add_argument("--judge", default="")
     ap.add_argument("--note", default="", help="foreman_note for the tasks.jsonl row")
+    ap.add_argument("--commit", "--commit-message", dest="commit_message", default=None,
+                    help="also git-commit the three board files with this message "
+                         "(atomic close; omit to only write + stage)")
     args = ap.parse_args()
 
     bdir = f"{args.repo.rstrip('/')}/.coding-hermes/board"
@@ -89,7 +164,8 @@ def main():
         f.write("\n")
 
     print(f"OK: events [{nid},{nid + 1}] tick {args.tick} commit {args.commit} task {args.task_id}")
+    return stage_board_files(bdir, BOARD_FILES, args.commit_message)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
