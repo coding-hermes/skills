@@ -290,6 +290,15 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
                           # QA-MUSTER-046's harness arm read as invented. Same
                           # external-tool class as --no-git / --commit.
                           '--server',
+                          # External-CLI flag: `hyperfine --export-json <FILE>` is a
+                          # real sharkdp/hyperfine flag (verified live 2026-11-21 PM
+                          # tick: `hyperfine --help` on the host hyperfine 1.20.0
+                          # prints "      --export-json <FILE>", and the sibling
+                          # -w/--warmup and -r/--runs flags in the same criterion
+                          # print on the same help), but it lives only in the
+                          # hyperfine binary, so PERF-017's A/B arm read as invented.
+                          # Same external-tool class as --no-git / --commit.
+                          '--export-json',
                           # NEGATIVE citation: QA-MUSTER-041 quotes the pre-fix
                           # failure `Error: unknown flag: --email` as proof that the
                           # form-encoded property flags did NOT exist. A flag named
