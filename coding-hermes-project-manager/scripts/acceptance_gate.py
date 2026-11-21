@@ -1,0 +1,411 @@
+#!/usr/bin/env python3
+"""acceptance_gate.py - deterministic check that a board row's acceptance criteria
+are re-runnable by a foreman who has no context.
+
+Usage:
+  acceptance_gate.py validate <repo> <row-json-file-or-inline-json>
+  acceptance_gate.py audit    <repo>            # report pass/fail for every open row
+
+Exit codes: 0 = all valid, 1 = at least one failure.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+
+# Phrases that mean nothing to a worker who has no context.
+FILLER = [
+    'tests pass', 'tests are green', 'it works', 'works correctly', 'no errors',
+    'as expected', 'looks good', 'is implemented', 'behaves properly',
+    'functions correctly', 'is working', 'satisfies the requirement',
+]
+
+COMMAND_HINTS = (
+    '`', 'cargo ', 'go test', 'go build', 'go vet', 'pytest', 'python3 ', 'npm ',
+    'npx ', 'make ', 'bash ', 'sh ', 'curl ', 'sqlite3 ', 'git ', 'grep ', 'jq ',
+    'bunker ', 'gitreins ', 'router ', 'boardctl ', 'hermes ',
+)
+
+OPEN_STATUS = {'pending', 'open', 'in_progress', 'ready', 'todo', 'blocked'}
+
+# Flags documented by external CLIs that no repo consuming them can mention in
+# source. Exempted only when the criterion actually invokes that CLI (see check()).
+_BOARDCTL_FLAGS = {'--type', '--acceptance-criteria'}
+# `gh run view --log-failed` is real GitHub CLI (verified live 2026-11-21 PM tick:
+# `gh run view --help` prints "--log-failed  View the log for any failed steps in a
+# run or specific job"), and the CLI is host-installed, so no file in a consuming
+# repo can mention it. Same external-tool class as --evidence-run-id.
+_GH_FLAGS = {'--log-failed'}
+# `gitreins guard --quality-async` is a real gitreins flag (verified live 2026-11-21
+# PM tick: `gitreins guard --help` on the pipx-installed 0.21.1 prints
+# "[--quality-async]" in the usage line and "  --quality-async       Run the
+# repo-owned quality producer in the background" in the option list). gitreins
+# ships from pipx, so no file in a consuming repo can ever mention it. Verified
+# against BOTH verbs before exempting: `gitreins task complete --help` does NOT
+# print it (its flags are --scan-root/--force/--skip-tier2), which is why the
+# exemption is scoped to a criterion that invokes `gitreins guard`.
+_GITREINS_GUARD_FLAGS = {'--quality-async'}
+
+
+
+def _is_absence_subject(text: str, token: str) -> bool:
+    """True when `token` is named in `text` as a path that must NOT exist.
+
+    Two sanctioned shapes, both requiring an EXACT path match on the subject:
+      * `test ! -e|! -f <token>`         — negation test
+      * `git log|show ... -- <token>`    — history query proving zero commits
+    A prefix such as `~/<repo>/` is not equal to the bare relative token, so
+    an exemption granted to one arm can never silence another arm's citation.
+    """
+    want = os.path.normpath(token.lstrip('./'))
+    for m in re.finditer(r'test\s+!\s+-[ef]\s+[`\'"]?([^\s`\'";|)]+)', text):
+        if os.path.normpath(m.group(1).lstrip('./')) == want:
+            return True
+    for m in re.finditer(r'\bgit\b[^\n]*?\b(?:log|show)\b[^\n]*?\s--\s+([^\n]+)', text):
+        for word in m.group(1).split():
+            word = word.strip('`\'";|)')
+            if word and os.path.normpath(word.lstrip('./')) == want:
+                return True
+    return False
+
+
+def as_text(value) -> str:
+    if value is None:
+        return ''
+    if isinstance(value, (list, tuple)):
+        return '\n'.join(as_text(v) for v in value)
+    if isinstance(value, dict):
+        return '\n'.join(f'{k}: {as_text(v)}' for k, v in value.items())
+    return str(value)
+
+
+def repo_paths(repo: str) -> set[str]:
+    """Tracked files, so a criterion naming a path can be checked for existence."""
+    try:
+        out = subprocess.run(['git', '-C', repo, 'ls-files'], capture_output=True,
+                             text=True, timeout=30).stdout
+        return set(out.split('\n'))
+    except Exception:                                          # noqa: BLE001
+        return set()
+
+
+_GREP_CACHE: dict[tuple[str, str], int] = {}
+
+
+def _greps(repo: str, name: str) -> int:
+    """How many tracked files mention `name`, EXCLUDING the board itself.
+
+    The exclusion is load-bearing: a criterion's own text lives in tasks.jsonl, so an
+    unexcluded `git grep` matches the criterion and every fabrication verifies as real.
+    """
+    key = (repo, name)
+    if key in _GREP_CACHE:
+        return _GREP_CACHE[key]
+    try:
+        # `-e <name>` so a pattern that itself starts with `--` (a CLI flag token
+        # cited by a criterion, e.g. `--frozen-lockfile`) is parsed as a PATTERN,
+        # not as a git option — without it, every flag citation rc=129s and
+        # reads as "flag that does not exist" (proven 2026-10-22 PM tick).
+        # `-i`: a `-run` fragment like 'SCHEDGAP214' or a flag token may differ
+        # in case from the real symbol it cites (TestSchedGap214_...); existence
+        # is case-insensitive (proven 2026-11-21 PM tick: SCHED-SHUTDOWN-001's
+        # red-arm -run fragment read as "test that does not exist" while
+        # TestSchedGap214_OperatorRestartAbortKeepsWaiver exists and passes).
+        out = subprocess.run(['git', '-C', repo, 'grep', '-l', '-i', '-F', '-e', name,
+                              '--', ':(exclude).coding-hermes/*', ':(exclude)*.jsonl'],
+                             capture_output=True, text=True, timeout=30).stdout
+        n = len([l for l in out.split('\n') if l.strip()])
+    except Exception:                                          # noqa: BLE001
+        n = 1          # a failed probe must not manufacture a failure
+    _GREP_CACHE[key] = n
+    return n
+
+
+def check(criteria: str, repo: str, files: set[str]) -> list[str]:
+    problems = []
+    text = criteria.strip()
+    low = text.lower()
+
+    # A criterion may name a FOREIGN repo ("in the <name> repo"). Path and
+    # test-symbol existence then resolve against that checkout, not the audited
+    # repo — otherwise a real cross-repo arm reads as an invented path/test.
+    # Proven 2026-11-21: BOARDCTL-HOOK-001's `cmd/boardctl/main.go` and
+    # `TestBT083` live in ~/coding-hermes-boardctl (verified on disk), and the
+    # gate read both as absent from the crier repo. Fail CLOSED: the foreign
+    # checkout must exist AND be a git work tree, or alt_repo stays None and
+    # the audited repo is used (so a typo'd repo name cannot disarm the arm).
+    alt_repo = None
+    m = re.search(r'in the ([A-Za-z0-9_.-]+) repo', text)
+    if m:
+        cand = os.path.expanduser('~/' + m.group(1))
+        if os.path.isdir(os.path.join(cand, '.git')):
+            alt_repo = cand
+
+    if not text:
+        return ['empty']
+    if len(text) < 40:
+        problems.append(f'too short ({len(text)} chars) - cannot specify done')
+    if low.strip().rstrip('.') in FILLER or any(f == low.strip().rstrip('.') for f in FILLER):
+        problems.append('pure filler phrase')
+    if not any(hint in low for hint in COMMAND_HINTS):
+        problems.append('names no runnable command')
+    if any(f in low for f in FILLER) and not any(hint in low for hint in COMMAND_HINTS):
+        problems.append('filler without a command')
+
+    # A path-shaped token must exist in the repo (or be a dotfile/board path).
+    # Longest extensions first: 'js' before 'json' truncates 'edges.jsonl' to 'edges.js'.
+    # Context classes that are NOT invented references (proven 2026-11-21 PM tick):
+    #   - runtime data the repo's own writers create untracked
+    #     (data/state/outcomes.jsonl is ~490MB on this host, gitignored) —
+    #     exists-on-disk == real;
+    #   - a PROPOSED deliverable: "a new docs/data-refresh.md", "(e.g. tests/...py:";
+    #   - a git-plumbing citation `HEAD:<path>` whose arm asserts it may be absent;
+    #   - an OR-resolution: "<path>` (or the suite file that owns ...)".
+    for m in re.finditer(
+            r'[A-Za-z0-9_./-]+/[A-Za-z0-9_./-]+\.(?:jsonl|json|go|py|rs|md|tsx|ts|js|toml|yaml|yml|sh)',
+            text):
+        token = m.group(0)
+        if token.startswith(('.coding-hermes', '~', '/')) or token.startswith('http'):
+            continue
+        if alt_repo and os.path.exists(os.path.join(alt_repo, token)):
+            continue
+        if files and token not in files and not any(f.endswith('/' + token) for f in files):
+            if os.path.exists(os.path.join(repo, token)):
+                continue
+            # One contextually-exempt occurrence exempts the TOKEN: a criterion can
+            # cite the same path 3x (proposed / HEAD: / absence-check) and one
+            # exempt shape proves the path is not an invented reference.
+            # (proven 2026-11-21 PM tick: DOC-24's docs/README.md is proposed once
+            # and cited twice more; DOC-36's docs/drivers.md is `HEAD:`-quoted and
+            # the subject of a ZERO-hits arm.)
+            token_exempt = False
+            positions = [mm for mm in re.finditer(re.escape(token), text)]
+            for pm in positions:
+                before = text[max(0, pm.start() - 6):pm.start()].lower()
+                after = text[pm.end():pm.end() + 8].lower()
+                if before.rstrip().endswith(('new', 'e.g.')):
+                    token_exempt = True
+                    break
+                if after.lstrip('` ').startswith('(or') or before.endswith('head:'):
+                    token_exempt = True
+                    break
+            if token_exempt:
+                continue
+            # ABSENCE assertion: an arm may name a path precisely to prove it is
+            # GONE (`test ! -e <path>`, or a zero-hits `git log --all -- <path>`).
+            # Such a path can never be in git ls-files, so the existence check
+            # failed those arms forever (proven 2026-11-21 PM tick: TRBL-049
+            # forbids the repo from carrying an in-repo AGENTS.md and the gate read
+            # the forbidden path as an invented one).
+            # EXACT subject match only. An earlier version let any prefix sit
+            # before the token, so `test ! -e ~/<repo>/specs/AGENTS.md` exempted
+            # the UNRELATED `specs/AGENTS.md` cited in the next arm — the audit
+            # went green on an arm that still fails standalone (skip-guard trap).
+            if _is_absence_subject(text, token):
+                continue
+            problems.append(f'path not in repo: {token}')
+
+    # Expected outcome must be stated.
+    # 'Expected outcome' / 'exits 0' are the standard phrasings in criteria; the
+    # bare keywords fail the trailing \b on the suffix ('expected', 'exits').
+    # (proven 2026-11-21 PM tick: RELEASE-061 etc. carry a literal 'Expected
+    # outcome:' paragraph and still read as outcome-less.)
+    # Broadened 2026-11-21 PM tick: substantive criteria also state the outcome as
+    # a result STATE — "completes the fresh-install cell", "byte-identical",
+    # "is <= 3", "no more than", "concludes success", "verified with the exact
+    # evidence path" — the original verb list read those as outcome-less and
+    # failed 12 live task-router rows whose criteria name commands and thresholds.
+    if not (re.search(r'\b(expect(?:ed(?:ly)?)?|exit(?:s|ed|ing)?|returns?|prints?|outputs?|PASS|FAIL|must (?:show|print|return)|completes?|equals?|resolves?|passes?|green|keeps?|stays?|remains?|byte-identical|recorded|no more than|at least|success|verif(?:y|ied)|reports?|produc(?:es|e|ed)|never)\b',
+                     text, re.I)
+            or re.search(r'[<>]=?\s*[0-9]', text)):
+        problems.append('does not state the expected outcome')
+
+    # A NAMED symbol must exist. A path check alone passes a criterion naming a test
+    # function or CLI flag that was invented: the file is real, the name is not.
+    named = set()
+    for pat in (r"-run\s+['\"]?([A-Za-z_][\w/.-]*)", r"-k\s+['\"]?([A-Za-z_]\w*)",
+                r'\bTest[A-Z]\w{3,}', r'::(Test\w+)'):
+        named.update(re.findall(pat, text))
+    for name in list(named)[:6]:
+        if alt_repo and _greps(alt_repo, name):
+            continue
+        if files and not _greps(repo, name):
+            problems.append(f'names a test that does not exist: {name}')
+
+    flags = {f for f in re.findall(r'(?<![\w-])(--[a-z][a-z0-9-]{2,})', text)
+             if f not in ('--help', '--version', '--dry-run', '--json', '--format',
+                          # External-scanner scan-mode flag: `gitleaks detect --no-git`
+                          # recurs in board criteria but lives only in the gitleaks
+                          # binary, so no tracked repo file can ever mention it
+                          # (proven 2026-10-30 BT-83: flag ran live, gate read it
+                          # as invented). Exempt like the generic flags above.
+                          '--no-git',
+                          # Generic git plumbing flag (proven 2026-11-03 guard PM
+                          # tick: `git rev-parse --show-toplevel` ran live, gate
+                          # read it as invented) and the bunker-qa.sh collect
+                          # evidence-path flag, which recurs in QA criteria but
+                          # lives only in ~/.hermes/scripts/bunker-qa.sh — same
+                          # external-tool class as --no-git.
+                          '--show-toplevel', '--evidence',
+                          # External-CLI flag: `gh run list -c/--commit <sha>` is a
+                          # real gh flag (verified live 2026-11-07: `gh run list
+                          # --help` on gh 2.46.0 prints `-c, --commit SHA  Filter
+                          # runs by the SHA of the commit`), but no tracked repo
+                          # file mentions it, so the RELEASE-045 arm read as
+                          # invented. Same external-tool class as --no-git.
+                          '--commit',
+                          # External-CLI flag: `act --concurrent-jobs N` is a real
+                          # nektos/act flag (verified live 2026-11-17: `act
+                          # --help` on the host act prints "--concurrent-jobs int
+                          # Maximum number of concurrent jobs to run"), but it
+                          # lives only in the act binary, so QA-CHIMERA-V2-46's
+                          # serial-mode arm read as invented. Same external-tool
+                          # class as --no-git.
+                          '--concurrent-jobs',
+                          # External-CLI flag: `git status --ignored[=<mode>]` is real git
+                          # plumbing (verified live 2026-11-21 PM tick: `git status --help`
+                          # prints "--ignored[=<mode>]" and `git status --ignored --porcelain`
+                          # exits 0 in this repo), but DAGGER-1089's criterion is the only place
+                          # in the tree that spells the long form, so the gate read it as
+                          # invented. Same external-tool class as --no-git / --commit.
+                          '--ignored',
+                          # Cobra/pflag flags are registered with the BARE name, so a
+                          # criterion that cites the runtime form finds nothing in
+                          # source: internal/builtin/extended.go:961 reads
+                          # `verifyCmd.Flags().StringVar(&verifySink, "sink", ...)`
+                          # (verified 2026-11-20 PM tick: `openapi-cli audit verify
+                          # --sink <path>` documented in docs/guides/commands.md,
+                          # runtime flag real, literal `--sink` absent from the tree).
+                          # This is the documented-form class, not an invented flag:
+                          # DOC-25's whole point is that the runtime flag exists and
+                          # the docs omit it.
+                          '--sink',
+                          # External-CLI flag: `bunker list --server <alias>` is real
+                          # (verified live 2026-11-20: `bunker list --help` prints
+                          # "      --server string      Server alias (default: active
+                          # server)") but lives only in the bunker binary, so
+                          # QA-MUSTER-046's harness arm read as invented. Same
+                          # external-tool class as --no-git / --commit.
+                          '--server',
+                          # NEGATIVE citation: QA-MUSTER-041 quotes the pre-fix
+                          # failure `Error: unknown flag: --email` as proof that the
+                          # form-encoded property flags did NOT exist. A flag named
+                          # for its own absence can never appear in a tracked file
+                          # before the fix, and after the fix the name derives from
+                          # spec properties, not source text (verified 2026-11-20 PM
+                          # tick: gate re-read the quote as an invented flag).
+                          # External-CLI flag: `boardctl update --evidence-run-id <run>` is a
+                          # real boardctl flag (verified live 2026-11-21: `boardctl update
+                          # --help` on the host binary at ~/.local/bin/boardctl prints
+                          # "--evidence-run-id RUN"), and boardctl ships from
+                          # coding-hermes-tools, so no file in a consuming repo can ever
+                          # mention it. Same external-tool class as --no-git / --commit.
+                          '--evidence-run-id',
+                          # NEGATIVE citation: SCHED-GAP-17021 forbids --no-verify
+                          # ("a guard refusal ... never worked around") and
+                          # SCHED-GAP-17033 requires a commit to land WITHOUT
+                          # --no-verify. The flag is real git plumbing (verified
+                          # live 2026-11-21: `git commit --help` lists it), no
+                          # tracked file in a consumer repo need mention it.
+                          '--no-verify',
+                          # External-CLI flag: `git merge --ff-only` is real git
+                          # plumbing (verified live 2026-11-21 PM tick: `git merge
+                          # --help` prints "--ff, --no-ff, --ff-only" and "With
+                          # --ff-only, resolve the merge as a fast-forward when
+                          # possible"), and HARDEN-LOOP-001's contract arm cites
+                          # it, so the gate read it as invented. Same
+                          # external-tool class as --no-git / --commit.
+                          '--ff-only',
+                          '--email')}
+    # Tool-scoped flag exemptions: a flag documented by an external CLI counts as
+    # real only inside a criterion that actually invokes that CLI, so an invented
+    # flag on any other tool is still caught in the same repo.
+    # boardctl create --type SLUG / --acceptance-criteria TEXT — verified live
+    # 2026-11-21 (`boardctl create --help` prints both, boardctl ships from
+    # coding-hermes-tools so no consuming repo file can mention them).
+    if 'boardctl' in text:
+        flags -= _BOARDCTL_FLAGS
+    # gh run view --log-failed — verified live 2026-11-21; scoped to a criterion
+    # that actually invokes `gh`, so an invented flag on any other tool still fails.
+    if 'gh ' in text:
+        flags -= _GH_FLAGS
+    # gitreins guard --quality-async — verified live 2026-11-21. Scoped twice: the
+    # criterion must name gitreins at all, AND cite the flag on the verb that owns
+    # it (`guard --quality-async`). A criterion that names the flag on another
+    # tool, or on another gitreins verb, still fails (red-proved in fixtures E/G).
+    if re.search(r'gitreins\b', text) and re.search(r'\bguard\s+[`\'"]?' + '--quality-async', text):
+        flags -= _GITREINS_GUARD_FLAGS
+    # ruff --select / --statistics are real ruff flags (verified live 2026-11-21:
+    # `ruff check --help` prints both, ruff 0.15.22) scoped to a criterion that
+    # invokes ruff — TR-CMPLX-001's statistics arm read as invented otherwise.
+    if 'ruff' in text:
+        flags -= {'--select', '--statistics'}
+    # A flag inside an "(or ...)" parenthetical is a PROPOSED ALTERNATIVE the work
+    # may add, not an existing flag to verify (proven 2026-11-21 PM tick:
+    # TR-1000976681059262's "Provide --all (or --chain-limit N)" — --chain-limit
+    # does not exist yet and is not required to). An invented flag outside such a
+    # parenthetical still fails.
+    flags = {f for f in flags
+             if not re.search(r'\(or\s+' + re.escape(f) + r'\b', text)}
+
+    for flag in list(flags)[:5]:
+        if files and not _greps(repo, flag):
+            problems.append(f'names a flag that does not exist: {flag}')
+    return problems
+
+
+def load_board(repo: str) -> tuple[str, list[dict]]:
+    path = os.path.join(repo, '.coding-hermes/board/tasks.jsonl')
+    if not os.path.exists(path):
+        sys.exit(f'no board at {path}')
+    rows = [json.loads(l) for l in open(path) if l.strip()]
+    return path, rows
+
+
+def cmd_audit(repo: str) -> int:
+    _, rows = load_board(repo)
+    files = repo_paths(repo)
+    bad = 0
+    total = 0
+    for row in rows:
+        if str(row.get('status', '')).lower() not in OPEN_STATUS:
+            continue
+        total += 1
+        ac = row.get('acceptance') or row.get('acceptance_criteria')
+        problems = check(as_text(ac), repo, files)
+        if problems:
+            bad += 1
+            print(f"FAIL {row.get('id')}: {'; '.join(problems)}")
+    print(f'\naudit: {total} open rows, {bad} failing, {total - bad} passing')
+    return 0 if bad == 0 else 1
+
+
+def cmd_validate(repo: str, payload: str) -> int:
+    files = repo_paths(repo)
+    if os.path.exists(payload):
+        data = json.load(open(payload))
+    else:
+        data = json.loads(payload)
+    # Acceptance first, canon fallback — same read path as cmd_audit, so a
+    # criteria-only row is never falsely REJECTed as 'empty'.
+    problems = check(as_text(data.get('acceptance') or data.get('acceptance_criteria')), repo, files)
+    if problems:
+        print('REJECT: ' + '; '.join(problems))
+        return 1
+    print('PASS')
+    return 0
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    action = sys.argv[1]
+    repo = sys.argv[2]
+    if action == 'audit':
+        sys.exit(cmd_audit(repo))
+    if action == 'validate' and len(sys.argv) == 4:
+        sys.exit(cmd_validate(repo, sys.argv[3]))
+    sys.exit(__doc__)
