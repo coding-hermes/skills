@@ -146,6 +146,7 @@ Use `references/go-release-verification.md` for Go version/provenance and checks
 
 - A "hold — blocked on owner" row for a patch/minor cut the charter already authorizes is a defect, not caution. If the newest RELEASE-* row for this project is such a hold, decide under Decision 1 instead of refreshing it; a lane that files holds for weeks has shipped nothing while claiming coverage.
 - Resolve the canonical remote and provider before probing; a plausible lane path can be an unrelated repository.
+- A lane worktree with no interpreter fails the commit guard for an environment reason, not a code reason: `pytest could not import <pkg>` from a fresh worktree is not a product verdict. Build the env offline (`uv sync --offline --extra dev`) so the guard runs its real lint and tests; the bypass taken instead becomes debt every later pass that reuses the tree inherits, and the tree can then never be committed cleanly.
 - Keep candidate and bookkeeping-carrier SHAs separate; a green parent does not prove a carrier.
 - Treat a tag, changelog heading, Release object, and artifact set as separate claims.
 - Treat a timeout with an empty or truncated receipt as UNVERIFIED even if a later independent probe succeeds.
