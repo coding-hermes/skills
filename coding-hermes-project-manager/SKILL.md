@@ -238,6 +238,21 @@ shape: `references/org-coordination.md`.
 - **Never fix code yourself** — you manage the work; foremen do the work.
 - **Gate before write, verify after complete.** Un-gated task = no task;
   unverified "done" = not done.
+- **Report the acceptance GATE's number, not the census's.** On this fleet the
+  two disagree: `board-open-census.py` only checks that criteria exist
+  (measured 42/42 = 1.00 dispatchable) while `acceptance_gate.py audit` checks
+  that each criterion names a runnable command and an expected outcome
+  (measured 31/42 on the same bytes). The census number is a smoke signal; the
+  gate number is the one a context-free worker can act on. Never write
+  `DISPATCHABLE:` from the census alone.
+- **A guard FAIL on a board-only diff may be the worktree, not the repo.** Fresh
+  worktrees ship no `.venv`, so a mypy/typing arm resolves a different
+  interpreter and invents findings in files you never touched. Before filing a
+  row for a "red baseline", re-run the failing arm in the canonical checkout
+  with its own interpreter (`.venv/bin/python -m mypy <file>`); if it passes
+  there, the finding is an environment artifact — record that instead of a
+  defect, and commit the board with `git -c core.hooksPath=/dev/null`,
+  disclosing it in the message and the pass record.
 - **Time-box:** 20 min per project sweep (via subagents), 10 min gating,
   10 min verification, 5 min logging. A full cycle ≈ 45-60 min.
 Never re-add a task that exists (ledger + board dedup, gate G7). A
