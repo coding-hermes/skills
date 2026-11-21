@@ -235,7 +235,7 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
         if files and not _greps(repo, name):
             problems.append(f'names a test that does not exist: {name}')
 
-    flags = {f for f in re.findall(r'(?<![\w-])(--[a-z][a-z0-9-]{2,})', text)
+    flags = {f for f in re.findall(r'(?<![\w-])(--[a-z][a-z0-9-]{2,}(?:\.[a-z][a-z0-9-]*)+|--[a-z][a-z0-9-]{2,})', text)
              if f not in ('--help', '--version', '--dry-run', '--json', '--format',
                           # External-scanner scan-mode flag: `gitleaks detect --no-git`
                           # recurs in board criteria but lives only in the gitleaks
@@ -343,6 +343,15 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # invokes ruff — TR-CMPLX-001's statistics arm read as invented otherwise.
     if 'ruff' in text:
         flags -= {'--select', '--statistics'}
+    # node_exporter DOTTED flag: `--collector.textfile.directory` is a real
+    # node_exporter collector flag, but it is spelled with a dot, so the old
+    # `--[a-z][a-z0-9-]{2,}` extractor truncated it to `--collector` and then
+    # grepped the repo for a token nobody writes. Scoped to a criterion that
+    # names node-exporter, mirroring the gh/ruff/boardctl tool-scoped blocks:
+    # the same dotted flag on any other tool still fails, and an invented
+    # dotted flag on node_exporter still fails.
+    if re.search(r'node[-_]exporter', text):
+        flags -= {'--collector.textfile.directory'}
     # A flag inside an "(or ...)" parenthetical is a PROPOSED ALTERNATIVE the work
     # may add, not an existing flag to verify (proven 2026-11-21 PM tick:
     # TR-1000976681059262's "Provide --all (or --chain-limit N)" — --chain-limit
