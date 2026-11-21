@@ -352,6 +352,16 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # invokes ruff — TR-CMPLX-001's statistics arm read as invented otherwise.
     if 'ruff' in text:
         flags -= {'--select', '--statistics'}
+    # journalctl --since <date|time> is a real systemd-journald time filter
+    # (verified live 2026-11-21 PM tick: `journalctl --help` prints --since and
+    # `journalctl --user -u h3-digest.service --since 2026-11-18` exits 0 printing
+    # the unit's Nov 20 entries). journalctl is a host binary, so no consuming
+    # repo file can spell the flag and the repo-grep can never learn it from the
+    # tree — the extractor read DF-DIGEST-058's evidence arm as invented. Scoped
+    # to a criterion that invokes journalctl, so an invented flag on any other
+    # tool still fails (red-proved in the fixtures run below).
+    if re.search(r'\bjournalctl\b', text):
+        flags -= {'--since'}
     # node_exporter DOTTED flag: `--collector.textfile.directory` is a real
     # node_exporter collector flag, but it is spelled with a dot, so the old
     # `--[a-z][a-z0-9-]{2,}` extractor truncated it to `--collector` and then
@@ -376,6 +386,16 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # (red-proved in fixtures run below).
     if re.search(r'\bgit\s+(?:diff|log|show|status)\b', text) and re.search(r'--(?:num)?stat\b', text):
         flags -= {'--stat', '--numstat'}
+    # git log --all / git rev-list --all — verified live 2026-11-21 PM tick
+    # (`git log --help` documents --all, "pretend as if all the refs ... are
+    # listed on the command line", and `git log --all --oneline --no-walk`
+    # exits 0 in digest printing commits). Negative-existence arms legitimately
+    # cite it — the negative-log-arm fixture's `git log --all -- docs/Invented-
+    # Gone.md` absence proof read as an invented flag since d67559c added the
+    # fixtures. Scoped: the criterion must invoke git log/rev-list AND name
+    # --all, so an invented git flag still fails (red-proved in fixtures).
+    if re.search(r'\bgit\s+(?:log|rev-list)\b', text) and re.search(r'--all\b', text):
+        flags -= {'--all'}
     # curl -k/--insecure is real curl plumbing (verified live 2026-11-21 PM tick:
     # `curl --help all` prints " -k, --insecure    Allow insecure server connections"),
     # but the extractor only knows flags some tracked file spells. Criteria legitimately
