@@ -396,6 +396,23 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # --all, so an invented git flag still fails (red-proved in fixtures).
     if re.search(r'\bgit\s+(?:log|rev-list)\b', text) and re.search(r'--all\b', text):
         flags -= {'--all'}
+    # git rev-list --objects / git cat-file --batch-check / git clone --mirror are
+    # real git plumbing (verified live 2026-11-21 PM tick in off-by-one, rc=0 for
+    # every one: `git rev-list --objects --all | head -2` printed blob ids,
+    # `git rev-parse HEAD | git cat-file --batch-check` printed
+    # "<sha> commit 3144", and `git clone --mirror . <scratch>.git` built a 52M
+    # bare mirror). A history-purge criterion legitimately cites all three as the
+    # inventory/size proof, so OBS-OB-010's arm read as three invented flags. No
+    # tracked repo file spells them, so the repo-grep can never learn them.
+    # Scoped per owning subcommand: the criterion must invoke that subcommand AND
+    # name the flag on it, so `go test ./... --objects` or an invented git flag
+    # still fails.
+    if re.search(r'\bgit\s+rev-list\b', text) and re.search(r'--objects\b', text):
+        flags -= {'--objects'}
+    if re.search(r'\bgit\s+cat-file\b', text) and re.search(r'--batch-check\b', text):
+        flags -= {'--batch-check'}
+    if re.search(r'\bgit\s+clone\b', text) and re.search(r'--mirror\b', text):
+        flags -= {'--mirror'}
     # curl -k/--insecure is real curl plumbing (verified live 2026-11-21 PM tick:
     # `curl --help all` prints " -k, --insecure    Allow insecure server connections"),
     # but the extractor only knows flags some tracked file spells. Criteria legitimately
