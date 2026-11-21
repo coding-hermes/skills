@@ -365,6 +365,12 @@ Build <task description> for <project>. Workdir: <path>.
 ### DuckBrain Context
 - <relevant pitfall or finding>
 
+## Board filing
+- Do NOT file board rows yourself — the foreman owns the board.
+- Report follow-up work in your summary; the foreman files it as
+  `boardctl create <ID> "<title>" --type <bug|chore|feat|task>`.
+  Types exist (BT-098), so an untyped row is a filing defect.
+
 ## Requirements
 - Follow existing code style
 - Add tests
