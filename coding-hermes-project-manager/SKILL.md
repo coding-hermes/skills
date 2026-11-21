@@ -10,7 +10,7 @@ description: >-
   items, verifies the fixes with real commands, updates statuses, and escalates
   stale items. Owns the fleet board as its project list, reports to the user as
   its stakeholder, and leaves a decision trail in DuckBrain.
-version: 1.2.2
+version: 1.2.3
 category: software-development
 ---
 
