@@ -346,12 +346,38 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # node_exporter DOTTED flag: `--collector.textfile.directory` is a real
     # node_exporter collector flag, but it is spelled with a dot, so the old
     # `--[a-z][a-z0-9-]{2,}` extractor truncated it to `--collector` and then
-    # grepped the repo for a token nobody writes. Scoped to a criterion that
-    # names node-exporter, mirroring the gh/ruff/boardctl tool-scoped blocks:
-    # the same dotted flag on any other tool still fails, and an invented
-    # dotted flag on node_exporter still fails.
+    # grepped the repo for a token nobody writes. Proven live 2026-11-21 PM tick:
+    # OBS-GITREINS-4 §3 read as "names a flag that does not exist: --collector".
+    # Provenance: the fleet's real node-exporter stack mounts the textfile dir
+    # (`/root/fleet-monitoring/docker-compose.yml.bak-20261004-loopback:203`
+    # -> /var/lib/node_exporter/textfile, and
+    # scripts/build-inventory.py:149 keys on `node_textfile_scrape_error`), so the
+    # collector class is live in this fleet. Scoped to a criterion that names
+    # node-exporter, mirroring the gh/ruff/boardctl tool-scoped blocks: the same
+    # dotted flag on any other tool still fails, and an invented dotted flag on
+    # node-exporter still fails (red-proved in the fixtures run below).
     if re.search(r'node[-_]exporter', text):
         flags -= {'--collector.textfile.directory'}
+    # git diff --stat / --numstat are real git flags (verified live 2026-11-21:
+    # `git diff --stat HEAD` and `git diff --numstat HEAD` both exit 0 in
+    # dexdat-core, printing a diffstat / numstat line per changed file). The
+    # extractor cannot know them from repo files. Scoped twice: the criterion
+    # must invoke a git subcommand that owns the flag AND name the flag itself,
+    # so `go test ./... --stat` and an invented git flag still fail
+    # (red-proved in fixtures run below).
+    if re.search(r'\bgit\s+(?:diff|log|show|status)\b', text) and re.search(r'--(?:num)?stat\b', text):
+        flags -= {'--stat', '--numstat'}
+    # curl -k/--insecure is real curl plumbing (verified live 2026-11-21 PM tick:
+    # `curl --help all` prints " -k, --insecure    Allow insecure server connections"),
+    # but the extractor only knows flags some tracked file spells. Criteria legitimately
+    # cite it as a PROHIBITION -- "with verification ENABLED (no `-k`, no `--insecure`)"
+    # -- because a proof that disables certificate verification proves nothing about the
+    # LAN trust store; the gate read the negation as a demanded flag and failed the row
+    # forever (proven: voice-mode VOICE-8). Scoped to a criterion that actually invokes
+    # curl, so an invented flag on another tool still fails and an invented curl-ish
+    # flag still fails (red-proved in fixtures run below).
+    if re.search(r'\bcurl\b', text):
+        flags -= {'--insecure'}
     # A flag inside an "(or ...)" parenthetical is a PROPOSED ALTERNATIVE the work
     # may add, not an existing flag to verify (proven 2026-11-21 PM tick:
     # TR-1000976681059262's "Provide --all (or --chain-limit N)" — --chain-limit

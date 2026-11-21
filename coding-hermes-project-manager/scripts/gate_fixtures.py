@@ -35,6 +35,15 @@ CASES = [
      "PASS: `go vet ./... --quality-async` exits 0 and prints no output, so the arm is clean."),
     ("invented-flag-on-other-gitreins-verb-fails", "REJECT",
      "PASS: `gitreins task complete TRBL-999 --quality-async` exits 0 and the row reads complete."),
+    # curl --insecure scoping (voice-mode VOICE-8): a PROHIBITION of the real curl
+    # bypass flag passes inside a curl criterion, while the same token on another
+    # tool and an invented curl-ish flag both still FAIL.
+    ("curl-insecure-prohibition-passes", "PASS",
+     "PASS: `curl -sS -o /dev/null -w '%{http_code}' https://192.168.123.147:7860/client/` with verification ENABLED (no -k, no --insecure) prints 200."),
+    ("insecure-prohibition-on-other-tool-fails", "REJECT",
+     "PASS: `go test ./...` with verification ENABLED (no --insecure) exits 0 and prints ok, so the arm is clean."),
+    ("invented-curl-flag-still-fails", "REJECT",
+     "PASS: `curl -sS --insecure-tls https://192.168.123.147:7860/client/` exits 0 and prints 200."),
 ]
 
 
