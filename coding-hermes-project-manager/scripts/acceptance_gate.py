@@ -461,6 +461,16 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # fixtures run below).
     if re.search(r'\bgit\s+tag\b', text) and re.search(r'--sort\b', text):
         flags -= {'--sort'}
+    # git ls-files -i -c --exclude-standard is real git plumbing (verified live
+    # 2026-11-22 PM tick in dexdat-core: exits 0 printing the 11 tracked-but-ignored
+    # scripts/ paths, and `git ls-files --help` documents --exclude-standard, "Use
+    # only the standard ignore rules"). QA-DEXDAT-CORE-28's inventory arm cites it;
+    # no tracked file in a consuming repo spells it, so the repo-grep can never
+    # learn it. Scoped per owning subcommand: the criterion must invoke
+    # `git ls-files` AND name the flag, so `go test ./... --exclude-standard` and
+    # an invented ls-files flag still fail (red-proved in the fixtures run below).
+    if re.search(r'\bgit\s+ls-files\b', text) and re.search(r'--exclude-standard\b', text):
+        flags -= {'--exclude-standard'}
     # git log --all / git rev-list --all — verified live 2026-11-21 PM tick
     # (`git log --help` documents --all, "pretend as if all the refs ... are
     # listed on the command line", and `git log --all --oneline --no-walk`

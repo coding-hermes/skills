@@ -53,6 +53,18 @@ CASES = [
      "PASS: `go test ./...` with verification ENABLED (no --insecure) exits 0 and prints ok, so the arm is clean."),
     ("invented-curl-flag-still-fails", "REJECT",
      "PASS: `curl -sS --insecure-tls https://192.168.123.147:7860/client/` exits 0 and prints 200."),
+    ("unexpanded-placeholder-still-fails", "REJECT",
+     "PASS: `make version-check VERSION_TAG=<current release>` exits 0 on the edited tree."),
+    # git ls-files --exclude-standard scoping (QA-DEXDAT-CORE-28): the real
+    # tracked-but-ignored inventory flag passes inside a `git ls-files` criterion,
+    # while the same token on another tool and an invented ls-files flag both
+    # still FAIL.
+    ("git-ls-files-exclude-standard-passes", "PASS",
+     "PASS: `git ls-files -i -c --exclude-standard` exits 0 and prints nothing; no tracked path is matched by .gitignore."),
+    ("exclude-standard-on-other-tool-fails", "REJECT",
+     "PASS: `go test ./... --exclude-standard` exits 0 and prints ok, so the arm is clean."),
+    ("invented-ls-files-flag-still-fails", "REJECT",
+     "PASS: `git ls-files -i -c --exclude-symlink-standard` exits 0 and prints nothing, so the arm is clean."),
 ]
 
 
