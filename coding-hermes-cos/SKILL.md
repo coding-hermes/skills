@@ -257,6 +257,17 @@ spawned_at (DuckBrain namespace query; the ticks table's `memory_keys > 0` is a
 cheap pre-filter). Non-compliant lanes go on the escalation list — the write-last
 rule is foreman skill clause 16, and a POST lane-hook audit probe (SCHED-431
 family) will make it mechanical.
+
+**PLAN-review compliance** (added 2026-11-22): weekly, sample dispatching foremen
+handoffs for `plan-unreviewed` stamps and goal cards for stale `PLAN:` comments —
+`python3 ~/.hermes/scripts/plan_review_compliance.py` prints the fleet census
+(per board: PLAN comments, `request-review` events, `plan-unreviewed` stamps, last
+PLAN date; an ENABLED foreman lane with zero `PLAN:` comments on non-exempt work is
+a non-compliant foreman — trivially mechanical ticks are exempt per foreman Step
+0.5). Quote per-foreman compliance with names, and nudge repeat offenders on their
+goal card naming foreman-skill Step 0.5; `plan-unreviewed` is a stamped exception
+for unreviewed non-exempt work — permitted coalesce-window timeouts are not
+themselves violations.
 Report on your own work with the same skepticism you apply to foremen:
 - **False-close check**: re-verify every initiative you closed in the last 7 days — is the
   evidence still valid? A closed card whose proof broke is a CRITICAL.
