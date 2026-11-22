@@ -538,6 +538,17 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # --all, so an invented git flag still fails (red-proved in fixtures).
     if re.search(r'\bgit\s+(?:log|rev-list)\b', text) and re.search(r'--all\b', text):
         flags -= {'--all'}
+    # git log --no-merges — verified live 2026-11-22 PM tick (hermes-dagger
+    # RELEASE-DAGGER-036): `git log --help` documents "--no-merges",
+    # "Do not print commits with more than one parent", and the changelog
+    # arm's `git log --no-merges v0.19.0..v0.20.0` exits 0 in this repo with
+    # real subjects. A changelog arm legitimately cites it; no tracked file
+    # spells the flag so the repo-grep can never learn it. Scoped per owning
+    # subcommand: the criterion must invoke git log/rev-list AND name the
+    # flag, so `go test ./... --no-merges` and an invented git flag still
+    # fail (red-proved in the fixtures run below).
+    if re.search(r'\bgit\s+(?:log|rev-list)\b', text) and re.search(r'--no-merges\b', text):
+        flags -= {'--no-merges'}
     # git rev-list --objects / git cat-file --batch-check / git clone --mirror are
     # real git plumbing (verified live 2026-11-21 PM tick in off-by-one, rc=0 for
     # every one: `git rev-list --objects --all | head -2` printed blob ids,
