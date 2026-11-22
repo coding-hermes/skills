@@ -33,7 +33,15 @@ OPEN_STATUS = {'pending', 'open', 'in_progress', 'ready', 'todo', 'blocked'}
 
 # Flags documented by external CLIs that no repo consuming them can mention in
 # source. Exempted only when the criterion actually invokes that CLI (see check()).
-_BOARDCTL_FLAGS = {'--type', '--acceptance-criteria', '--meta', '--commit-hash'}
+_BOARDCTL_FLAGS = {'--type', '--acceptance-criteria', '--meta', '--commit-hash',
+                   '--evidence-fingerprint'}
+# `boardctl update --evidence-fingerprint FP` is a real boardctl flag (verified live
+# 2026-11-22 PM tick: `boardctl update --help` usage line prints
+# "[--evidence-run-id RUN] [--evidence-fingerprint FP]"). JUDGE-DUCKBRAIN-002's
+# evidence-attachment arm cites it; boardctl ships from coding-hermes-tools, so no
+# consuming repo file can spell it. Same external-tool class as --evidence-run-id;
+# scoped via the boardctl branch below, so an invented flag beside boardctl
+# (--evidence-sha) still FAILs (red-proved 2026-11-22).
 # `boardctl update --commit-hash <sha>` is a real boardctl flag (verified live
 # 2026-11-22 PM tick: `boardctl update --help` usage line prints
 # "[--commit-hash SHA]"), and boardctl ships from coding-hermes-tools, so no
