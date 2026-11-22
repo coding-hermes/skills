@@ -203,11 +203,20 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     #   - a PROPOSED deliverable: "a new docs/data-refresh.md", "(e.g. tests/...py:";
     #   - a git-plumbing citation `HEAD:<path>` whose arm asserts it may be absent;
     #   - an OR-resolution: "<path>` (or the suite file that owns ...)".
+    #   - a path INSIDE an http(s) URL: the URL's port/path segment
+    #     (`127.0.0.1:19195/openapi.json` -> token `19195/openapi.json`) is a
+    #     network address, not a repo reference (proven 2026-11-22 PM tick:
+    #     DOC-32's live-server curl arm).
+    url_spans = [m.span() for m in re.finditer(r'https?://\S+', text)]
+    def _inside_url(pos: int) -> bool:
+        return any(s <= pos < e for s, e in url_spans)
     for m in re.finditer(
             r'[A-Za-z0-9_./-]+/[A-Za-z0-9_./-]+\.(?:jsonl|json|go|py|rs|md|tsx|ts|js|toml|yaml|yml|sh)',
             text):
         token = m.group(0)
         if token.startswith(('.coding-hermes', '~', '/')) or token.startswith('http'):
+            continue
+        if _inside_url(m.start()):
             continue
         if alt_repo and os.path.exists(os.path.join(alt_repo, token)):
             continue
