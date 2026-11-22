@@ -16,7 +16,7 @@ Every coding-hermes skill includes this map. Load any one skill, get the full pi
 ```mermaid
 graph TD
     subgraph "Orchestrator"
-        CF[coding-hermes-foreman<br/>Full SDLC delivery loop<br/>When: every foreman tick<br/>Why: orchestrates all steps<br/>Law: work-order dispatch — pass the exact rows+briefs, never "pick from board"; board track runs in parallel with worker product track]
+        CF[coding-hermes-foreman<br/>Full SDLC delivery loop<br/>When: every foreman tick<br/>Why: orchestrates all steps<br/>Law: work-order dispatch — pass the exact rows+briefs, never "pick from board"; board track runs in parallel with worker product track; Step 0.5 plan review = RULING from a fresh COS Hermes (RUN IT / CHANGES / ESCALATE) before any dispatch]
         FI[coding-hermes-foreman-imposter<br/>Current conversation owns planning and coordination<br/>When: direct foreman mode is requested<br/>Why: no coordinator handoff<br/>Law: call out the direct work; owner-gate does not bleed to ungated siblings]
     end
 
