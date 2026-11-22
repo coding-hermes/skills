@@ -48,6 +48,19 @@ _GH_FLAGS = {'--log-failed'}
 # print it (its flags are --scan-root/--force/--skip-tier2), which is why the
 # exemption is scoped to a criterion that invokes `gitreins guard`.
 _GITREINS_GUARD_FLAGS = {'--quality-async'}
+# bunker-qa.sh flags — the QA foreman's fleet harness lives OUTSIDE every consuming
+# repo (~/.hermes/scripts/bunker-qa.sh), so no tracked file can ever mention them and
+# the repo-grep can only read them as invented. Verified live 2026-11-22 PM tick
+# against the harness's own Usage block and argument parser: usage lines
+# 'run <repo-dir> [--server X] [--ttl 4h] [--keep]' (bunker-qa.sh:17-18),
+# 'collect --evidence <path>' (line 28) and
+# 'verify-evidence <dir|evidence.jsonl> [--expect <hex>] [--event <json>]'
+# (line 40); the --expect parser is real code at lines 300-303 ('--expect)' refuses
+# a missing digest, '--expect=*)' strips the prefix) and an unknown flag there
+# exits 2 'unknown verify-evidence flag' (line 311). Scoped to a criterion that
+# names the harness, so an invented flag on any other tool still fails
+# (red-proved in the fixtures run).
+_BUNKER_QA_FLAGS = {'--expect', '--evidence', '--event', '--keep', '--ttl', '--server'}
 
 
 
@@ -337,6 +350,13 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # coding-hermes-tools so no consuming repo file can mention them).
     if 'boardctl' in text:
         flags -= _BOARDCTL_FLAGS
+    # bunker-qa.sh launch/collect/verify-evidence — verified live 2026-11-22 PM tick
+    # against the harness file itself (Usage block lines 17-18/28/40 and the
+    # --expect parser at 300-311). Scoped to a criterion that names the harness, so
+    # an invented flag on any other tool still fails (red-proved: --frobnicate
+    # beside bunker-qa.sh still FAILs).
+    if 'bunker-qa.sh' in text:
+        flags -= _BUNKER_QA_FLAGS
     # gh run view --log-failed — verified live 2026-11-21; scoped to a criterion
     # that actually invokes `gh`, so an invented flag on any other tool still fails.
     if 'gh ' in text:
