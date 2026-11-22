@@ -33,7 +33,14 @@ OPEN_STATUS = {'pending', 'open', 'in_progress', 'ready', 'todo', 'blocked'}
 
 # Flags documented by external CLIs that no repo consuming them can mention in
 # source. Exempted only when the criterion actually invokes that CLI (see check()).
-_BOARDCTL_FLAGS = {'--type', '--acceptance-criteria'}
+_BOARDCTL_FLAGS = {'--type', '--acceptance-criteria', '--meta'}
+# `boardctl create --meta k=v` is a real flag (verified live 2026-11-22 PM tick:
+# `boardctl create --help` usage line prints "[--meta k=v]"). terminal-jail
+# INT-CI-020-R2 legitimately cites it inside a PROHIBITION — "no --meta flags"
+# on the fixed default path — and the mirror of the curl/-k class: a negation
+# read as a demanded flag fails the row forever. Scoped to a criterion that
+# names boardctl, so an invented flag on any other tool still fails (red-proved:
+# --frobnicate beside boardctl still FAILs; gate_fixtures must stay ALL-GREEN).
 # `gh run view --log-failed` is real GitHub CLI (verified live 2026-11-21 PM tick:
 # `gh run view --help` prints "--log-failed  View the log for any failed steps in a
 # run or specific job"), and the CLI is host-installed, so no file in a consuming
