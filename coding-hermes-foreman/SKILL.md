@@ -170,7 +170,14 @@ Procedure, in this order, every tick that will dispatch or write:
    corrections), execute the CORRECTED plan and cite the correction in your handoff. If no answer
    arrives within one coalesce window, execute the plan as drafted and stamp the handoff
    `plan-unreviewed` with the card id and the time you asked. **Never stall a tick waiting for review.**
-4. **Handoff evidence** — the tick record names the goal card, the plan comment id, and either the COS
+4. **Dispatch brief carries the COS intent (operator, 2026-11-22):** the brief sent to every
+   worker QUOTES the governing card's intent — the goal line, the binding ACs, and the COS's
+   `RUN IT` constraints verbatim — so the worker builds against the intent the COS is driving,
+   not the row title alone. A dispatch whose brief cites no card intent, or that goes out while
+   the plan review stands at `request-changes` (unaddressed), is a misalignment defect: surface
+   it, do not send it.
+
+5. **Handoff evidence** — the tick record names the goal card, the plan comment id, and either the COS
    correction quote or the `plan-unreviewed` stamp. A closeout that cites neither is incomplete.
 
 Do NOT ask for review on trivially mechanical ticks (a single pre-approved closure with all gates green,
