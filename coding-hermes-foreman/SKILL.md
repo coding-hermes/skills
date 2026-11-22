@@ -163,13 +163,23 @@ Procedure, in this order, every tick that will dispatch or write:
 1. **Draft the plan** — after Step 1 (read board) and Step 1.5 (discovery), write down: the row ids you
    intend to take, the action per row (dispatch / verify / close / file), the worker model, the stop
    conditions, and what you will NOT touch this tick.
-2. **Post it** — comment the plan on the project's COS initiative goal card, prefixed `PLAN:`, then
-   `hermes kanban request-review <goal-card-id>` (on boards with no goal card yet, comment on the
-   newest project card and name the project in the first line).
-3. **Wait one coalesce window, not forever** — if the COS answers (`RUN IT` or `request-changes` with
-   corrections), execute the CORRECTED plan and cite the correction in your handoff. If no answer
-   arrives within one coalesce window, execute the plan as drafted and stamp the handoff
-   `plan-unreviewed` with the card id and the time you asked. **Never stall a tick waiting for review.**
+2. **Ruling by a fresh COS Hermes (operator, 2026-11-22 — supersedes passive comment-waiting):**
+   the review is not the foreman grading itself and it is not waiting on a comment. Spawn a NEW
+   one-shot Hermes loaded with the COS skills and have it return a ruling:
+   `hermes -z "<review brief>" --skills coding-hermes-cos,coding-hermes-writing` — a fresh context,
+   so the reviewer carries no foreman momentum. The review brief instructs the reviewer to:
+   (a) read the COS DuckBrain namespace (initiatives, intent records, prior rulings for the
+   project), (b) read the project's kanban goal card + linked intent cards end to end, (c) read
+   the posted `PLAN:` comment, then (d) return one of exactly three rulings with reasons:
+   **RUN IT** / **CHANGES:** <specific corrections> / **ESCALATE:** <the owner decision needed>.
+   Post the ruling back onto the goal card as the review record (traceability), and keep the
+   `PLAN:` + `request-review` posting from step 2's old form so card readers still see the ask.
+3. **Execute the ruling, not the draft** — RUN IT: execute as reviewed. CHANGES: execute the
+   CORRECTED plan and cite the correction in your handoff. ESCALATE: file the owner decision
+   card (owner-decision-briefing shape) and do not dispatch that scope this tick. If the reviewer
+   spawn fails or returns none of the three rulings, retry once; if it still fails, execute the
+   plan as drafted and stamp the handoff `plan-unreviewed` with the card id, the spawn error, and
+   the time you asked. **Never stall a tick waiting for review.**
 4. **Dispatch brief carries the COS intent (operator, 2026-11-22):** the brief sent to every
    worker QUOTES the governing card's intent — the goal line, the binding ACs, and the COS's
    `RUN IT` constraints verbatim — so the worker builds against the intent the COS is driving,
