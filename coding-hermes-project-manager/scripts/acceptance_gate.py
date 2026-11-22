@@ -218,6 +218,19 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
             continue
         if _inside_url(m.start()):
             continue
+        # A token whose match is immediately preceded by '$' is a shell-variable
+        # interpolation (`cat "$d/.search/meta.json"` with
+        # d=/home/kara/duckbrain/namespaces/<ns>/), not a repo reference: the
+        # regex char class cannot contain '$', so the captured token is only the
+        # variable's SUFFIX and the repo-membership check would invent a path
+        # `d/.search/meta.json` that exists nowhere. Exempt ONLY the direct
+        # `$name/` form; `${name}/` and `$(cmd)/` concatenations stay unexempted
+        # until a proven case needs them.
+        # (proven 2026-11-22 PM tick auger-pm-2026-11-22-15-58-00 pass3:
+        #  AUG-180 AC4's sweep read-back arm `cat "$d/.search/meta.json"` was
+        #  the sole audit FAIL as `path not in repo: d/.search/meta.json`.)
+        if m.start() > 0 and text[m.start() - 1] == '$':
+            continue
         if alt_repo and os.path.exists(os.path.join(alt_repo, token)):
             continue
         if files and token not in files and not any(f.endswith('/' + token) for f in files):
