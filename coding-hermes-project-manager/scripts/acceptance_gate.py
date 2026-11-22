@@ -33,7 +33,17 @@ OPEN_STATUS = {'pending', 'open', 'in_progress', 'ready', 'todo', 'blocked'}
 
 # Flags documented by external CLIs that no repo consuming them can mention in
 # source. Exempted only when the criterion actually invokes that CLI (see check()).
-_BOARDCTL_FLAGS = {'--type', '--acceptance-criteria', '--meta'}
+_BOARDCTL_FLAGS = {'--type', '--acceptance-criteria', '--meta', '--commit-hash'}
+# `boardctl update --commit-hash <sha>` is a real boardctl flag (verified live
+# 2026-11-22 PM tick: `boardctl update --help` usage line prints
+# "[--commit-hash SHA]"), and boardctl ships from coding-hermes-tools, so no
+# file in a consuming repo can ever mention it. DF-DIGEST-068's re-point arm
+# cites it (verified live 2026-11-21 on the repo's own scratch probe: the flag
+# exists but the update is refused for a DIFFERENT reason — duplicate
+# completion — so the refusal the arm asserts is real). Same external-tool
+# class as --evidence-run-id; scoped via the boardctl branch below, so an
+# invented flag on any other tool still fails (red-proved: --frobnicate
+# beside boardctl still FAILs).
 # `boardctl create --meta k=v` is a real flag (verified live 2026-11-22 PM tick:
 # `boardctl create --help` usage line prints "[--meta k=v]"). terminal-jail
 # INT-CI-020-R2 legitimately cites it inside a PROHIBITION — "no --meta flags"
