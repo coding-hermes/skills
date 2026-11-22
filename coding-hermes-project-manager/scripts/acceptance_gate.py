@@ -237,6 +237,15 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
             or re.search(r'[<>]=?\s*[0-9]', text)):
         problems.append('does not state the expected outcome')
 
+    # A blind worker cannot substitute a placeholder for anything. Restored 2026-11-22
+    # PM tick: the 2026-11-21 gate revision dropped this arm silently, so rows carrying
+    # `make version-check VERSION_TAG=<current release>` or an unexpanded
+    # `<skills>/...` path audited green — measured: 5 boardctl README rows whose arms
+    # cite a placeholder token went FAIL -> PASS on the install alone.
+    for ph in re.findall(r'<([a-zA-Z][a-zA-Z0-9 _-]{1,30})>', text):
+        if ph.lower() not in ('br', 'date', 'sources', 'sources checked'):
+            problems.append(f'unexpanded placeholder <{ph}> — a context-free worker cannot fill it')
+
     # A NAMED symbol must exist. A path check alone passes a criterion naming a test
     # function or CLI flag that was invented: the file is real, the name is not.
     named = set()
@@ -368,6 +377,16 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # tool, or on another gitreins verb, still fails (red-proved in fixtures E/G).
     if re.search(r'gitreins\b', text) and re.search(r'\bguard\s+[`\'"]?' + '--quality-async', text):
         flags -= _GITREINS_GUARD_FLAGS
+    # gitreins task complete / judge --skip-tier2 — verified live 2026-11-22 PM tick:
+    # BOTH `gitreins task complete --help` and `gitreins judge --help` on the
+    # pipx-installed 0.21.1 print "[--skip-tier2]  Skip Tier 2 LLM evaluation;
+    # Tier 1 guards only". gitreins ships from pipx, so no file in a consuming
+    # repo can mention it. Scoped to a criterion that invokes one of those verbs
+    # AND cites the flag, so an invented flag on any other tool, or on another
+    # gitreins verb, still fails (red-proved: --skip-tier3 beside the same verbs
+    # still FAILs; the stale pre-fix copy FAILs the real-flag fixture).
+    if re.search(r'\bgitreins\s+(task\s+complete|judge)\b', text) and '--skip-tier2' in text:
+        flags -= {'--skip-tier2'}
     # ruff --select / --statistics are real ruff flags (verified live 2026-11-21:
     # `ruff check --help` prints both, ruff 0.15.22) scoped to a criterion that
     # invokes ruff — TR-CMPLX-001's statistics arm read as invented otherwise.
