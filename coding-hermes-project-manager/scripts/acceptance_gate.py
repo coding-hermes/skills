@@ -51,15 +51,15 @@ _GITREINS_GUARD_FLAGS = {'--quality-async'}
 # bunker-qa.sh flags — the QA foreman's fleet harness lives OUTSIDE every consuming
 # repo (~/.hermes/scripts/bunker-qa.sh), so no tracked file can ever mention them and
 # the repo-grep can only read them as invented. Verified live 2026-11-22 PM tick
-# against the harness's own Usage block and argument parser: usage lines
-# 'run <repo-dir> [--server X] [--ttl 4h] [--keep]' (bunker-qa.sh:17-18),
-# 'collect --evidence <path>' (line 28) and
+# against the harness's own Usage block and argument parser, not against a guessed
+# interface: usage lines 'collect --evidence <path>' (bunker-qa.sh:28) and
 # 'verify-evidence <dir|evidence.jsonl> [--expect <hex>] [--event <json>]'
-# (line 40); the --expect parser is real code at lines 300-303 ('--expect)' refuses
-# a missing digest, '--expect=*)' strips the prefix) and an unknown flag there
-# exits 2 'unknown verify-evidence flag' (line 311). Scoped to a criterion that
-# names the harness, so an invented flag on any other tool still fails
-# (red-proved in the fixtures run).
+# (bunker-qa.sh:40) plus 'run <repo-dir> [--server X] [--ttl 4h] [--keep]'
+# (bunker-qa.sh:17-18); the --expect parser is real code at bunker-qa.sh:300-303
+# ('--expect)' -> refuses a missing digest, '--expect=*)' -> strips the prefix) and
+# an unknown flag there exits 2 with 'unknown verify-evidence flag' (line 311).
+# Scoped to a criterion that names the harness, so an invented flag on any other
+# tool still fails (red-proved in the fixtures run).
 _BUNKER_QA_FLAGS = {'--expect', '--evidence', '--event', '--keep', '--ttl', '--server'}
 
 
@@ -128,7 +128,8 @@ def _greps(repo: str, name: str) -> int:
         # red-arm -run fragment read as "test that does not exist" while
         # TestSchedGap214_OperatorRestartAbortKeepsWaiver exists and passes).
         out = subprocess.run(['git', '-C', repo, 'grep', '-l', '-i', '-F', '-e', name,
-                              '--', ':(exclude).coding-hermes/*', ':(exclude)*.jsonl'],
+                              '--', ':(exclude).coding-hermes/*', ':(exclude)*.jsonl',
+                              ':(exclude)data/*', ':(exclude)site/*'],
                              capture_output=True, text=True, timeout=30).stdout
         n = len([l for l in out.split('\n') if l.strip()])
     except Exception:                                          # noqa: BLE001
@@ -406,6 +407,16 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # (red-proved in fixtures run below).
     if re.search(r'\bgit\s+(?:diff|log|show|status)\b', text) and re.search(r'--(?:num)?stat\b', text):
         flags -= {'--stat', '--numstat'}
+    # git tag --sort=<key> is real git plumbing (verified live 2026-11-22 PM tick,
+    # boardctl repo: `git tag --sort=-creatordate` exits 0 printing v0.5.0/v0.4.0/
+    # v0.3.0, and `git tag --help` documents "-n, --sort=<key>"). QA-BOARDCTL-009's
+    # ground-truth arm cites it; the gate read it as invented because no tracked
+    # file in a consuming repo spells it. Scoped twice like the git diff block:
+    # the criterion must invoke `git tag` AND cite the flag, so an invented --sort
+    # on any other tool (or on another git verb) still fails (red-proved in the
+    # fixtures run below).
+    if re.search(r'\bgit\s+tag\b', text) and re.search(r'--sort\b', text):
+        flags -= {'--sort'}
     # git log --all / git rev-list --all — verified live 2026-11-21 PM tick
     # (`git log --help` documents --all, "pretend as if all the refs ... are
     # listed on the command line", and `git log --all --oneline --no-walk`

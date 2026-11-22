@@ -14,7 +14,16 @@ Exit 0 only when every case matches its expectation.
 import json, os, subprocess, sys, tempfile
 
 GATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'acceptance_gate.py')
-REPO = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
+# REPO pinned to a barren suite-created temp dir by default (2026-11-22 PM tick,
+# measured): the expectations encode a repo whose tracked files mention NONE of
+# the fixture tokens — the invented-flag cases reject only when the grep misses.
+# A real checkout can never satisfy that (the skills repo itself contains this
+# fixtures file, boardctl's docs quote --insecure), so REPO=caller-cwd made
+# ALL-GREEN cwd-dependent: from boardctl, insecure-prohibition-on-other-tool-
+# fails PASSed (suite read FAILURES); from a non-git dir, all 12 matched. The
+# temp dir reproduces that barren context deterministically; the argv override
+# is kept for a deliberate cross-repo run.
+REPO = sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp(prefix='gate-fx-repo-')
 
 CASES = [
     ("absence-assertion-passes", "PASS",
