@@ -332,6 +332,8 @@ recoverable state, not silent loss). ONE wave per tick — never a second wave w
 one runs. Workers get sibling awareness in their briefs (who else is running), but
 zero coordination: disjoint scopes, own worktrees.
 
+**23. COS-PLANE CHECK BEFORE WAVE COMPOSITION (operator, 2026-11-22):** BEFORE WAVE COMPOSITION the foreman pulls the project's CoS plane (kanban initiative cards / goal ledger) and confirms every candidate row maps to an active initiative card or goal subgoal — citing the card id it serves; rows serving no card get surfaced with a one-line justification (or skipped), never silently dispatched; mismatches (row cites a dead card) get flagged back to the CoS lane.
+
 **Foreman merge checklist (the foreman's OWN verification — the worker's judge
 covers the branch, the foreman covers the merge):** per merged branch:
 (1) merge clean, or conflicts went to a fixup worker in a fresh worktree (never
