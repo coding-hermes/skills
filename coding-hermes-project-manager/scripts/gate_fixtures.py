@@ -65,6 +65,31 @@ CASES = [
      "PASS: `go test ./... --exclude-standard` exits 0 and prints ok, so the arm is clean."),
     ("invented-ls-files-flag-still-fails", "REJECT",
      "PASS: `git ls-files -i -c --exclude-symlink-standard` exits 0 and prints nothing, so the arm is clean."),
+    # bunker list --status / bunker destroy --purge scoping (QA-HERMES-CANOPY-50):
+    # real flags of the host-installed bunker CLI pass inside criteria that invoke
+    # the owning subcommand, while an invented bunker flag and the same flag on
+    # another tool both still FAIL.
+    ("bunker-list-status-flag-passes", "PASS",
+     "PASS: `bunker list --status all` exits 0 and prints the agent table, so the slot census is real."),
+    ("bunker-destroy-purge-flag-passes", "PASS",
+     "PASS: `bunker destroy $AGENT_ID --purge` terminates within the printed deadline and exits 0; the follow-up `bunker list --status all` no longer lists the agent."),
+    ("invented-bunker-flag-still-fails", "REJECT",
+     "PASS: `bunker list --status all --frobnicate` exits 0 and prints the table, so the census is clean."),
+    ("purge-on-other-tool-still-fails", "REJECT",
+     "PASS: `go vet ./... --purge` exits 0 and prints no output, so the arm is clean."),
+    # Absence-shape extension (QA-HERMES-CANOPY-060): a "contains no <token>"
+    # anti-latch arm and a `grep -c '<token>'` arm whose expectation is zero are
+    # sanctioned absence assertions, while a zero-shaped token does not exempt a
+    # DIFFERENT path cited as must-exist, and a grep -c expecting a NONZERO count
+    # stays an existence arm and still FAILs on an absent path.
+    ("contains-no-absence-passes", "PASS",
+     "PASS: run `cat /var/lib/qa/state-snapshot-text.txt` after the fix; the snapshot contains no ./qa-evidence.jsonl and the probe exits 0, so the chaos cell grades a repo surface."),
+    ("zero-count-grep-passes", "PASS",
+     "PASS: run `grep -c './qa-evidence.jsonl' /var/lib/qa/state-snapshot-text.txt`; expect the next battery's snapshot to return 0 for that token and the probe to exit 0."),
+    ("zero-grep-nonzero-expect-still-fails", "REJECT",
+     "PASS: run `grep -c './Other-Invented.jsonl' /var/lib/qa/snap.txt`; expect the count to be 1 and the probe to exit 0."),
+    ("absence-shape-does-not-leak", "REJECT",
+     "PASS: the snapshot contains no ./qa-evidence.jsonl and the probe exits 0; the shipped ./Third-Invented.jsonl parses against the spec."),
 ]
 
 

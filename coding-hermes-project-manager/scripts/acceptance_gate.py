@@ -92,9 +92,11 @@ _BUNKER_QA_FLAGS = {'--expect', '--evidence', '--event', '--keep', '--ttl', '--s
 def _is_absence_subject(text: str, token: str) -> bool:
     """True when `token` is named in `text` as a path that must NOT exist.
 
-    Two sanctioned shapes, both requiring an EXACT path match on the subject:
+    Four sanctioned shapes, all requiring an EXACT path match on the subject:
       * `test ! -e|! -f <token>`         — negation test
       * `git log|show ... -- <token>`    — history query proving zero commits
+      * `contains no <token>`            — natural-language absence assertion
+      * `grep -c '<token>' ...` + `expect ... 0` — zero-count proof
     A prefix such as `~/<repo>/` is not equal to the bare relative token, so
     an exemption granted to one arm can never silence another arm's citation.
     """
@@ -106,6 +108,24 @@ def _is_absence_subject(text: str, token: str) -> bool:
         for word in m.group(1).split():
             word = word.strip('`\'";|)')
             if word and os.path.normpath(word.lstrip('./')) == want:
+                return True
+    # Natural-language absence: "the snapshot contains no <token>" — the path is
+    # named precisely to prove it must NOT appear (proven 2026-11-22 PM tick:
+    # QA-HERMES-CANOPY-060's anti-latch arm). Exact subject match only.
+    for m in re.finditer(r'contains?\s+no\s+[`\'"]?([^\s`\'";|)]+)', text):
+        if os.path.normpath(m.group(1).lstrip('./')) == want:
+            return True
+    # Zero-count grep arm: `grep -c '<token>' <file>` whose stated expectation
+    # is zero (proven 2026-11-22 PM tick, same row: "expect ... to return 0 for
+    # that token"). The FIRST number after "expect" must be the 0 — scanning for
+    # any 0 in the tail is leaky: "...expect the count to be 1 and the probe to
+    # exit 0" carries an unrelated 0 in the outcome phrase, and a grep -c
+    # expecting a NONZERO count is an existence arm that must keep failing.
+    for m in re.finditer(r'grep\s+-c\s+[`\'"]([^\s`\'"]+)[`\'"]', text):
+        if os.path.normpath(m.group(1).lstrip('./')) == want:
+            tail = text[m.end():m.end() + 200]
+            nz = re.search(r'\bexpect\D*?(\d+)', tail, re.IGNORECASE)
+            if nz and int(nz.group(1)) == 0:
                 return True
     return False
 
@@ -434,6 +454,21 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # still FAILs; the stale pre-fix copy FAILs the real-flag fixture).
     if re.search(r'\bgitreins\s+(task\s+complete|judge)\b', text) and '--skip-tier2' in text:
         flags -= {'--skip-tier2'}
+    # bunker list --status / bunker destroy --purge are real bunker CLI flags
+    # (verified live 2026-11-22 PM tick: `bunker list --help` documents
+    # "--status string   Filter by status: running, stopped, all" and
+    # `bunker destroy --help` documents "--purge   Shorthand for
+    # --archive=false: delete the home with NO archive and NO copy kept").
+    # bunker is a host binary, so no tracked file in a consuming repo can spell
+    # these — QA-HERMES-CANOPY-50's destroy-recovery arms read as invented.
+    # Scoped per owning subcommand like the git blocks: the criterion must
+    # invoke `bunker list` AND name --status (resp. `bunker destroy` AND
+    # --purge), so an invented flag on any other tool still fails (red-proved
+    # in the fixtures run below).
+    if re.search(r'\bbunker\s+list\b', text) and re.search(r'--status\b', text):
+        flags -= {'--status'}
+    if re.search(r'\bbunker\s+destroy\b', text) and re.search(r'--purge\b', text):
+        flags -= {'--purge'}
     # ruff --select / --statistics are real ruff flags (verified live 2026-11-21:
     # `ruff check --help` prints both, ruff 0.15.22) scoped to a criterion that
     # invokes ruff — TR-CMPLX-001's statistics arm read as invented otherwise.
