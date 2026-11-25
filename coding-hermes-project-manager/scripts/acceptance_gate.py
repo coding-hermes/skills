@@ -150,6 +150,73 @@ def repo_paths(repo: str) -> set[str]:
         return set()
 
 
+_IGNORE_CACHE: dict[tuple[str, str], bool] = {}
+
+
+def _is_ignored_by_repo(repo: str, token: str) -> bool:
+    """True when the repo's own ignore rules match `token` (git check-ignore).
+
+    Class-B generated-artifact false negative (MY-GAP-067): a criterion citing
+    the built CLI entrypoint (packages/cli/dist/index.js) or any gitignored
+    build output can never appear in git ls-files — the file is BY DESIGN
+    untracked — so the membership check failed the row even when the artifact
+    is real. Ask the repo's ignore rules instead of the working tree: a token
+    matched by an ignore rule is generated output, not an invented reference,
+    whether or not it already exists on disk (a previous exemption via
+    os.path.exists passed B2 only while dist/ was checked out — by accident).
+    A truly absent, NOT-ignored file still fails (red-proved: the
+    docs/getting-started/definitely-absent-file-example.md control arm).
+    """
+    key = (repo, token)
+    if key in _IGNORE_CACHE:
+        return _IGNORE_CACHE[key]
+    try:
+        out = subprocess.run(['git', '-C', repo, 'check-ignore', '-v', '--', token],
+                             capture_output=True, text=True, timeout=30)
+        ignored = out.returncode == 0
+    except Exception:                                          # noqa: BLE001
+        ignored = False   # a failed probe must not manufacture an exemption
+    _IGNORE_CACHE[key] = ignored
+    return ignored
+
+
+def _relative_link_resolves(text: str, repo: str, files: set[str],
+                            token: str, pos: int) -> bool:
+    """True when a `../`-relative path token resolves against the citing document.
+
+    Class-A relative-link false negative (MY-GAP-067): a criterion that follows a
+    sibling markdown link inside a docs subdirectory ("Open
+    docs/getting-started/troubleshooting.md and follow its relative link
+    ../faq.md") was rejected as 'path not in repo' because `../faq.md` can never
+    be a tracked path. Resolve the token against the citing document's directory
+    (the nearest .md path mentioned EARLIER in the same criterion) and accept it
+    when that target exists in the repo; an unresolved relative token stays a
+    failure (red-proved 2026-11-25: ../invented-*.md beside a real doc still
+    REJECTs, and a relative token with no citing document still REJECTs).
+    """
+    if not token.startswith('../'):
+        return False
+    doc = None
+    for m in re.finditer(r'[A-Za-z0-9_./-]+\.(?:md|mdx|adoc|rst)', text[:pos]):
+        doc = m.group(0)
+    if not doc:
+        return False
+    resolved = os.path.normpath(os.path.join(os.path.dirname(doc), token))
+    # Repo-boundary guard (tier-2 derived FAIL, MY-GAP-067 closeout re-grade
+    # 2026-11-25): a resolved token that normalizes ABOVE the repo root
+    # ('../../../…') or is absolute must never pass — the old os.path.exists
+    # check made the gate validate arbitrary HOST files instead of repo paths.
+    if resolved.startswith('..') or os.path.isabs(resolved):
+        return False
+    if resolved in files or any(f.endswith('/' + resolved) for f in files):
+        return True
+    # Untracked-but-present is only acceptable when the repo's own ignore rules
+    # claim it (generated output, class-B arm) — a bare os.path.exists here
+    # would bypass the tracked-set membership the non-relative branch keeps.
+    return (_is_ignored_by_repo(repo, resolved)
+            and os.path.exists(os.path.join(repo, resolved)))
+
+
 _GREP_CACHE: dict[tuple[str, str], int] = {}
 
 
@@ -254,6 +321,14 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
         if alt_repo and os.path.exists(os.path.join(alt_repo, token)):
             continue
         if files and token not in files and not any(f.endswith('/' + token) for f in files):
+            # (b) MY-GAP-067: a gitignored build output is by design untracked;
+            # consult the repo's ignore rules BEFORE the on-disk fallback so the
+            # arm passes through the ignore-rule path regardless of whether the
+            # artifact already exists on the working tree.
+            if _is_ignored_by_repo(repo, token):
+                print(f'info: generated-artifact (gitignored) path exempted: {token}',
+                      file=sys.stderr)
+                continue
             if os.path.exists(os.path.join(repo, token)):
                 continue
             # One contextually-exempt occurrence exempts the TOKEN: a criterion can
@@ -286,6 +361,10 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
             # the UNRELATED `specs/AGENTS.md` cited in the next arm — the audit
             # went green on an arm that still fails standalone (skip-guard trap).
             if _is_absence_subject(text, token):
+                continue
+            # (a) MY-GAP-067: a `../`-relative link token resolves against the
+            # citing document's directory; only an unresolved token is reported.
+            if _relative_link_resolves(text, repo, files, token, m.start()):
                 continue
             problems.append(f'path not in repo: {token}')
 
@@ -518,17 +597,6 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # (red-proved in fixtures run below).
     if re.search(r'\bgit\s+(?:diff|log|show|status)\b', text) and re.search(r'--(?:num)?stat\b', text):
         flags -= {'--stat', '--numstat'}
-    # git diff/log/show --name-status is real git plumbing (verified live 2026-11-25
-    # PM tick heading-pm-2026-11-25-15-43-57 on the heading repo: `git show
-    # --name-status a8d207d8c` exits 0 printing the per-file D/A lines, and
-    # `git diff --name-status <a> <b>` prints the same shape). BOARD-001's
-    # fail-first arm cites it; the gate read it as invented because no tracked
-    # file in a consuming repo spells it. Scoped like the --stat block above:
-    # the criterion must invoke a git subcommand that owns the flag AND name
-    # the flag itself, so `go test ./... --name-status` and an invented sibling
-    # spelling beside git still fail.
-    if re.search(r'\bgit\s+(?:diff|log|show|status)\b', text) and re.search(r'--name-status\b', text):
-        flags -= {'--name-status'}
     # git tag --sort=<key> is real git plumbing (verified live 2026-11-22 PM tick,
     # boardctl repo: `git tag --sort=-creatordate` exits 0 printing v0.5.0/v0.4.0/
     # v0.3.0, and `git tag --help` documents "-n, --sort=<key>"). QA-BOARDCTL-009's
@@ -549,6 +617,18 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # an invented ls-files flag still fail (red-proved in the fixtures run below).
     if re.search(r'\bgit\s+ls-files\b', text) and re.search(r'--exclude-standard\b', text):
         flags -= {'--exclude-standard'}
+    # git --name-status is real git plumbing (verified live 2026-11-25 PM tick
+    # heading: `git show --name-status a8d207d8c` exits 0 and prints
+    # "D .coding-hermes/board/reports/ops-heading-prod-crm-key-20261111.md";
+    # `git show --help` documents it, "Show only names and status of changed
+    # files"). BOARD-001's fail-first evidence arm cites it; no tracked repo
+    # file can spell the flag, so the repo-grep reads it as invented. Scoped
+    # per owning subcommand like the git diff block: the criterion must invoke
+    # git show/diff/log AND name --name-status, so an invented neighbour
+    # (--name-statusz) and the same flag on any other tool still fail
+    # (red-proved in fixtures run below).
+    if re.search(r'\bgit\s+(?:show|diff|log)\b', text) and re.search(r'--name-status\b', text):
+        flags -= {'--name-status'}
     # git log --all / git rev-list --all — verified live 2026-11-21 PM tick
     # (`git log --help` documents --all, "pretend as if all the refs ... are
     # listed on the command line", and `git log --all --oneline --no-walk`
@@ -606,6 +686,17 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # script and --root beside `go test` both still REJECT).
     if re.search(r'doc_inbound_census\.py', text) and re.search(r'--root\b', text):
         flags -= {'--root'}
+    # External-CLI flag: `act --pull` is a real nektos/act flag (verified live
+    # 2026-11-25 MY-GAP-067: `act --help` on the host act prints
+    # "-p, --pull  pull docker image(s) even if already present (default true)"),
+    # but act is a host-installed binary, so no tracked repo file can spell the
+    # flag and the repo-grep can only read it as invented. General class-B
+    # external-flag shape (MY-GAP-067): the exemption is scoped to a criterion
+    # that names the external binary that owns the flag, so an invented
+    # neighbour flag beside act (--pullz) and --pull on any other tool
+    # (`go test --pull`) still fail.
+    if re.search(r'\bact\b', text):
+        flags -= {'--pull'}
     # curl -k/--insecure is real curl plumbing (verified live 2026-11-21 PM tick:
     # `curl --help all` prints " -k, --insecure    Allow insecure server connections"),
     # but the extractor only knows flags some tracked file spells. Criteria legitimately
