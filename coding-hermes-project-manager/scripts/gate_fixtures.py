@@ -44,6 +44,13 @@ CASES = [
      "PASS: `go vet ./... --quality-async` exits 0 and prints no output, so the arm is clean."),
     ("invented-flag-on-other-gitreins-verb-fails", "REJECT",
      "PASS: `gitreins task complete TRBL-999 --quality-async` exits 0 and the row reads complete."),
+    # Repo-root escape guard (MY-GAP-067 closeout re-grade, tier-2 derived FAIL):
+    # a ../../../ token normalized above the repo root must NOT pass by host-disk
+    # existence, even when the host file happens to exist — the relative-link
+    # helper's repo-boundary guard makes the path-resolution arm irrelevant here
+    # and the token stays 'path not in repo'.
+    ("relative-link-escape-still-fails", "REJECT",
+     "PASS: Open docs/getting-started/troubleshooting.md and follow its relative link ../../../Invented-Gone.md; expect a 200 page that grep finds the heading Invented-Gone in."),
     # curl --insecure scoping (voice-mode VOICE-8): a PROHIBITION of the real curl
     # bypass flag passes inside a curl criterion, while the same token on another
     # tool and an invented curl-ish flag both still FAIL.
