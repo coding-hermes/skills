@@ -100,6 +100,14 @@ CASES = [
      "PASS: `python3 doc_inbound_census.py --rootz /srv/probe-repo` exits 0 and prints the orphan-page census."),
     ("root-flag-on-other-tool-still-fails", "REJECT",
      "PASS: `go test ./... --root ./` exits 0 and prints ok, so the arm is clean."),
+    # auditctl -k scoping (hermes-canopy CAN-OPS-006, 2026-11-25 PM tick): auditctl
+    # is not a test runner — its `-k <key>` is an operator-invented AUDIT-RULE key,
+    # so the named-symbol arm must NOT repo-grep it, while an invented pytest `-k`
+    # token on any other command still FAILs with the same message.
+    ("auditctl-operator-key-passes", "PASS",
+     "PASS: `sudo auditctl -a always,exit -F arch=b64 -S pidfd_send_signal -F a2=9 -k canopykill_fx` adds the pidfd audit rule (consent-block recorded on unattended surfaces). Expected outcome: auditctl -l lists the rule with key canopykill_fx."),
+    ("invented-pytest-k-token-still-fails", "REJECT",
+     "PASS: run `pytest -k canopytest_fx`; expect exit 0 and the invented suite as the only match."),
 ]
 
 

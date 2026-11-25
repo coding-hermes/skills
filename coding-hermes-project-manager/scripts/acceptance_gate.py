@@ -315,21 +315,18 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
 
     # A NAMED symbol must exist. A path check alone passes a criterion naming a test
     # function or CLI flag that was invented: the file is real, the name is not.
-    # auditctl-scoped -k (2026-11-25 PM tick, hermes-canopy CAN-OPS-006): auditctl is
-    # NOT a test runner — `auditctl … -k <key>` names an AUDIT-RULE key the operator
-    # invents at arm-write time (no repo test can ever contain it), so capturing it
-    # here reds every honest audit-rule arm with 'names a test that does not exist'.
-    # Skip the -k capture only when the criterion's runner is auditctl; every other
-    # -k (pytest, ginkgo) still grades. Red-proven via validate: an auditctl -k
-    # invented-key fixture PASSES, a pytest -k invented-token fixture still REJECTs
-    # with this same message. Fixture pair lives in gate_fixtures.py.
+    # auditctl `-k <key>` names an AUDIT-RULE key the operator invents at arm-write
+    # time (e.g. `-k canopykill3`), not a test-filter symbol the repo must already
+    # contain — repo-grepping it false-FAILs every pidfd/audit arm (proven live
+    # 2026-11-25 PM tick hermes-canopy: CAN-OPS-006's own auditctl arm was the
+    # audit's single FAIL, 22 open rows 1 failing). Scoped to criteria invoking
+    # auditctl, so an invented pytest/ginkgo `-k` token on any other command still
+    # fails (kept as a red fixture in fixtures run below).
+    audit_ctx = bool(re.search(r'\bauditctl\b', text, re.I))
     named = set()
-    auditctl_only = 'auditctl' in text and 'pytest' not in text
-    for pat in (r"-run\s+['\"]?([A-Za-z_][\w/.-]*)",
-                (None if auditctl_only
-                 else r"-k\s+['\"]?([A-Za-z_]\w*)"),
+    for pat in (r"-run\s+['\"]?([A-Za-z_][\w/.-]*)", r"-k\s+['\"]?([A-Za-z_]\w*)",
                 r'\bTest[A-Z]\w{3,}', r'::(Test\w+)'):
-        if pat is None:
+        if audit_ctx and pat == r"-k\s+['\"]?([A-Za-z_]\w*)":
             continue
         named.update(re.findall(pat, text))
     for name in list(named)[:6]:
