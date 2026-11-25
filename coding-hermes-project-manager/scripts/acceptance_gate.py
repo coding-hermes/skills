@@ -315,9 +315,22 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
 
     # A NAMED symbol must exist. A path check alone passes a criterion naming a test
     # function or CLI flag that was invented: the file is real, the name is not.
+    # auditctl-scoped -k (2026-11-25 PM tick, hermes-canopy CAN-OPS-006): auditctl is
+    # NOT a test runner — `auditctl … -k <key>` names an AUDIT-RULE key the operator
+    # invents at arm-write time (no repo test can ever contain it), so capturing it
+    # here reds every honest audit-rule arm with 'names a test that does not exist'.
+    # Skip the -k capture only when the criterion's runner is auditctl; every other
+    # -k (pytest, ginkgo) still grades. Red-proven via validate: an auditctl -k
+    # invented-key fixture PASSES, a pytest -k invented-token fixture still REJECTs
+    # with this same message. Fixture pair lives in gate_fixtures.py.
     named = set()
-    for pat in (r"-run\s+['\"]?([A-Za-z_][\w/.-]*)", r"-k\s+['\"]?([A-Za-z_]\w*)",
+    auditctl_only = 'auditctl' in text and 'pytest' not in text
+    for pat in (r"-run\s+['\"]?([A-Za-z_][\w/.-]*)",
+                (None if auditctl_only
+                 else r"-k\s+['\"]?([A-Za-z_]\w*)"),
                 r'\bTest[A-Z]\w{3,}', r'::(Test\w+)'):
+        if pat is None:
+            continue
         named.update(re.findall(pat, text))
     for name in list(named)[:6]:
         if alt_repo and _greps(alt_repo, name):
@@ -575,6 +588,16 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # still fails.
     if re.search(r'doc_inbound_census\.py', text) and re.search(r'--control\b', text):
         flags -= {'--control'}
+    # doc_inbound_census.py --root — verified live 2026-11-25 PM tick digest-pm
+    # (digest DOC-028): argparse declares "--root" REQUIRED at
+    # coding-hermes-docs/scripts/doc_inbound_census.py:62 (--help prints it),
+    # but the script ships in the skills tree, so no tracked repo file can
+    # spell it — the audit read the reachability-census re-run arm as invented.
+    # Scoped to criteria invoking the script, so an invented --root beside any
+    # other tool still fails (red-proven below/in fixtures: --rootz beside the
+    # script and --root beside `go test` both still REJECT).
+    if re.search(r'doc_inbound_census\.py', text) and re.search(r'--root\b', text):
+        flags -= {'--root'}
     # curl -k/--insecure is real curl plumbing (verified live 2026-11-21 PM tick:
     # `curl --help all` prints " -k, --insecure    Allow insecure server connections"),
     # but the extractor only knows flags some tracked file spells. Criteria legitimately

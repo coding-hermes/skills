@@ -90,6 +90,16 @@ CASES = [
      "PASS: run `grep -c './Other-Invented.jsonl' /var/lib/qa/snap.txt`; expect the count to be 1 and the probe to exit 0."),
     ("absence-shape-does-not-leak", "REJECT",
      "PASS: the snapshot contains no ./qa-evidence.jsonl and the probe exits 0; the shipped ./Third-Invented.jsonl parses against the spec."),
+    # doc_inbound_census.py --root scoping (digest DOC-028, 2026-11-25 PM tick):
+    # the REQUIRED --root flag of the coding-hermes-docs inbound census passes
+    # inside a criterion invoking the script, while an invented neighbor flag
+    # beside the script and the same flag on another tool both still FAIL.
+    ("doc-census-root-flag-passes", "PASS",
+     "PASS: `python3 doc_inbound_census.py --root /srv/probe-repo` exits 0 and prints the orphan-page census; the three named docs no longer appear among zero-inbound pages."),
+    ("invented-doc-census-flag-still-fails", "REJECT",
+     "PASS: `python3 doc_inbound_census.py --rootz /srv/probe-repo` exits 0 and prints the orphan-page census."),
+    ("root-flag-on-other-tool-still-fails", "REJECT",
+     "PASS: `go test ./... --root ./` exits 0 and prints ok, so the arm is clean."),
 ]
 
 
