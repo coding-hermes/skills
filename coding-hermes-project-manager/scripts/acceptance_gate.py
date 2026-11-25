@@ -518,6 +518,17 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # (red-proved in fixtures run below).
     if re.search(r'\bgit\s+(?:diff|log|show|status)\b', text) and re.search(r'--(?:num)?stat\b', text):
         flags -= {'--stat', '--numstat'}
+    # git diff/log/show --name-status is real git plumbing (verified live 2026-11-25
+    # PM tick heading-pm-2026-11-25-15-43-57 on the heading repo: `git show
+    # --name-status a8d207d8c` exits 0 printing the per-file D/A lines, and
+    # `git diff --name-status <a> <b>` prints the same shape). BOARD-001's
+    # fail-first arm cites it; the gate read it as invented because no tracked
+    # file in a consuming repo spells it. Scoped like the --stat block above:
+    # the criterion must invoke a git subcommand that owns the flag AND name
+    # the flag itself, so `go test ./... --name-status` and an invented sibling
+    # spelling beside git still fail.
+    if re.search(r'\bgit\s+(?:diff|log|show|status)\b', text) and re.search(r'--name-status\b', text):
+        flags -= {'--name-status'}
     # git tag --sort=<key> is real git plumbing (verified live 2026-11-22 PM tick,
     # boardctl repo: `git tag --sort=-creatordate` exits 0 printing v0.5.0/v0.4.0/
     # v0.3.0, and `git tag --help` documents "-n, --sort=<key>"). QA-BOARDCTL-009's
