@@ -566,6 +566,15 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
         flags -= {'--batch-check'}
     if re.search(r'\bgit\s+clone\b', text) and re.search(r'--mirror\b', text):
         flags -= {'--mirror'}
+    # External-skill-script flag: `doc_inbound_census.py --control <file>` is a real
+    # flag of the coding-hermes-docs inbound-link census (verified live 2026-11-25 PM
+    # tick hermes-dagger DOC-034: argparse declares "--control" with nargs='*' at
+    # ~/.hermes/skills/coding-hermes/coding-hermes-docs/scripts/doc_inbound_census.py:67),
+    # but the script ships in the skills tree, so no tracked repo file can ever spell
+    # it. Scoped to criteria invoking the script, so an invented --control elsewhere
+    # still fails.
+    if re.search(r'doc_inbound_census\.py', text) and re.search(r'--control\b', text):
+        flags -= {'--control'}
     # curl -k/--insecure is real curl plumbing (verified live 2026-11-21 PM tick:
     # `curl --help all` prints " -k, --insecure    Allow insecure server connections"),
     # but the extractor only knows flags some tracked file spells. Criteria legitimately
