@@ -34,11 +34,45 @@ re-running would append a duplicate event).
 Proven: ring-runner tick 34 (2026-08-02).
 """
 import argparse
+import fcntl
 import json
 import os
 import subprocess
 
 BOARD_FILES = ("events.jsonl", "board.jsonl")
+
+BOARD_LOCK_FILE = ".lock"
+
+
+def acquire_board_write_lock(bdir):
+    """QA-GITREINS-16: exclusive advisory flock on <bdir>/.lock - the SAME
+    sidecar lock file boardctl's write guard uses (coding-hermes-boardctl
+    internal/board/lock.go, boardLockFileName = ".lock") - held from BEFORE
+    the events.jsonl id-derivation read until AFTER the header rewrite.
+    Advisory: protects only writers that acquire it; flock releases on
+    process death."""
+    f = open(os.path.join(bdir, BOARD_LOCK_FILE), "a+")
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    return f
+
+
+def board_line_count(path):
+    with open(path) as f:
+        return sum(1 for line in f if line.strip())
+
+
+def refuse_drift(path, snapshot):
+    """QA-GITREINS-16 drift refusal: exit 2, write nothing, when the caller's
+    pre-lock snapshot no longer matches disk. A stale events view mints a
+    DUPLICATE event id (the 2026-11-15 60789922 signature: ids ...101/...102
+    reused for different events)."""
+    current = board_line_count(path)
+    if snapshot is not None and current != snapshot:
+        print(f"DRIFT REFUSED: {path} has {current} lines but the caller "
+              f"snapshot says {snapshot} - another writer moved the board "
+              f"during this invocation; re-read the board and retry")
+        return True
+    return False
 
 
 def stage_board_files(bdir, files, commit_message=None):
@@ -92,6 +126,9 @@ def main() -> int:
     ap.add_argument("detail_json")
     ap.add_argument("--ts", default=None, help="timestamp, default now")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE header updates")
+    ap.add_argument("--snapshot-events-lines", type=int, default=None,
+                    help="line count of events.jsonl read by the caller BEFORE this "
+                         "invocation; mismatch under the write lock refuses with exit 2")
     args = ap.parse_args()
 
     board = f"{args.repo.rstrip('/')}/.coding-hermes/board"
@@ -108,54 +145,61 @@ def main() -> int:
         detail = json.load(f)
     detail_json = json.dumps(detail, ensure_ascii=False)
 
-    # explicit id sequence: MAX(id)+1 across JSONL (source of truth)
-    max_id = 0
-    with open(events) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+    lock = acquire_board_write_lock(board)
+    try:
+        if refuse_drift(f"{board}/events.jsonl", args.snapshot_events_lines):
+            return 2
+
+        # explicit id sequence: MAX(id)+1 across JSONL (source of truth)
+        max_id = 0
+        with open(events) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                    eid = e.get("id", 0)
+                    if isinstance(eid, str):
+                        eid = int(eid) if eid.isdigit() else 0
+                    if eid > max_id:
+                        max_id = eid
+                except json.JSONDecodeError:
+                    print(f"WARN: skipping malformed events.jsonl line: {line[:80]}")
+        next_id = max_id + 1
+
+        event = {
+            "id": next_id,
+            "timestamp": ts,
+            "event_type": "audit",
+            "task_id": None,
+            "actor": "foreman",
+            "detail": detail_json,
+            "tick_number": args.tick_number,
+        }
+        with open(events, "a") as f:
+            f.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+        print(f"events.jsonl appended id={next_id} tick={args.tick_number}")
+
+        # header merge
+        with open(header) as f:
+            hdr = json.load(f)
+        hdr["last_tick"] = ts
+        hdr["updated_at"] = ts
+        for kv in args.set:
+            k, _, v = kv.partition("=")
+            if not k:
+                print(f"WARN: skipping malformed --set {kv}")
                 continue
-            try:
-                e = json.loads(line)
-                eid = e.get("id", 0)
-                if isinstance(eid, str):
-                    eid = int(eid) if eid.isdigit() else 0
-                if eid > max_id:
-                    max_id = eid
-            except json.JSONDecodeError:
-                print(f"WARN: skipping malformed events.jsonl line: {line[:80]}")
-    next_id = max_id + 1
-
-    event = {
-        "id": next_id,
-        "timestamp": ts,
-        "event_type": "audit",
-        "task_id": None,
-        "actor": "foreman",
-        "detail": detail_json,
-        "tick_number": args.tick_number,
-    }
-    with open(events, "a") as f:
-        f.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
-    print(f"events.jsonl appended id={next_id} tick={args.tick_number}")
-
-    # header merge
-    with open(header) as f:
-        hdr = json.load(f)
-    hdr["last_tick"] = ts
-    hdr["updated_at"] = ts
-    for kv in args.set:
-        k, _, v = kv.partition("=")
-        if not k:
-            print(f"WARN: skipping malformed --set {kv}")
-            continue
-        if v.isdigit():
-            v = int(v)
-        hdr[k] = v
-    with open(header, "w") as f:
-        json.dump(hdr, f, default=str)
-        f.write("\n")
-    print("board.jsonl header updated")
+            if v.isdigit():
+                v = int(v)
+            hdr[k] = v
+        with open(header, "w") as f:
+            json.dump(hdr, f, default=str)
+            f.write("\n")
+        print("board.jsonl header updated")
+    finally:
+        lock.close()  # releases the flock; no stale lock survives a crash
     return stage_board_files(board, BOARD_FILES)
 
 

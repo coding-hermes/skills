@@ -24,6 +24,7 @@ it prints a NOTICE and skips staging instead of failing; a git failure is report
 never raised (the write already happened).
 """
 import argparse
+import fcntl
 import json
 import os
 import subprocess
@@ -31,6 +32,41 @@ import sys
 from datetime import datetime
 
 BOARD_FILES = ("tasks.jsonl",)
+
+BOARD_LOCK_FILE = ".lock"
+
+
+def acquire_board_write_lock(bdir):
+    """QA-GITREINS-16: exclusive advisory flock on <bdir>/.lock - the SAME
+    sidecar lock file boardctl's write guard uses (coding-hermes-boardctl
+    internal/board/lock.go, boardLockFileName = ".lock") - held from BEFORE
+    the tasks.jsonl re-read until AFTER the rewrite (and the staging, which
+    publishes the written bytes). This script is a READ-MODIFY-WRITE-ALL
+    writer: a stale snapshot plus the full rewrite is exactly the
+    2026-11-15 60789922 board damage (RELEASE-025 row deleted, RELEASE-023
+    reverted). Advisory: protects only writers that acquire it; flock
+    releases on process death."""
+    f = open(os.path.join(bdir, BOARD_LOCK_FILE), "a+")
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    return f
+
+
+def board_line_count(path):
+    with open(path) as f:
+        return sum(1 for line in f if line.strip())
+
+
+def refuse_drift(path, snapshot):
+    """QA-GITREINS-16 drift refusal: exit 2, write nothing, when the caller's
+    pre-lock snapshot no longer matches disk - another writer moved the board
+    and a rewrite from the stale view would silently revert their rows."""
+    current = board_line_count(path)
+    if snapshot is not None and current != snapshot:
+        print(f"DRIFT REFUSED: {path} has {current} lines but the caller "
+              f"snapshot says {snapshot} - another writer moved the board "
+              f"during this invocation; re-read the board and retry")
+        return True
+    return False
 
 
 def stage_board_files(bdir, files, commit_message=None):
@@ -83,6 +119,9 @@ def main() -> int:
     ap.add_argument("task_id")
     ap.add_argument("fields", nargs="+", help="FIELD=VALUE pairs")
     ap.add_argument("--ts", default=None)
+    ap.add_argument("--snapshot-tasks-lines", type=int, default=None,
+                    help="line count of tasks.jsonl read by the caller BEFORE this "
+                         "invocation; mismatch under the write lock refuses with exit 2")
     args = ap.parse_args()
 
     board = f"{args.repo.rstrip('/')}/.coding-hermes/board"
@@ -96,25 +135,32 @@ def main() -> int:
             continue
         updates[k] = v
 
-    rows = []
-    with open(f"{board}/tasks.jsonl") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                rows.append(json.loads(line))
-    found = False
-    for r in rows:
-        if r["id"] == args.task_id:
-            r.update(updates)
-            found = True
-    if not found:
-        print(f"ERROR: task {args.task_id} not found in tasks.jsonl")
-        sys.exit(1)
-    with open(f"{board}/tasks.jsonl", "w") as f:
+    lock = acquire_board_write_lock(board)
+    try:
+        if refuse_drift(f"{board}/tasks.jsonl", args.snapshot_tasks_lines):
+            return 2
+
+        rows = []
+        with open(f"{board}/tasks.jsonl") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        found = False
         for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    print(f"tasks.jsonl updated {args.task_id}: {sorted(updates)}")
-    return stage_board_files(board, BOARD_FILES)
+            if r["id"] == args.task_id:
+                r.update(updates)
+                found = True
+        if not found:
+            print(f"ERROR: task {args.task_id} not found in tasks.jsonl")
+            sys.exit(1)
+        with open(f"{board}/tasks.jsonl", "w") as f:
+            for r in rows:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        print(f"tasks.jsonl updated {args.task_id}: {sorted(updates)}")
+        return stage_board_files(board, BOARD_FILES)
+    finally:
+        lock.close()  # releases the flock; no stale lock survives a crash
 
 
 if __name__ == "__main__":

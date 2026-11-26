@@ -50,11 +50,54 @@ NOTICE and skips staging instead of failing.
 """
 import argparse
 import datetime
+import fcntl
 import json
 import os
 import subprocess
 
 BOARD_FILES = ("events.jsonl", "tasks.jsonl", "board.jsonl")
+
+BOARD_LOCK_FILE = ".lock"
+
+
+def acquire_board_write_lock(bdir):
+    """QA-GITREINS-16: exclusive advisory flock on <bdir>/.lock.
+
+    .lock is the SAME sidecar lock file boardctl's write guard uses
+    (coding-hermes-boardctl internal/board/lock.go, boardLockFileName = ".lock"),
+    so these scripts and boardctl serialize against each other instead of
+    racing read-modify-write windows. Hold it from BEFORE the first board
+    read until AFTER the last write (and the staging/commit, which publishes
+    the written bytes). Advisory: it protects only writers that acquire it -
+    that is exactly the fleet's writer set once every writer is lock-bearing.
+    flock releases on process death, so a crashed writer leaves no stale lock.
+    """
+    f = open(os.path.join(bdir, BOARD_LOCK_FILE), "a+")
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    return f
+
+
+def board_line_count(path):
+    with open(path) as f:
+        return sum(1 for line in f if line.strip())
+
+
+def refuse_drift(path, snapshot):
+    """Exit 2 when the caller's pre-lock snapshot no longer matches disk.
+
+    A stale snapshot means another writer moved the board between the
+    caller's read and this lock acquisition - writing back from it is the
+    60789922 failure (2026-11-15: a QA closeout rewrote tasks.jsonl from a
+    stale view, deleting the RELEASE-025 row and reverting RELEASE-023, and
+    reused event ids ...101/...102). Refuse loudly, write nothing.
+    """
+    current = board_line_count(path)
+    if snapshot is not None and current != snapshot:
+        print(f"DRIFT REFUSED: {path} has {current} lines but the caller "
+              f"snapshot says {snapshot} - another writer moved the board "
+              f"during this invocation; re-read the board and retry")
+        return True
+    return False
 
 
 def numeric_event_ids(events):
@@ -141,60 +184,76 @@ def main():
     ap.add_argument("--commit", "--commit-message", dest="commit_message", default=None,
                     help="also git-commit the three board files with this message "
                          "(atomic close; omit to only write + stage)")
+    ap.add_argument("--snapshot-tasks-lines", type=int, default=None,
+                    help="line count of tasks.jsonl read by the caller BEFORE this "
+                         "invocation; if it no longer matches disk once the write "
+                         "lock is held, refuse with exit 2 instead of writing")
+    ap.add_argument("--snapshot-events-lines", type=int, default=None,
+                    help="line count of events.jsonl read by the caller BEFORE this "
+                         "invocation; mismatch under the lock refuses with exit 2")
     args = ap.parse_args()
 
     bdir = f"{args.repo.rstrip('/')}/.coding-hermes/board"
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.000000")
 
-    with open(f"{bdir}/events.jsonl") as f:
-        events = [json.loads(l) for l in f if l.strip()]
-    nid = next_event_id(events)
-    new_events = [
-        {"id": nid, "timestamp": now, "event_type": "task_completed", "task_id": args.task_id,
-         "actor": "foreman", "detail": json.dumps({"commit": args.commit, "guard": args.guard, "judge": args.judge, "tick": args.tick}),
-         "tick_number": args.tick},
-        {"id": nid + 1, "timestamp": now, "event_type": "audit", "task_id": None, "actor": "foreman",
-         "detail": json.dumps({"tick": args.tick, "summary": args.summary}), "tick_number": args.tick},
-    ]
-    with open(f"{bdir}/events.jsonl", "a") as f:
-        for e in new_events:
-            f.write(json.dumps(e, separators=(",", ":")) + "\n")
+    lock = acquire_board_write_lock(bdir)
+    try:
+        if refuse_drift(f"{bdir}/tasks.jsonl", args.snapshot_tasks_lines):
+            return 2
+        if refuse_drift(f"{bdir}/events.jsonl", args.snapshot_events_lines):
+            return 2
 
-    tk_path = f"{bdir}/tasks.jsonl"
-    with open(tk_path) as f:
-        tasks = [json.loads(l) for l in f if l.strip()]
-    row = next((t for t in tasks if t["id"] == args.task_id), None)
-    if row is None:
-        print(f"WARN: task {args.task_id} not found in tasks.jsonl; row not updated")
-    else:
-        row["status"] = "complete"
-        row["worker_status"] = "complete"
-        row["completed_at"] = now
-        row["updated_at"] = now
-        row["commit_hash"] = args.commit
-        row["guard_result"] = args.guard
-        if args.ci:
-            row["ci_result"] = args.ci
-        if args.note:
-            row["foreman_note"] = args.note
-        with open(tk_path, "w") as f:
-            for t in tasks:
-                f.write(json.dumps(t, separators=(",", ":")) + "\n")
+        with open(f"{bdir}/events.jsonl") as f:
+            events = [json.loads(l) for l in f if l.strip()]
+        nid = next_event_id(events)
+        new_events = [
+            {"id": nid, "timestamp": now, "event_type": "task_completed", "task_id": args.task_id,
+             "actor": "foreman", "detail": json.dumps({"commit": args.commit, "guard": args.guard, "judge": args.judge, "tick": args.tick}),
+             "tick_number": args.tick},
+            {"id": nid + 1, "timestamp": now, "event_type": "audit", "task_id": None, "actor": "foreman",
+             "detail": json.dumps({"tick": args.tick, "summary": args.summary}), "tick_number": args.tick},
+        ]
+        with open(f"{bdir}/events.jsonl", "a") as f:
+            for e in new_events:
+                f.write(json.dumps(e, separators=(",", ":")) + "\n")
 
-    hd_path = f"{bdir}/board.jsonl"
-    with open(hd_path) as f:
-        hdr = json.load(f)
-    hdr["last_tick"] = now
-    hdr["ticks_total"] = args.tick
-    hdr["ticks_idle"] = 0
-    hdr["last_commit"] = args.commit
-    hdr["updated_at"] = now
-    with open(hd_path, "w") as f:
-        json.dump(hdr, f, default=str)
-        f.write("\n")
+        tk_path = f"{bdir}/tasks.jsonl"
+        with open(tk_path) as f:
+            tasks = [json.loads(l) for l in f if l.strip()]
+        row = next((t for t in tasks if t["id"] == args.task_id), None)
+        if row is None:
+            print(f"WARN: task {args.task_id} not found in tasks.jsonl; row not updated")
+        else:
+            row["status"] = "complete"
+            row["worker_status"] = "complete"
+            row["completed_at"] = now
+            row["updated_at"] = now
+            row["commit_hash"] = args.commit
+            row["guard_result"] = args.guard
+            if args.ci:
+                row["ci_result"] = args.ci
+            if args.note:
+                row["foreman_note"] = args.note
+            with open(tk_path, "w") as f:
+                for t in tasks:
+                    f.write(json.dumps(t, separators=(",", ":")) + "\n")
 
-    print(f"OK: events [{nid},{nid + 1}] tick {args.tick} commit {args.commit} task {args.task_id}")
-    return stage_board_files(bdir, BOARD_FILES, args.commit_message)
+        hd_path = f"{bdir}/board.jsonl"
+        with open(hd_path) as f:
+            hdr = json.load(f)
+        hdr["last_tick"] = now
+        hdr["ticks_total"] = args.tick
+        hdr["ticks_idle"] = 0
+        hdr["last_commit"] = args.commit
+        hdr["updated_at"] = now
+        with open(hd_path, "w") as f:
+            json.dump(hdr, f, default=str)
+            f.write("\n")
+
+        print(f"OK: events [{nid},{nid + 1}] tick {args.tick} commit {args.commit} task {args.task_id}")
+        return stage_board_files(bdir, BOARD_FILES, args.commit_message)
+    finally:
+        lock.close()  # releases the flock; no stale lock survives a crash
 
 
 if __name__ == "__main__":

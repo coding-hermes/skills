@@ -26,6 +26,7 @@ Steps:
 """
 import argparse
 import datetime
+import fcntl
 import json
 import os
 import sys
@@ -33,6 +34,19 @@ import sys
 BOARD = '~/totalstack/.coding-hermes/board'
 EVENTS = os.path.join(BOARD, 'events.jsonl')
 HEADER = os.path.join(BOARD, 'board.jsonl')
+
+BOARD_LOCK_FILE = '.lock'
+
+
+def acquire_board_write_lock(bdir):
+    """QA-GITREINS-16: exclusive advisory flock on <bdir>/.lock - the SAME
+    sidecar lock file boardctl's write guard uses (coding-hermes-boardctl
+    internal/board/lock.go, boardLockFileName = ".lock") - held across the
+    id-derivation read, the event append and the header rewrite. Advisory:
+    protects only writers that acquire it; flock releases on process death."""
+    f = open(os.path.join(bdir, BOARD_LOCK_FILE), 'a+')
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    return f
 
 
 def main() -> int:
@@ -46,32 +60,36 @@ def main() -> int:
 
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    with open(EVENTS) as f:
-        events = [json.loads(l) for l in f if l.strip()]
-    next_id = max((e.get('id') or 0) for e in events) + 1
-    event = {
-        "id": next_id,
-        "timestamp": now,
-        "event_type": "audit",
-        "task_id": None,
-        "actor": "foreman",
-        "detail": args.detail,
-        "tick_number": args.tick,
-    }
-    with open(EVENTS, 'a') as f:
-        f.write(json.dumps(event) + '\n')
+    lockf = acquire_board_write_lock(os.path.expanduser(BOARD))
+    try:
+        with open(EVENTS) as f:
+            events = [json.loads(l) for l in f if l.strip()]
+        next_id = max((e.get('id') or 0) for e in events) + 1
+        event = {
+            "id": next_id,
+            "timestamp": now,
+            "event_type": "audit",
+            "task_id": None,
+            "actor": "foreman",
+            "detail": args.detail,
+            "tick_number": args.tick,
+        }
+        with open(EVENTS, 'a') as f:
+            f.write(json.dumps(event) + '\n')
 
-    with open(HEADER) as f:
-        hdr = json.load(f)
-    hdr['last_tick'] = now
-    hdr['ticks_total'] = hdr.get('ticks_total', 0) + 1
-    if not args.no_idle:
-        hdr['ticks_idle'] = hdr.get('ticks_idle', 0) + 1
-    hdr['last_commit'] = args.pre_tick_head
-    hdr['updated_at'] = now
-    with open(HEADER, 'w') as f:
-        json.dump(hdr, f)
-        f.write('\n')
+        with open(HEADER) as f:
+            hdr = json.load(f)
+        hdr['last_tick'] = now
+        hdr['ticks_total'] = hdr.get('ticks_total', 0) + 1
+        if not args.no_idle:
+            hdr['ticks_idle'] = hdr.get('ticks_idle', 0) + 1
+        hdr['last_commit'] = args.pre_tick_head
+        hdr['updated_at'] = now
+        with open(HEADER, 'w') as f:
+            json.dump(hdr, f)
+            f.write('\n')
+    finally:
+        lockf.close()  # releases the flock; no stale lock survives a crash
 
     print(f"event id={next_id} tick={args.tick} appended")
     print(f"header: ticks_total={hdr['ticks_total']} ticks_idle={hdr['ticks_idle']} "

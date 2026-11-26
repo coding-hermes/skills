@@ -152,10 +152,20 @@ def unstaged_paths(repo):
 class StageAfterWriteTests(unittest.TestCase):
 
     def assert_all_lines_staged(self, repo):
-        """Every porcelain line must be index-side ('M ' / 'A '), never ' M'/'??'."""
+        """Every porcelain line must be index-side ('M ' / 'A '), never ' M'/'??'.
+
+        QA-GITREINS-16: the writers now hold an advisory flock sidecar at
+        <board>/.lock (the same lock file boardctl's Go write guard uses,
+        coding-hermes-boardctl internal/board/lock.go). The sidecar is data,
+        never board content, and is deliberately NOT staged - exactly like
+        boardctl's, whose validate/doctor never enumerate it. Exempt it here.
+        """
         lines = porcelain(repo)
         self.assertTrue(lines, "expected staged board changes, git status was clean")
         for line in lines:
+            path = line[3:].strip() if len(line) > 3 else ""
+            if path.endswith("/.lock") or path == ".lock":
+                continue
             self.assertNotIn(line[:2], (" M", " D", "??", " A"),
                              f"board file left UNSTAGED: {line!r}")
             self.assertIn(line[0], "MADRTC", f"unexpected porcelain line: {line!r}")
@@ -198,7 +208,8 @@ class StageAfterWriteTests(unittest.TestCase):
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertIn("OK: committed", res.stdout)
 
-        self.assertEqual(porcelain(repo), [], "board dir must be clean after --commit")
+        board_lines = [l for l in porcelain(repo) if not l.rstrip().endswith(".lock")]
+        self.assertEqual(board_lines, [], "board dir must be clean after --commit")
         self.assertEqual(git(repo, "rev-list", "--count", "HEAD").stdout.strip(), "2",
                          "exactly one board commit expected")
 
@@ -281,7 +292,8 @@ class StageAfterWriteTests(unittest.TestCase):
         res = run_script(TASK_NOTES, repo, "NOPE-999", "foreman_note=x")
         self.assertEqual(res.returncode, 1)
         self.assertIn("not found", res.stdout)
-        self.assertEqual(porcelain(repo), [])
+        board_lines = [l for l in porcelain(repo) if not l.rstrip().endswith(".lock")]
+        self.assertEqual(board_lines, [])
         self.assertEqual(unstaged_paths(repo), set())
 
     # ---- board nested under a parent git root (cwd != toplevel) --------------------
@@ -293,7 +305,8 @@ class StageAfterWriteTests(unittest.TestCase):
                          "--summary", "tick 2 - FIX-001 complete (abc1234, +10/-2).",
                          "--commit", "test close")
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertEqual(porcelain(root, sub=rel), [], "board dir must be clean after --commit")
+        board_lines = [l for l in porcelain(root, sub=rel) if not l.rstrip().endswith(".lock")]
+        self.assertEqual(board_lines, [], "board dir must be clean after --commit")
         committed = {l.strip() for l in
                      git(root, "log", "-1", "--name-only", "--format=").stdout.splitlines() if l.strip()}
         self.assertEqual(committed, {f"{rel}/events.jsonl", f"{rel}/tasks.jsonl",
@@ -416,7 +429,8 @@ class DispatchedMixedEventIdTests(unittest.TestCase):
         self.assertEqual(tasks[0]["attempts"], 1)
 
         # the dispatch write is staged, not left in the worktree (DF-CRIER-510)
-        lines = porcelain(repo)
+        # (the .lock flock sidecar is data, never staged - QA-GITREINS-16)
+        lines = [l for l in porcelain(repo) if not l.rstrip().endswith(".lock")]
         self.assertTrue(lines, "expected staged board changes, git status was clean")
         for line in lines:
             self.assertEqual(line[1], " ", f"worktree-side change still pending: {line!r}")
