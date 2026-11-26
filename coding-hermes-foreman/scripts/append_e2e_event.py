@@ -25,6 +25,7 @@ so a caller commit cannot leave the e2e event behind. Outside a git repo it prin
 NOTICE and skips staging instead of failing; a git failure is reported, never raised
 (the write already happened and re-running would append a duplicate event).
 """
+import fcntl
 import json
 import sys
 import datetime
@@ -32,6 +33,21 @@ import os
 import subprocess
 
 BOARD_FILES = ("events.jsonl",)
+
+BOARD_LOCK_FILE = ".lock"
+
+
+def acquire_board_write_lock(board):
+    """QA-GITREINS-16: exclusive advisory flock on <board>/.lock - the SAME
+    sidecar lock file boardctl's write guard uses (coding-hermes-boardctl
+    internal/board/lock.go, boardLockFileName = ".lock") - held across the
+    id-derivation read and the append so a concurrent writer cannot slip an
+    event in between and get its id reused (the 2026-11-15 60789922
+    duplicate-id signature). Advisory: protects only writers that acquire
+    it; flock releases on process death."""
+    f = open(os.path.join(board, BOARD_LOCK_FILE), "a+")
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    return f
 
 
 def stage_board_files(bdir, files, commit_message=None):
@@ -90,23 +106,27 @@ task_id = sys.argv[4] if len(sys.argv) > 4 else "E2E-001"
 board = os.path.join(repo, ".coding-hermes", "board")
 events_path = os.path.join(board, "events.jsonl")
 
-with open(events_path) as f:
-    lines = [l for l in f.read().splitlines() if l.strip()]
-ids = [json.loads(l)["id"] for l in lines]
-new_id = max(ids) + 1
-print(f"max existing id: {max(ids)}, new id: {new_id}")
+lockf = acquire_board_write_lock(board)
+try:
+    with open(events_path) as f:
+        lines = [l for l in f.read().splitlines() if l.strip()]
+    ids = [json.loads(l)["id"] for l in lines]
+    new_id = max(ids) + 1
+    print(f"max existing id: {max(ids)}, new id: {new_id}")
 
-detail = json.load(open(detail_path))
-event = {
-    "id": new_id,
-    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-    "event_type": "e2e_verified",
-    "task_id": task_id,
-    "actor": "foreman",
-    "detail": json.dumps(detail, ensure_ascii=False),
-    "tick_number": tick,
-}
-with open(events_path, "a") as f:
-    f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    detail = json.load(open(detail_path))
+    event = {
+        "id": new_id,
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+        "event_type": "e2e_verified",
+        "task_id": task_id,
+        "actor": "foreman",
+        "detail": json.dumps(detail, ensure_ascii=False),
+        "tick_number": tick,
+    }
+    with open(events_path, "a") as f:
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
+finally:
+    lockf.close()  # releases the flock; no stale lock survives a crash
 print("JSONL appended, id", new_id)
 sys.exit(stage_board_files(board, BOARD_FILES))

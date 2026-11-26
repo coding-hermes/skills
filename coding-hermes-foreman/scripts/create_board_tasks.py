@@ -32,12 +32,45 @@ a NOTICE and skips staging instead of failing; a git failure is reported, never 
 (the writes already happened and re-running would append duplicate events).
 """
 import argparse
+import fcntl
 import json
 import os
 import subprocess
 from datetime import datetime
 
 BOARD_FILES = ("tasks.jsonl", "events.jsonl")
+
+BOARD_LOCK_FILE = ".lock"
+
+
+def acquire_board_write_lock(bdir):
+    """QA-GITREINS-16: exclusive advisory flock on <bdir>/.lock - the SAME
+    sidecar lock file boardctl's write guard uses (coding-hermes-boardctl
+    internal/board/lock.go, boardLockFileName = ".lock") - held across the
+    duplicate-id scan, the event-id derivation and both appends so a
+    concurrent writer cannot slip a row/event in between and get its id
+    reused. Advisory: protects only writers that acquire it; flock releases
+    on process death."""
+    f = open(os.path.join(bdir, BOARD_LOCK_FILE), "a+")
+    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+    return f
+
+
+def board_line_count(path):
+    with open(path) as f:
+        return sum(1 for line in f if line.strip())
+
+
+def refuse_drift(path, snapshot):
+    """QA-GITREINS-16 drift refusal: exit 2, write nothing, when the caller's
+    pre-lock snapshot no longer matches disk."""
+    current = board_line_count(path)
+    if snapshot is not None and current != snapshot:
+        print(f"DRIFT REFUSED: {path} has {current} lines but the caller "
+              f"snapshot says {snapshot} - another writer moved the board "
+              f"during this invocation; re-read the board and retry")
+        return True
+    return False
 
 
 def stage_board_files(bdir, files, commit_message=None):
@@ -136,6 +169,12 @@ def main():
     ap.add_argument("tick_number", type=int)
     ap.add_argument("tasks_json")
     ap.add_argument("--reason", default="foreman")
+    ap.add_argument("--snapshot-tasks-lines", type=int, default=None,
+                    help="line count of tasks.jsonl read by the caller BEFORE this "
+                         "invocation; mismatch under the write lock refuses with exit 2")
+    ap.add_argument("--snapshot-events-lines", type=int, default=None,
+                    help="line count of events.jsonl read by the caller BEFORE this "
+                         "invocation; mismatch under the write lock refuses with exit 2")
     args = ap.parse_args()
 
     board = f"{args.repo.rstrip('/')}/.coding-hermes/board"
@@ -146,61 +185,70 @@ def main():
     with open(args.tasks_json) as f:
         new_tasks = json.load(f)
 
-    existing_ids = {t["id"] for t in load_rows(tasks_path)}
-    added = []
-    for t in new_tasks:
-        if t["id"] in existing_ids:
-            print(f"skip existing {t['id']}")
-            continue
-        row = {
-            "status": "pending",
-            "blocks": None,
-            "fallback_model": None,
-            "fallback_provider": None,
-            "worker_status": "pending",
-            "dispatched_at": None,
-            "completed_at": None,
-            "attempts": 0,
-            "exit_code": None,
-            "commit_hash": None,
-            "files_changed": None,
-            "lines_added": 0,
-            "lines_removed": 0,
-            "guard_result": None,
-            "ci_result": None,
-            "worker_summary": None,
-            "blocked_reason": None,
-            "review_notes": None,
-            "created_at": now,
-            "updated_at": now,
-            **t,
-        }
-        added.append(row)
+    lock = acquire_board_write_lock(board)
+    try:
+        if refuse_drift(tasks_path, args.snapshot_tasks_lines):
+            return 2
+        if refuse_drift(events_path, args.snapshot_events_lines):
+            return 2
 
-    with open(tasks_path, "a") as f:
+        existing_ids = {t["id"] for t in load_rows(tasks_path)}
+        added = []
+        for t in new_tasks:
+            if t["id"] in existing_ids:
+                print(f"skip existing {t['id']}")
+                continue
+            row = {
+                "status": "pending",
+                "blocks": None,
+                "fallback_model": None,
+                "fallback_provider": None,
+                "worker_status": "pending",
+                "dispatched_at": None,
+                "completed_at": None,
+                "attempts": 0,
+                "exit_code": None,
+                "commit_hash": None,
+                "files_changed": None,
+                "lines_added": 0,
+                "lines_removed": 0,
+                "guard_result": None,
+                "ci_result": None,
+                "worker_summary": None,
+                "blocked_reason": None,
+                "review_notes": None,
+                "created_at": now,
+                "updated_at": now,
+                **t,
+            }
+            added.append(row)
+
+        with open(tasks_path, "a") as f:
+            for t in added:
+                f.write(json.dumps(t, default=str, separators=(",", ":")) + "\n")
+        print(f"tasks.jsonl: appended {len(added)} rows")
+
+        next_id = max_event_id(events_path)
+        events = []
         for t in added:
-            f.write(json.dumps(t, default=str, separators=(",", ":")) + "\n")
-    print(f"tasks.jsonl: appended {len(added)} rows")
-
-    next_id = max_event_id(events_path)
-    events = []
-    for t in added:
-        next_id += 1
-        events.append({
-            "id": next_id,
-            "timestamp": now,
-            "event_type": "task_created",
-            "task_id": t["id"],
-            "actor": "foreman",
-            "detail": json.dumps({"source": args.reason, "tick": args.tick_number}),
-            "tick_number": args.tick_number,
-        })
-    with open(events_path, "a") as f:
-        for ev in events:
-            f.write(json.dumps(ev, default=str, separators=(",", ":")) + "\n")
-    print(f"events.jsonl: appended {len(events)} task_created events")
-    print("done")
-    return stage_board_files(board, BOARD_FILES)
+            next_id += 1
+            events.append({
+                "id": next_id,
+                "timestamp": now,
+                "event_type": "task_created",
+                "task_id": t["id"],
+                "actor": "foreman",
+                "detail": json.dumps({"source": args.reason, "tick": args.tick_number}),
+                "tick_number": args.tick_number,
+            })
+        with open(events_path, "a") as f:
+            for ev in events:
+                f.write(json.dumps(ev, default=str, separators=(",", ":")) + "\n")
+        print(f"events.jsonl: appended {len(events)} task_created events")
+        print("done")
+        return stage_board_files(board, BOARD_FILES)
+    finally:
+        lock.close()  # releases the flock; no stale lock survives a crash
 
 
 if __name__ == "__main__":
