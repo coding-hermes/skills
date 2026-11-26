@@ -516,6 +516,8 @@ And when the coverage check reports uncovered ids, validate the MATCHER before e
 `grep -E` does not support `(?:…)` groups (it warns and matches a fragment), so a malformed
 so a malformed pattern fabricates gaps — a broken regex is a false CRITICAL on your own pass. The id SHAPE defeats honest patterns too: a generation-suffixed id like `FED-PR-005-R2` ends letter+digit and can never match a `[A-Z][A-Z0-9-]*-\d+` token, so it reads uncited forever — confirm with a plain substring grep (`grep -c -- <id>`) before recording a gap or editing a card.
 
+**A premise re-check must grep the SHORTEST stable token of a prose claim — a full-phrase grep false-negatives on line wrapping.** Measured 2026-11-26 on rethinkdb: `grep 'runs driver-only' AGENTS.md` returned nothing because the sentence is wrapped as `continues running\n  driver-only`, so the pass first read the live defect as fixed; `grep 'driver-only'` found it at line 95 immediately. Prose in docs/instruction files wraps at 80 columns and rewraps on unrelated edits, so grep one distinctive word (or `grep -z`/`tr -d '\n'` the file) and only then decide a documented claim has been repaired.
+
 ---
 
 ## Pitfalls (fleet history, paid for already)
