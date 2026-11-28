@@ -580,6 +580,19 @@ def check(criteria: str, repo: str, files: set[str]) -> list[str]:
     # tool still fails (red-proved in the fixtures run below).
     if re.search(r'\bjournalctl\b', text):
         flags -= {'--since'}
+    # hermes CLI --provider (top-level, applies to -z/--oneshot and chat) — verified
+    # live 2026-11-28 PM tick (warpfs INT-CI-025): `hermes --help` usage line prints
+    # "[--provider PROVIDER]" with "Provider override for this invocation (e.g.
+    # openrouter, anthropic). Applies to -z/--oneshot and ..." and `hermes chat
+    # --help` cites it 3x. hermes ships from the agent install, so no consuming
+    # repo file can spell it — the dispatch-law rows citing the seat-binding pair
+    # (`-m <model> --provider <lane>`) read as invented otherwise. Scoped like the
+    # gh block: the criterion must invoke hermes by name (accepted residual: prose
+    # mentioning hermes plus ANOTHER tool's --provider passes, same accepted-risk
+    # class as 'gh '; red-proved below — --provider beside a non-hermes tool and an
+    # invented flag beside hermes both still FAIL in gate_fixtures.py).
+    if re.search(r'\bhermes\b', text):
+        flags -= {'--provider'}
     # node_exporter DOTTED flag: `--collector.textfile.directory` is a real
     # node_exporter collector flag, but it is spelled with a dot, so the old
     # `--[a-z][a-z0-9-]{2,}` extractor truncated it to `--collector` and then

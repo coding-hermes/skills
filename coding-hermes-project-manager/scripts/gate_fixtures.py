@@ -115,6 +115,15 @@ CASES = [
      "PASS: `sudo auditctl -a always,exit -F arch=b64 -S pidfd_send_signal -F a2=9 -k canopykill_fx` adds the pidfd audit rule (consent-block recorded on unattended surfaces). Expected outcome: auditctl -l lists the rule with key canopykill_fx."),
     ("invented-pytest-k-token-still-fails", "REJECT",
      "PASS: run `pytest -k canopytest_fx`; expect exit 0 and the invented suite as the only match."),
+    # hermes CLI --provider seat-binding pair (warpfs INT-CI-025, 2026-11-28): the
+    # real dispatch-law flag passes inside a criterion that invokes hermes, while
+    # the same token on another tool and an invented hermes flag both still FAIL.
+    ("hermes-provider-dispatch-pair-passes", "PASS",
+     "PASS: `hermes -z 'seat probe' -m glm-5.3-flash --provider opencode-go-2` records model=glm-5.3-flash and the ocg billing_base_url in state.db sessions and never deepseek-foreman."),
+    ("provider-flag-on-other-tool-still-fails", "REJECT",
+     "PASS: `go vet ./... --provider opencode-go-2` exits 0 and prints no output, so the arm is clean."),
+    ("invented-flag-beside-hermes-still-fails", "REJECT",
+     "PASS: `hermes -z 'seat probe' --seat-pin-lane opencode-go-2` refuses loudly when the lane cannot bind."),
 ]
 
 
