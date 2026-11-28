@@ -27,6 +27,13 @@ COMMAND_HINTS = (
     '`', 'cargo ', 'go test', 'go build', 'go vet', 'pytest', 'python3 ', 'npm ',
     'npx ', 'make ', 'bash ', 'sh ', 'curl ', 'sqlite3 ', 'git ', 'grep ', 'jq ',
     'bunker ', 'gitreins ', 'router ', 'boardctl ', 'hermes ',
+    # gh subcommands, not the bare 'gh ' token: 'gh ' is a SUBSTRING of ordinary
+    # prose ('hi\ngh rate', 'high ') and would let any row pass on a plain word.
+    # Proven 2026-11-28 (crier INT-CI-048/INT-CI-049): both rows' ACs open with a
+    # runnable `gh run view <id> --repo <o>/<r> --json ...` proof command and were
+    # graded 'names no runnable command' purely because the gate did not know the
+    # gh CLI -- the rows were runnable, the instrument was blind.
+    'gh run ', 'gh api ', 'gh pr ', 'gh release ', 'gh workflow ',
 )
 
 OPEN_STATUS = {'pending', 'open', 'in_progress', 'ready', 'todo', 'blocked'}
